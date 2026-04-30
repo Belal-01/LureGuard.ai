@@ -1,0 +1,26 @@
+<!-- LureGuard custom Wazuh rules -->
+<group name="lureguard_custom,">
+
+  <!-- Cowrie session events (rule IDs >= 100000) -->
+  <rule id="100001" level="8">
+    <decoded_as>json</decoded_as>
+    <field name="eventid">cowrie.login.failed</field>
+    <description>Cowrie: Failed login attempt on honeypot</description>
+    <group>cowrie,authentication_failed,lureguard_custom,</group>
+  </rule>
+
+  <rule id="100002" level="10">
+    <decoded_as>json</decoded_as>
+    <field name="eventid">cowrie.login.success</field>
+    <description>Cowrie: Successful login to honeypot</description>
+    <group>cowrie,authentication_success,lureguard_custom,</group>
+  </rule>
+
+  <rule id="100003" level="12">
+    <decoded_as>json</decoded_as>
+    <field name="eventid">cowrie.command.input</field>
+    <description>Cowrie: Command executed in honeypot</description>
+    <group>cowrie,lureguard_custom,</group>
+  </rule>
+
+</group>

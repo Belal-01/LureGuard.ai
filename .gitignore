@@ -1,0 +1,25 @@
+# Secrets — never commit
+secrets/
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+dist/
+*.egg-info/
+
+# ML models (large files — use Git LFS or share manually)
+ml/models/*.joblib
+
+# Docker
+.docker/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
