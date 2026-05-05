@@ -1,136 +1,24 @@
-# LureGuard.ai — docker-compose.yml
-# Usage:
-#   ./install.sh                              (interactive setup)
-#   docker compose up -d                      (Cloud LLM or Disabled)
-#   docker compose --profile local-llm up -d  (Ollama local)
-
-version: '3.9'
-
-# ── Secrets (files must exist in ./secrets/ with chmod 0600) ──
-secrets:
-  db_password:
-    file: ./secrets/db_password.txt
-  telegram_token:
-    file: ./secrets/telegram_token.txt
-  llm_api_key:
-    file: ./secrets/llm_api_key.txt
-  admin_token:
-    file: ./secrets/admin_token.txt
-
-# ── Networks ──────────────────────────────────────────────────
-networks:
-  mgmt-net:
-    driver: bridge
-  honeypot-net:          # Cowrie is isolated — no internet
-    driver: bridge
-    internal: true
-  llm-net:               # Core ↔ Ollama only
-    driver: bridge
-
-# ── Volumes ───────────────────────────────────────────────────
-volumes:
-  pg_data: {}
-  wazuh_data: {}
-  ollama_data: {}
-  cowrie_dev_log: {}
-  cowrie_db_log: {}
-
-# ════════════════════════════════════════════════════════════
 services:
-# ════════════════════════════════════════════════════════════
-
-  # ── 1. PostgreSQL ─────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    secrets: [db_password]
-    environment:
-      POSTGRES_DB: lureguard
-      POSTGRES_USER: lureguard
-      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    networks: [mgmt-net]
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "lureguard"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ── 2. LureGuard Core ─────────────────────────────────────
-  lureguard-core:
-    build:
-      context: ./core
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    secrets: [db_password, telegram_token, llm_api_key, admin_token]
-    ports:
-      - "127.0.0.1:8080:8080"   # Wazuh webhook + Admin API
-      - "127.0.0.1:9090:9090"   # Prometheus /metrics
-    volumes:
-      - ./ml/models:/app/models:ro        # shared model files
-      - ./config:/app/config:ro           # core.yaml
-    environment:
-      CONFIG_PATH: /app/config/core.yaml
-    cap_add: [NET_ADMIN]                  # required for iptables DNAT
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks: [mgmt-net, honeypot-net, llm-net]
-
-  # ── 3. Wazuh Manager ─────────────────────────────────────
   wazuh-manager:
-    image: wazuh/wazuh-manager:4.7.5
+    image: wazuh/wazuh-manager:4.14.5
+    container_name: wazuh-manager
     restart: unless-stopped
+
     ports:
-      - "1514:1514/udp"     # Agent registration
+      - "1514:1514/tcp"
+      - "1515:1515/tcp"
+
+    environment:
+      - WAZUH_MANAGER_NAME=lureguard-manager
+
     volumes:
+      - wazuh_etc:/var/ossec/etc        # ← persists keys, config, certs
+      - wazuh_data:/var/ossec/data      # ← persists db, queue
+      - wazuh_logs:/var/ossec/logs      # ← persists alerts, ossec.log
       - ./wazuh/ossec.conf:/var/ossec/etc/ossec.conf:ro
       - ./wazuh/local_rules.xml:/var/ossec/etc/rules/local_rules.xml:ro
-      - wazuh_data:/var/ossec/data
-    networks: [mgmt-net]
 
-  # ── 4. Cowrie dev-server ──────────────────────────────────
-  cowrie-dev:
-    image: cowrie/cowrie:2.5.0
-    restart: unless-stopped
-    volumes:
-      - ./cowrie/dev-server/cowrie.cfg:/cowrie/etc/cowrie.cfg:ro
-      - ./cowrie/dev-server/honeyfs:/cowrie/honeyfs:ro
-      - cowrie_dev_log:/cowrie/var/log/cowrie
-    networks: [honeypot-net]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-
-  # ── 5. Cowrie db-server ───────────────────────────────────
-  cowrie-db:
-    image: cowrie/cowrie:2.5.0
-    restart: unless-stopped
-    volumes:
-      - ./cowrie/db-server/cowrie.cfg:/cowrie/etc/cowrie.cfg:ro
-      - ./cowrie/db-server/honeyfs:/cowrie/honeyfs:ro
-      - cowrie_db_log:/cowrie/var/log/cowrie
-    networks: [honeypot-net]
-    security_opt: [no-new-privileges:true]
-    cap_drop: [ALL]
-
-  # ── 6. Grafana ────────────────────────────────────────────
-  grafana:
-    image: grafana/grafana:10.4.0
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:3000:3000"
-    volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
-    networks: [mgmt-net]
-    depends_on: [postgres]
-
-  # ── 7. Ollama (only with --profile local-llm) ─────────────
-  ollama:
-    image: ollama/ollama:latest
-    profiles: [local-llm]
-    restart: unless-stopped
-    volumes:
-      - ollama_data:/root/.ollama
-    networks: [llm-net]
+volumes:
+  wazuh_etc:
+  wazuh_data:
+  wazuh_logs:
