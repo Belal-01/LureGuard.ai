@@ -1,0 +1,554 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>التقرير التقني - مشروع LureGuard</title>
+  <style>
+    :root {
+      --paper: #ffffff;
+      --ink: #132532;
+      --muted: #556878;
+      --line: #d9e2ea;
+      --brand: #0c6971;
+      --brand2: #1f8b95;
+      --soft: #ebf6f7;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 15% 10%, #e9f2f6 0%, #f7fbfd 45%, #eef4f7 100%);
+      color: var(--ink);
+      font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+      line-height: 1.7;
+    }
+
+    .page {
+      max-width: 1060px;
+      margin: 24px auto;
+      padding: 0 14px;
+    }
+
+    .report {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 14px 36px rgba(19, 37, 50, 0.11);
+    }
+
+    .hero {
+      background: linear-gradient(125deg, var(--brand) 0%, var(--brand2) 100%);
+      color: #fff;
+      padding: 34px 30px 24px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: 1.7rem;
+      line-height: 1.35;
+    }
+
+    .hero p {
+      margin: 10px 0 0;
+      font-size: 0.98rem;
+      opacity: 0.97;
+    }
+
+    .meta {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .meta .item {
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 10px;
+      padding: 10px 11px;
+      font-size: 0.9rem;
+    }
+
+    .content {
+      padding: 26px 30px 34px;
+    }
+
+    h2 {
+      margin: 25px 0 10px;
+      color: var(--brand);
+      font-size: 1.15rem;
+      border-bottom: 2px solid var(--soft);
+      padding-bottom: 6px;
+    }
+
+    h3 {
+      margin: 16px 0 8px;
+      color: #173a4d;
+      font-size: 1rem;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    ul,
+    ol {
+      margin: 8px 0;
+      padding-right: 20px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 0.93rem;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      text-align: right;
+      padding: 9px 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #f8fbfd;
+      color: #17384a;
+      font-weight: 700;
+    }
+
+    .code {
+      direction: ltr;
+      text-align: left;
+      background: #101c27;
+      color: #d2ebf8;
+      border-radius: 10px;
+      padding: 12px 14px;
+      overflow-x: auto;
+      font-size: 0.84rem;
+      font-family: Consolas, "Courier New", monospace;
+      line-height: 1.52;
+      margin: 10px 0;
+    }
+
+    .box {
+      border: 1px solid #c8e3e6;
+      background: #f2fbfc;
+      border-radius: 11px;
+      padding: 10px 12px;
+      margin: 10px 0;
+      font-size: 0.92rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fbfdff;
+    }
+
+    .footer {
+      margin-top: 24px;
+      padding-top: 12px;
+      border-top: 1px dashed var(--line);
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 860px) {
+
+      .meta,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      @page {
+        size: A4;
+        margin: 13mm;
+      }
+
+      body {
+        background: #fff !important;
+      }
+
+      .page {
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      .report {
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+      }
+
+      .hero {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+
+      .card,
+      .box {
+        break-inside: avoid;
+      }
+
+      tr {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <article class="report">
+      <header class="hero">
+        <h1>التقرير التقني الشامل لمشروع LureGuard</h1>
+        <p>وثيقة تعريفية وتشغيلية لشرح المشروع بشكل واضح لشخص لا يعرف عنه شيئًا: الهدف، طريقة العمل، المدخلات والمخرجات،
+          وخطوات الاستخدام.</p>
+        <div class="meta">
+          <div class="item"><strong>نوع المستند:</strong> Technical Report</div>
+          <div class="item"><strong>اللغة:</strong> العربية</div>
+          <div class="item"><strong>تنسيق الطباعة:</strong> A4</div>
+        </div>
+      </header>
+
+      <section class="content">
+        <h2>1) تعريف المشروع</h2>
+        <p>مشروع <strong>LureGuard</strong> هو خدمة API أمنية تقوم بتحليل تنبيهات المصادقة (Authentication Alerts)
+          القادمة من Wazuh، وتحويلها إلى ميزات رقمية سلوكية، ثم تمريرها إلى نموذج تعلم آلة لإخراج درجة خطورة وقرار
+          نهائي.</p>
+
+        <h2>2) ماذا يقدم المشروع عمليًا؟</h2>
+        <ul>
+          <li>استقبال الحدث الأمني بصيغة JSON.</li>
+          <li>حساب ميزات سلوكية زمنية (f1..f8) على نافذة زمنية محددة.</li>
+          <li>تطبيق نموذج تصنيف لإعطاء احتمالية المخاطر <code>risk_score</code>.</li>
+          <li>إرجاع قرار تشغيل واضح: <code>allow</code> أو <code>block</code>.</li>
+          <li>تطبيق whitelist لحماية الكيانات الموثوقة من الحظر الخاطئ.</li>
+          <li>مراقبة انحراف البيانات (Data Drift) لضمان استقرار الأداء.</li>
+        </ul>
+
+        <h2>3) المعمارية المختصرة</h2>
+        <pre class="code">Wazuh Event JSON
+    |
+    v
+FastAPI endpoint: POST /wazuh/event
+    |
+    v
+Feature Extraction (f1..f8)
+    |
+    v
+Scaler + RandomForest model
+    |
+    v
+Decision Engine (threshold)
+    |
+    v
+Output JSON + Drift Status</pre>
+
+        <h2>4) الملفات الأساسية داخل المشروع</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>الملف</th>
+              <th>المسؤولية</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>main.py</td>
+              <td>تشغيل API، تحميل model/scaler، تنفيذ القرار، وإرجاع الاستجابة.</td>
+            </tr>
+            <tr>
+              <td>LureGuardExtractor.py</td>
+              <td>استخراج الميزات من السجلات على نافذة زمنية.</td>
+            </tr>
+            <tr>
+              <td>feature_contract.py</td>
+              <td>تعريف رسمي للميزات وصيغها ووحداتها.</td>
+            </tr>
+            <tr>
+              <td>whitelist.py</td>
+              <td>التحقق من whitelist عبر IP/CIDR/user/expiry.</td>
+            </tr>
+            <tr>
+              <td>drift_monitor.py</td>
+              <td>قياس PSI لمراقبة الانحراف في الميزات الحساسة.</td>
+            </tr>
+            <tr>
+              <td>train_intrusion_model.py</td>
+              <td>تدريب النموذج وإنتاج ملفات artifacts.</td>
+            </tr>
+            <tr>
+              <td>artifacts/</td>
+              <td>model.joblib, scaler.joblib, metrics.json, drift_baseline.json, whitelist.json</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>5) شرح الميزات (f1..f8)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>الميزة</th>
+              <th>المعنى</th>
+              <th>الوحدة</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>f1</td>
+              <td>عدد المحاولات داخل النافذة الزمنية</td>
+              <td>count</td>
+            </tr>
+            <tr>
+              <td>f2</td>
+              <td>نسبة المحاولات الفاشلة</td>
+              <td>ratio [0,1]</td>
+            </tr>
+            <tr>
+              <td>f3</td>
+              <td>عدد المستخدمين المختلفين لنفس المصدر</td>
+              <td>count</td>
+            </tr>
+            <tr>
+              <td>f4</td>
+              <td>أقصى اندفاع محاولات داخل sub-window قصيرة</td>
+              <td>count</td>
+            </tr>
+            <tr>
+              <td>f5</td>
+              <td>متوسط الفاصل الزمني بين المحاولات</td>
+              <td>seconds</td>
+            </tr>
+            <tr>
+              <td>f6</td>
+              <td>انحراف الفاصل الزمني</td>
+              <td>seconds</td>
+            </tr>
+            <tr>
+              <td>f7</td>
+              <td>وزن زمني مقارنةً بخط أساس تاريخي</td>
+              <td>ratio [0,1]</td>
+            </tr>
+            <tr>
+              <td>f8</td>
+              <td>علامة whitelist</td>
+              <td>0 أو 1</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>6) طريقة الاستخدام</h2>
+        <h3>6.1 تثبيت المتطلبات</h3>
+        <pre class="code">pip install -r requirements.txt</pre>
+
+        <h3>6.2 تدريب النموذج (إذا احتجت إعادة توليد artifacts)</h3>
+        <pre
+          class="code">python train_intrusion_model.py --n-samples 120000 --attack-ratio 0.08 --label-noise 0.01 --seed 42 --save-dataset</pre>
+
+        <h3>6.3 تشغيل الخدمة</h3>
+        <pre class="code">python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload</pre>
+
+        <h2>7) المدخلات (Input)</h2>
+        <p>المسار المستخدم: <code>POST /wazuh/event</code></p>
+        <table>
+          <thead>
+            <tr>
+              <th>الحقل</th>
+              <th>النوع</th>
+              <th>الوصف</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>timestamp</td>
+              <td>string</td>
+              <td>وقت الحدث بصيغة ISO.</td>
+            </tr>
+            <tr>
+              <td>rule</td>
+              <td>object</td>
+              <td>بيانات قاعدة التنبيه.</td>
+            </tr>
+            <tr>
+              <td>agent</td>
+              <td>object</td>
+              <td>بيانات العميل/الوكيل.</td>
+            </tr>
+            <tr>
+              <td>data.srcip</td>
+              <td>string</td>
+              <td>عنوان المصدر.</td>
+            </tr>
+            <tr>
+              <td>data.srcuser</td>
+              <td>string</td>
+              <td>اسم المستخدم.</td>
+            </tr>
+            <tr>
+              <td>data.status</td>
+              <td>string</td>
+              <td>failed أو success.</td>
+            </tr>
+            <tr>
+              <td>full_log</td>
+              <td>string</td>
+              <td>النص الخام للسجل.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>7.1 مثال Input</h3>
+        <pre class="code">{
+  "timestamp": "2026-05-01T10:00:00Z",
+  "rule": {"id": "5710", "groups": ["syslog", "sshd"]},
+  "agent": {"id": "001", "name": "target-host"},
+  "data": {"srcip": "10.20.30.40", "srcuser": "root", "status": "failed"},
+  "full_log": "Failed password for root from 10.20.30.40"
+}</pre>
+
+        <h2>8) المخرجات (Output)</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>الحقل</th>
+              <th>التفسير</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>status</td>
+              <td>حالة التنفيذ (processed).</td>
+            </tr>
+            <tr>
+              <td>src_ip</td>
+              <td>عنوان المصدر بعد المعالجة.</td>
+            </tr>
+            <tr>
+              <td>features</td>
+              <td>متجه الميزات f1..f8.</td>
+            </tr>
+            <tr>
+              <td>risk_score</td>
+              <td>درجة الخطورة الناتجة عن النموذج.</td>
+            </tr>
+            <tr>
+              <td>threshold</td>
+              <td>عتبة القرار المعتمدة.</td>
+            </tr>
+            <tr>
+              <td>predicted_label</td>
+              <td>0 طبيعي، 1 مشبوه.</td>
+            </tr>
+            <tr>
+              <td>decision</td>
+              <td>allow أو block.</td>
+            </tr>
+            <tr>
+              <td>is_whitelisted</td>
+              <td>نتيجة فحص whitelist.</td>
+            </tr>
+            <tr>
+              <td>drift_monitor</td>
+              <td>مؤشرات انحراف البيانات.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>8.1 مثال Output</h3>
+        <pre class="code">{
+  "status": "processed",
+  "src_ip": "10.20.30.40",
+  "features": [6.0, 0.66, 3.0, 3.0, 18.0, 15.67, 0.61, 0.0],
+  "risk_score": 0.73,
+  "threshold": 0.5293,
+  "predicted_label": 1,
+  "decision": "block",
+  "is_whitelisted": false,
+  "drift_monitor": {"enabled": true, "ready": true, "drift_level": "low"}
+}</pre>
+
+        <h2>9) نقاط مهمة لفهم السلوك</h2>
+        <div class="grid">
+          <div class="card">
+            <strong>f7 قد تبدأ بـ 0.5</strong>
+            <p>عند قلة التاريخ الزمني تكون القيمة حيادية، ثم تصبح ديناميكية مع تراكم البيانات.</p>
+          </div>
+          <div class="card">
+            <strong>drift_monitor.ready</strong>
+            <p>تبقى false في البداية حتى يجمع النظام عددًا كافيًا من العينات.</p>
+          </div>
+        </div>
+
+        <h2>10) اختبار سريع</h2>
+        <pre
+          class="code">$body = @{
+  timestamp="2026-05-01T10:00:00Z"
+  rule=@{id="5710"; groups=@("syslog","sshd")}
+  agent=@{id="001"; name="target-host"}
+  data=@{srcip="10.20.30.40"; srcuser="root"; status="failed"}
+  full_log="Failed password"
+} | ConvertTo-Json -Depth 5
+
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/wazuh/event" -Method Post -ContentType "application/json" -Body $body</pre>
+
+        <h2>11) المشاكل الشائعة</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>المشكلة</th>
+              <th>السبب</th>
+              <th>الحل</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Model artifacts not loaded</td>
+              <td>ملفات artifacts غير موجودة</td>
+              <td>شغّل التدريب أو تأكد من مسار الملفات.</td>
+            </tr>
+            <tr>
+              <td>422 Validation Error</td>
+              <td>صيغة payload غير صحيحة</td>
+              <td>التزم ببنية الإدخال في القسم 7.</td>
+            </tr>
+            <tr>
+              <td>قرار غير متوقع</td>
+              <td>عتبة القرار/توزيع البيانات</td>
+              <td>راجع threshold وأعد التدريب عند الحاجة.</td>
+            </tr>
+          </tbody>
+        </table>
+
+
+        <div class="footer">
+          تم إعداد هذا التقرير لتقديم شرح واضح وكامل للمشروع من منظور تقني وتشغيلي.
+        </div>
+      </section>
+    </article>
+  </main>
+</body>
+
+</html>
