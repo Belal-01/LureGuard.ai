@@ -1,0 +1,141 @@
+{
+  "dataset": {
+    "rows": 15000,
+    "attack_ratio_actual": 0.08686666666666666,
+    "feature_columns": [
+      "f1",
+      "f2",
+      "f3",
+      "f4",
+      "f5",
+      "f6",
+      "f7",
+      "f8"
+    ],
+    "feature_contract": [
+      {
+        "feature": "f1",
+        "description": "Total authentication attempts inside the rolling window.",
+        "formula": "count(events in last window_seconds)",
+        "unit": "count",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f2",
+        "description": "Failure ratio inside the rolling window.",
+        "formula": "failed_attempts / total_attempts",
+        "unit": "ratio [0,1]",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f3",
+        "description": "Distinct usernames attempted from the same source IP in window.",
+        "formula": "cardinality(unique usernames)",
+        "unit": "count",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f4",
+        "description": "Burstiness: maximum attempts observed in any 10-second sub-window.",
+        "formula": "max(count(events between t and t+10s))",
+        "unit": "count",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f5",
+        "description": "Mean inter-arrival time between consecutive attempts.",
+        "formula": "mean(diff(sorted event timestamps))",
+        "unit": "seconds",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f6",
+        "description": "Standard deviation of inter-arrival times.",
+        "formula": "std(diff(sorted event timestamps))",
+        "unit": "seconds",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f7",
+        "description": "Temporal risk weight from historical hour/day baseline (UTC).",
+        "formula": "sigmoid((current_rate - baseline_mean) / baseline_std)",
+        "unit": "ratio [0,1]",
+        "window_seconds": 300
+      },
+      {
+        "feature": "f8",
+        "description": "Whitelist flag from IP/CIDR + optional user + optional expiry policy.",
+        "formula": "1.0 if whitelist rule matches else 0.0",
+        "unit": "binary {0,1}",
+        "window_seconds": 300
+      }
+    ]
+  },
+  "training": {
+    "cv_mean": {
+      "roc_auc": 0.919505827905207,
+      "average_precision": 0.8328051767189668,
+      "f1": 0.7847548547095398,
+      "precision": 0.7726473434915311,
+      "recall": 0.7984993867686315
+    },
+    "cv_std": {
+      "roc_auc": 0.011418985461309894,
+      "average_precision": 0.02458658981389995,
+      "f1": 0.019653971903877018,
+      "precision": 0.024393595974750895,
+      "recall": 0.03360789466787606
+    },
+    "threshold_selection": {
+      "threshold": 0.5077951759931455,
+      "precision": 0.7935779816513762,
+      "recall": 0.8317307692307693,
+      "f_beta": 0.8238095238093182
+    },
+    "test_default_threshold_0_5": {
+      "roc_auc": 0.9242298346992988,
+      "average_precision": 0.8425859504776873,
+      "precision": 0.7785977859778598,
+      "recall": 0.8084291187739464,
+      "f2": 0.8022813688212928,
+      "confusion_matrix": [
+        [
+          2679,
+          60
+        ],
+        [
+          50,
+          211
+        ]
+      ]
+    },
+    "test_tuned_threshold": {
+      "threshold": 0.5077951759931455,
+      "roc_auc": 0.9242298346992988,
+      "average_precision": 0.8425859504776873,
+      "precision": 0.7873134328358209,
+      "recall": 0.8084291187739464,
+      "f2": 0.8041158536585366,
+      "confusion_matrix": [
+        [
+          2682,
+          57
+        ],
+        [
+          50,
+          211
+        ]
+      ],
+      "classification_report": "              precision    recall  f1-score   support\n\n           0     0.9817    0.9792    0.9804      2739\n           1     0.7873    0.8084    0.7977       261\n\n    accuracy                         0.9643      3000\n   macro avg     0.8845    0.8938    0.8891      3000\nweighted avg     0.9648    0.9643    0.9645      3000\n"
+    },
+    "splits": {
+      "train": 9600,
+      "validation": 2400,
+      "test": 3000
+    }
+  },
+  "parity": {
+    "extractor": "LureGuardExtractor.update_from_raw",
+    "status": "train_and_serve_use_same_extractor"
+  }
+}

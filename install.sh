@@ -89,8 +89,19 @@ success "Docker is running"
 [ -f wazuh/ossec.conf ]       || error "wazuh/ossec.conf not found. Are you in the repo root?"
 [ -f wazuh/local_rules.xml ]  || error "wazuh/local_rules.xml not found."
 [ -f wazuh/agent-ossec.conf ] || error "wazuh/agent-ossec.conf not found."
+[ -f wazuh/integrations/custom-lureguard.py ] || error "wazuh/integrations/custom-lureguard.py not found."
+[ -f wazuh/integrations/custom-lureguard ] || error "wazuh/integrations/custom-lureguard not found."
 [ -f docker-compose.yml ]     || error "docker-compose.yml not found."
+chmod +x wazuh/integrations/custom-lureguard scripts/setup_venv.sh scripts/ensure_ml_artifacts.sh 2>/dev/null || true
 success "Repo files OK"
+
+# ── Python venv (repo root) ─────────────────────────────────
+step "Setting up Python virtualenv at .venv/"
+bash scripts/setup_venv.sh
+
+# ── ML model artifacts (ml/models) ────────────────────────
+step "Ensuring ML model artifacts"
+bash scripts/ensure_ml_artifacts.sh
 
 # ── Secrets ───────────────────────────────────────────────
 step "Generating secrets"
@@ -159,8 +170,15 @@ fi
 # ── Start Wazuh Manager ───────────────────────────────────
 step "Starting Wazuh Manager"
 docker compose up -d
+docker compose restart wazuh-manager >/dev/null 2>&1 || true
 info "Waiting 30s for Wazuh Manager to be healthy..."
 sleep 30
+INTEGRATORD_ERR=$(docker exec wazuh-manager grep -c "Unable to enable integration for: 'lureguard'" /var/ossec/logs/ossec.log 2>/dev/null || echo 0)
+if docker exec wazuh-manager test -x /var/ossec/integrations/lureguard.py 2>/dev/null; then
+    success "Wazuh lureguard integration script mounted"
+else
+    warn "lureguard integration not found in container — run: docker compose up -d --force-recreate"
+fi
 DB_STATUS=$(docker exec wazuh-manager /var/ossec/bin/wazuh-control status 2>/dev/null | grep "wazuh-db" || true)
 echo "$DB_STATUS" | grep -q "is running" \
     && success "Wazuh Manager is healthy" \
@@ -217,7 +235,7 @@ fi
 # ── Deploy agent ossec.conf via scp ───────────────────────
 # scp is reliable — no heredoc, no pipe, no tee issues
 info "Deploying agent config (manager → $MANAGER_IP)..."
-sed "s/192.168.1.107/${MANAGER_IP}/g" wazuh/agent-ossec.conf > /tmp/lureguard-agent-ossec.conf
+sed "s/__WAZUH_MANAGER_IP__/${MANAGER_IP}/g" wazuh/agent-ossec.conf > /tmp/lureguard-agent-ossec.conf
 scp -o StrictHostKeyChecking=no -o LogLevel=ERROR \
     /tmp/lureguard-agent-ossec.conf "${VM_USER}@${VM_IP}:/tmp/ossec.conf"
 vm_sudo "install ossec.conf" "cp /tmp/ossec.conf /var/ossec/etc/ossec.conf && chmod 640 /var/ossec/etc/ossec.conf && chown root:wazuh /var/ossec/etc/ossec.conf"
@@ -286,14 +304,17 @@ echo -e "${BOLD}║  LureGuard Sprint 1 — setup complete                 ║${
 echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}║${NC}  Wazuh Manager  → running (docker compose up -d)     ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}  Agent VM       → ${VM_IP}                          ${BOLD}║${NC}"
-echo -e "${BOLD}║${NC}  integratord    → waiting for Core :8080             ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}  integratord    → POST Core :8080/wazuh/event         ${BOLD}║${NC}"
+echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
+echo -e "${BOLD}║${NC}  Start Core:                                         ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}    make core                                          ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}    # or: cd core && PYTHONPATH=.. uvicorn main:app   ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}       --host 0.0.0.0 --port 8080                     ${BOLD}║${NC}"
 echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
 echo -e "${BOLD}║${NC}  Test:                                               ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}    ssh wronguser@${VM_IP}                           ${BOLD}║${NC}"
+echo -e "${BOLD}║${NC}    → uvicorn shows POST /wazuh/event                 ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}    docker exec -it wazuh-manager \\                   ${BOLD}║${NC}"
 echo -e "${BOLD}║${NC}      tail -f /var/ossec/logs/alerts/alerts.json      ${BOLD}║${NC}"
-echo -e "${BOLD}╠══════════════════════════════════════════════════════╣${NC}"
-echo -e "${BOLD}║${NC}  Core devs (مجد/علي) — test without Wazuh:          ${BOLD}║${NC}"
-echo -e "${BOLD}║${NC}    python3 tools/replay_alerts.py                    ${BOLD}║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""

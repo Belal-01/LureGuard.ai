@@ -1,8 +1,7 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List
-
 
 FEATURE_COLUMNS = ["f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8"]
 FEATURE_DRIFT_COLUMNS = ["f4", "f5", "f6", "f7", "f8"]

@@ -1,12 +1,11 @@
 {
-  "version": "0.0.0-stub",
-  "algorithm": "stub",
-  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-  "f1_test": 0.0,
-  "recall_test": 0.0,
-  "roc_auc_test": 0.0,
-  "training_samples": 0,
-  "trained_at": "2026-01-01T00:00:00Z",
-  "active": false,
-  "note": "Stub registry — replace after Sprint 2 training"
+  "version": "1.0.0",
+  "algorithm": "RandomForestClassifier",
+  "sha256": "4ed2908a8c6db9bab2571ca283a6deb67c8352ab6c596594885f1aa0e76417fb",
+  "f1_test": 0.8041158536585366,
+  "recall_test": 0.8084291187739464,
+  "roc_auc_test": 0.9242298346992988,
+  "training_samples": 9600,
+  "trained_at": "2026-05-18T10:33:58.882479+00:00",
+  "active": true
 }

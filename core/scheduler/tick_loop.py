@@ -14,9 +14,19 @@ from api.metrics_endpoint import dnat_active
 scheduler = AsyncIOScheduler()
 
 
+async def _refresh_whitelist_cache() -> None:
+    from db.session import AsyncSessionLocal
+    from runtime.whitelist import refresh_whitelist_from_db
+
+    async with AsyncSessionLocal() as db:
+        await refresh_whitelist_from_db(db)
+        await db.commit()
+
+
 async def _tick() -> None:
     """Main tick — called every 2 seconds."""
     cleanup_expired()
+    await _refresh_whitelist_cache()
     dnat_active.set(get_active_count())
 
 

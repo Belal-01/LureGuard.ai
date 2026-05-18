@@ -1,0 +1,17 @@
+.venv
+.git
+**/__pycache__
+**/*.pyc
+.env
+secrets
+modules
+tests
+cowrie
+wazuh
+migrations
+install.sh
+Makefile
+*.md
+.DS_Store
+ml/models/*.joblib
+ml/models/*.csv

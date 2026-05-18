@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import math
@@ -109,7 +109,6 @@ class LureGuardExtractor:
         self._baseline_store_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _slot_key(self, event_dt: datetime) -> str:
-        # weekday: Monday=0..Sunday=6 and hour in UTC.
         return f"{event_dt.weekday()}:{event_dt.hour}"
 
     def _trim_window(self, src_ip: str, current_ts: float) -> None:
@@ -167,7 +166,7 @@ class LureGuardExtractor:
         status: str,
         event_timestamp: str | None,
         is_whitelist: bool = False,
-    ):
+    ) -> list[float]:
         event_dt = parse_event_datetime(event_timestamp)
         event_ts = event_dt.timestamp()
 
@@ -202,17 +201,3 @@ class LureGuardExtractor:
         self._update_temporal_baseline(slot, attempts_per_minute)
 
         return [float(f1), float(f2), float(f3), float(f4), float(f5), float(f6), float(f7), float(f8)]
-
-    def update_and_extract(self, alert: "WazuhAlert", is_whitelist: bool = False):
-        src_ip = str(alert.data.get("srcip", "0.0.0.0"))
-        username = str(alert.data.get("srcuser", "unknown"))
-        status = str(alert.data.get("status", "unknown"))
-        event_timestamp = getattr(alert, "timestamp", None)
-
-        return self.update_from_raw(
-            src_ip=src_ip,
-            username=username,
-            status=status,
-            event_timestamp=event_timestamp,
-            is_whitelist=is_whitelist,
-        )

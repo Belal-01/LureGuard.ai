@@ -1,40 +1,82 @@
-"""Unit tests for decision thresholds."""
-import numpy as np
+"""Tests for threshold logic and decision_policy helpers."""
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
-# Patch inference to return controlled p values
-def make_event(src_ip="1.2.3.4", username="root"):
-    from schemas.normalized_event import NormalizedEvent
-    return NormalizedEvent(
-        src_ip=src_ip, channel="sshd",
-        event_type="auth_failed", username=username
-    )
+from modules.decision_policy import decide, process_event, update_whitelist
+
+
+@pytest.mark.parametrize(
+    "p,expected",
+    [
+        (0.1, "allow"),
+        (0.39, "allow"),
+        (0.40, "allow"),
+        (0.41, "alert"),
+        (0.70, "alert"),
+        (0.71, "redirect"),
+        (0.99, "redirect"),
+    ],
+)
+def test_decide_thresholds(p: float, expected: str):
+    assert decide(p, t1=0.40, t2=0.70) == expected
 
 
 @pytest.mark.asyncio
-async def test_allow_below_t1():
-    with patch("modules.inference.infer", return_value={"p": 0.2, "model_version": "test"}):
-        with patch("modules.decision_policy._whitelist", set()):
-            from modules.decision_policy import process_event
-            from db.session import AsyncSessionLocal
-            # TODO: use test DB fixture
-            pass  # placeholder
+async def test_process_event_allow_no_enforcement():
+    from schemas.normalized_event import NormalizedEvent
+
+    event = NormalizedEvent(
+        src_ip="10.0.0.99",
+        channel="sshd",
+        event_type="auth_failed",
+        username="root",
+    )
+    db = AsyncMock()
+
+    with (
+        patch("modules.inference.infer", return_value={"p": 0.1, "model_version": "test"}),
+        patch("modules.feature_extractor.extract_ssh_features") as mock_features,
+        patch("modules.decision_policy.apply_dnat") as mock_dnat,
+        patch("modules.decision_policy.crud.insert_event", new=AsyncMock()),
+        patch("modules.decision_policy.crud.insert_decision", new=AsyncMock()),
+        patch("modules.alerting.send_alert", new=AsyncMock()),
+    ):
+        import numpy as np
+
+        mock_features.return_value = np.zeros(8, dtype=np.float32)
+        update_whitelist([])
+        await process_event(event, db)
+
+    mock_dnat.assert_not_called()
 
 
-def test_thresholds_logic():
-    """Pure logic test — no DB needed."""
-    t1, t2 = 0.40, 0.70
-    for p, expected in [
-        (0.1, "allow"), (0.39, "allow"),
-        (0.40, "allow"), (0.41, "alert"),
-        (0.70, "alert"), (0.71, "redirect"),
-        (0.99, "redirect"),
-    ]:
-        if p <= t1:
-            decision = "allow"
-        elif p <= t2:
-            decision = "alert"
-        else:
-            decision = "redirect"
-        assert decision == expected, f"p={p} → expected {expected}, got {decision}"
+@pytest.mark.asyncio
+async def test_process_event_redirect_calls_dnat():
+    from schemas.normalized_event import NormalizedEvent
+
+    event = NormalizedEvent(
+        src_ip="10.0.0.99",
+        channel="sshd",
+        event_type="auth_failed",
+        username="postgres",
+    )
+    db = AsyncMock()
+
+    with (
+        patch("modules.inference.infer", return_value={"p": 0.95, "model_version": "test"}),
+        patch("modules.feature_extractor.extract_ssh_features") as mock_features,
+        patch("modules.decision_policy.apply_dnat") as mock_dnat,
+        patch("modules.decision_policy.crud.insert_event", new=AsyncMock()),
+        patch("modules.decision_policy.crud.insert_decision", new=AsyncMock()),
+        patch("modules.alerting.send_alert", new=AsyncMock()),
+    ):
+        import numpy as np
+
+        feats = np.ones(8, dtype=np.float32)
+        feats[0] = 10.0  # past min_attempts_for_alert gate
+        mock_features.return_value = feats
+        update_whitelist([])
+        await process_event(event, db)
+
+    mock_dnat.assert_called_once()
+    assert mock_dnat.call_args[0][1] == "db-server"

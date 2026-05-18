@@ -1,24 +1,75 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lureguard-postgres
+    restart: unless-stopped
+    networks:
+      - lureguard-net
+    environment:
+      POSTGRES_USER: lureguard
+      POSTGRES_PASSWORD: lureguard
+      POSTGRES_DB: lureguard
+    ports:
+      - "5433:5432"
+    volumes:
+      - lureguard_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lureguard -d lureguard"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  lureguard-core:
+    build:
+      context: .
+      dockerfile: core/Dockerfile
+    container_name: lureguard-core
+    restart: unless-stopped
+    networks:
+      - lureguard-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      MODELS_DIR: /app/models
+      CONFIG_PATH: /app/config/core.yaml
+      DATABASE_URL: postgresql+asyncpg://lureguard:lureguard@postgres:5432/lureguard
+    volumes:
+      - ./ml/models:/app/models:ro
+      - ./config:/app/config:ro
+
   wazuh-manager:
     image: wazuh/wazuh-manager:4.14.5
     container_name: wazuh-manager
     restart: unless-stopped
-
+    networks:
+      - lureguard-net
+    depends_on:
+      - lureguard-core
     ports:
       - "1514:1514/tcp"
       - "1515:1515/tcp"
-
     environment:
-      - WAZUH_MANAGER_NAME=lureguard-manager
-
+      WAZUH_MANAGER_NAME: lureguard-manager
     volumes:
-      - wazuh_etc:/var/ossec/etc        # ← persists keys, config, certs
-      - wazuh_data:/var/ossec/data      # ← persists db, queue
-      - wazuh_logs:/var/ossec/logs      # ← persists alerts, ossec.log
+      - wazuh_etc:/var/ossec/etc
+      - wazuh_data:/var/ossec/data
+      - wazuh_logs:/var/ossec/logs
       - ./wazuh/ossec.conf:/var/ossec/etc/ossec.conf:ro
       - ./wazuh/local_rules.xml:/var/ossec/etc/rules/local_rules.xml:ro
+      - ./wazuh/integrations/custom-lureguard:/var/ossec/integrations/custom-lureguard:ro
+      - ./wazuh/integrations/custom-lureguard.py:/var/ossec/integrations/custom-lureguard.py:ro
+
+networks:
+  lureguard-net:
+    driver: bridge
 
 volumes:
+  lureguard_pg:
   wazuh_etc:
   wazuh_data:
   wazuh_logs:

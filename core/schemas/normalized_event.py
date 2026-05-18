@@ -20,6 +20,11 @@ class NormalizedEvent(BaseModel):
     profile_id: Optional[str] = None   # dev-server | db-server | None
     wazuh_rule_id: int = 0
     wazuh_rule_level: int = 0
+    wazuh_rule_description: Optional[str] = None
+    agent_name: Optional[str] = None
+    agent_id: Optional[str] = None
+    agent_ip: Optional[str] = None
+    location: Optional[str] = None
     ingestion_path: str = "wazuh"  # wazuh | direct
     syscheck_path: Optional[str] = None
     syscheck_event: Optional[str] = None

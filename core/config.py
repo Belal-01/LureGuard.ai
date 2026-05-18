@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     window_seconds: int = 300
     tick_interval_seconds: int = 2
     dnat_ttl_minutes: int = 60
+    min_attempts_for_alert: int = 8
 
     def load_yaml(self) -> None:
         """Load settings from core.yaml."""
@@ -54,9 +55,17 @@ class Settings(BaseSettings):
                 k: CowrieProfileConfig(**v)
                 for k, v in data["cowrie_profiles"].items()
             }
-        for key in ("window_seconds", "tick_interval_seconds", "dnat_ttl_minutes"):
+        for key in (
+            "window_seconds",
+            "tick_interval_seconds",
+            "dnat_ttl_minutes",
+            "min_attempts_for_alert",
+        ):
             if key in data:
                 setattr(self, key, data[key])
+        if "policy" in data and isinstance(data["policy"], dict):
+            if "min_attempts_for_alert" in data["policy"]:
+                self.min_attempts_for_alert = int(data["policy"]["min_attempts_for_alert"])
 
 
 # Singleton — import this everywhere

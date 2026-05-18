@@ -1,19 +1,21 @@
 FROM python:3.11-slim
 
 WORKDIR /app
+ENV PYTHONPATH=/app
 
-# Install system deps (iptables for Enforcer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     iptables iproute2 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files first (layer caching)
 COPY pyproject.toml .
-RUN pip install --no-cache-dir -e ".[llm-openai,llm-anthropic]"
+COPY ml/ ./ml/
+RUN pip install --no-cache-dir --default-timeout=120 -e .
 
-# Copy source
-COPY . .
+COPY core/ ./core/
+COPY connectors/ ./connectors/
+COPY config/ ./config/
 
-EXPOSE 8080 9090
+EXPOSE 8080
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "1"]
+WORKDIR /app/core
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

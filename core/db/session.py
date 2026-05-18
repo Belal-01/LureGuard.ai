@@ -1,20 +1,38 @@
 """
 Async SQLAlchemy engine + session factory.
 """
+import os
 from pathlib import Path
+from urllib.parse import quote_plus
+
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from loguru import logger
 
 from db.models import Base
 
-# Read DATABASE_URL from Docker Secret or fallback env
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _read_local_db_password() -> str | None:
+    path = _REPO_ROOT / "secrets" / "db_password.txt"
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
+    return None
+
+
 def _get_db_url() -> str:
-    secret = Path("/run/secrets/db_password")
-    if secret.exists():
-        pw = secret.read_text().strip()
+    if url := os.getenv("DATABASE_URL", "").strip():
+        return url
+
+    docker_secret = Path("/run/secrets/db_password")
+    if docker_secret.exists():
+        pw = quote_plus(docker_secret.read_text(encoding="utf-8").strip())
         return f"postgresql+asyncpg://lureguard:{pw}@postgres:5432/lureguard"
-    # Fallback for local dev
-    return "postgresql+asyncpg://lureguard:lureguard@localhost:5432/lureguard"
+
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = os.getenv("POSTGRES_PORT", "5433")
+    pw = quote_plus(_read_local_db_password() or os.getenv("POSTGRES_PASSWORD", "lureguard"))
+    return f"postgresql+asyncpg://lureguard:{pw}@{host}:{port}/lureguard"
 
 
 engine = create_async_engine(

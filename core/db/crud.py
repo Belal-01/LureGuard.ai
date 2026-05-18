@@ -51,6 +51,37 @@ async def get_whitelist(db: AsyncSession) -> list[str]:
     return [str(row[0]) for row in result.all()]
 
 
+async def list_whitelist_entries(db: AsyncSession) -> list[Whitelist]:
+    result = await db.execute(select(Whitelist).order_by(Whitelist.added_at))
+    return list(result.scalars().all())
+
+
+async def add_whitelist_ip(
+    db: AsyncSession,
+    ip: str,
+    *,
+    reason: str | None = None,
+    added_by: str = "admin",
+) -> Whitelist:
+    ip = ip.strip()
+    existing = await db.get(Whitelist, ip)
+    if existing:
+        if reason:
+            existing.reason = reason
+        return existing
+    row = Whitelist(ip=ip, reason=reason, added_by=added_by)
+    db.add(row)
+    return row
+
+
+async def remove_whitelist_ip(db: AsyncSession, ip: str) -> bool:
+    row = await db.get(Whitelist, ip.strip())
+    if row is None:
+        return False
+    await db.delete(row)
+    return True
+
+
 async def append_audit(
     db: AsyncSession, actor: str, action: str,
     before: dict, after: dict

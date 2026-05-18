@@ -1,31 +1,37 @@
 """
-Feature Extractor — builds x(ip) = [f1..f8] from recent events.
-
-⚠️  STUB — علي يكمل التنفيذ الحقيقي في Sprint 2.
+Feature extraction — rolling-window f1..f8 via shared ml.extractor.
 """
+from __future__ import annotations
+
+from datetime import timezone
+
 import numpy as np
 
+from runtime.window_store import get_extractor
+from runtime.whitelist import is_whitelisted
+from schemas.normalized_event import NormalizedEvent
 
-def extract_features(src_ip: str, events_window: list) -> np.ndarray:
-    """
-    Build feature vector for a given source IP over a time window.
 
-    Args:
-        src_ip: attacker IP address
-        events_window: list of NormalizedEvent within last W seconds
+def _auth_status(event: NormalizedEvent) -> str:
+    if event.event_type == "auth_failed":
+        return "failed"
+    if event.event_type == "auth_success":
+        return "success"
+    return "unknown"
 
-    Returns:
-        np.ndarray shape (8,) — [f1..f8] already scaled to [0,1]
 
-    Features:
-        f1: attempts           — total login attempts
-        f2: failed_ratio       — failed / attempts
-        f3: distinct_users     — unique usernames tried
-        f4: burst_max          — max attempts in any 10s sub-window
-        f5: mean_inter_ms      — mean inter-attempt interval (ms)
-        f6: stddev_inter_ms    — std dev of inter-attempt interval
-        f7: hour_weight        — 0 (night) → 1 (day)
-        f8: is_known_good      — 1 if IP is in whitelist
-    """
-    # TODO: implement in Sprint 2
-    return np.zeros(8, dtype=np.float32)
+def extract_ssh_features(event: NormalizedEvent) -> np.ndarray:
+    """Ingest one SSH auth event and return raw feature vector f1..f8."""
+    event_ts = event.ts if event.ts.tzinfo else event.ts.replace(tzinfo=timezone.utc)
+    whitelisted = is_whitelisted(event.src_ip, event.username, event_ts)
+    ts_iso = event.ts.isoformat()
+    if not ts_iso.endswith("Z") and "+" not in ts_iso:
+        ts_iso = ts_iso + "Z"
+    features = get_extractor().update_from_raw(
+        src_ip=event.src_ip or "0.0.0.0",
+        username=event.username or "unknown",
+        status=_auth_status(event),
+        event_timestamp=ts_iso,
+        is_whitelist=whitelisted,
+    )
+    return np.array(features, dtype=np.float32)

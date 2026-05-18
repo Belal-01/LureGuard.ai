@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import math
@@ -6,7 +6,7 @@ from collections import deque
 from pathlib import Path
 from typing import Dict, List
 
-from feature_contract import FEATURE_DRIFT_COLUMNS
+from ml.feature_contract import FEATURE_DRIFT_COLUMNS
 
 
 class FeatureDriftMonitor:
