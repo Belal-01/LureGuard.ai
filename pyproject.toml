@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "lureguard"
 version = "1.0.0"
 description = "Host-Level SIEM with AI-Driven Detection and Dynamic SSH Honeypot Deception"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
 
 dependencies = [
@@ -31,6 +33,9 @@ dependencies = [
 [project.optional-dependencies]
 llm-openai     = ["openai>=1.40.0"]
 llm-anthropic  = ["anthropic>=0.30.0"]
+train = [
+    "kagglehub>=0.3.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

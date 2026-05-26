@@ -52,7 +52,7 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
         return
 
     if _is_whitelisted(event):
-        x = feature_extractor.extract_ssh_features(event)
+        x_ssh = feature_extractor.extract_ssh_features(event)
         p = 0.0
         decision = "allow"
         reason = f"whitelisted IP {event.src_ip} → ALLOW"
@@ -67,29 +67,32 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
             t1=settings.thresholds.t1,
             t2=settings.thresholds.t2,
             model_version=result.get("model_version", "stub"),
-            features_hash=hashlib.md5(x.tobytes()).hexdigest(),
+            features_hash=hashlib.md5(x_ssh.tobytes()).hexdigest(),
             profile_id=None,
             reason=reason,
         )
         await crud.insert_decision(db, dec)
         return
 
-    x = feature_extractor.extract_ssh_features(event)
-    result = inference.infer(x)
+    from ml.alert_features import featurize_normalized_event
+
+    x_ssh = feature_extractor.extract_ssh_features(event)
+    feat = featurize_normalized_event(event)
+    result = inference.infer_event(feat)
     p = result["p"]
-    p = _apply_min_attempts_gate(p, float(x[0]), settings.thresholds.t1)
+    p = _apply_min_attempts_gate(p, float(x_ssh[0]), settings.thresholds.t1)
 
     t1, t2 = settings.thresholds.t1, settings.thresholds.t2
     decision = decide(p, t1, t2)
     if decision == "allow":
-        reason = f"p={p:.3f} ≤ T1={t1} → ALLOW (attempts={int(x[0])})"
+        reason = f"p={p:.3f} ≤ T1={t1} → ALLOW (attempts={int(x_ssh[0])})"
     elif decision == "alert":
-        reason = f"p={p:.3f} ∈ (T1={t1}, T2={t2}] → ALERT (attempts={int(x[0])})"
+        reason = f"p={p:.3f} ∈ (T1={t1}, T2={t2}] → ALERT (attempts={int(x_ssh[0])})"
     else:
         profile_id = select_profile(event.username or "", p)
         reason = (
             f"p={p:.3f} > T2={t2} → REDIRECT to {profile_id} "
-            f"(attempts={int(x[0])}, user={event.username})"
+            f"(attempts={int(x_ssh[0])}, user={event.username})"
         )
 
     profile_id = None
@@ -106,7 +109,7 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
         t1=t1,
         t2=t2,
         model_version=result.get("model_version", "stub"),
-        features_hash=hashlib.md5(x.tobytes()).hexdigest(),
+        features_hash=hashlib.md5(str(feat).encode()).hexdigest(),
         profile_id=profile_id,
         reason=reason,
     )

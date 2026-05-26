@@ -1,141 +1,173 @@
 {
-  "dataset": {
-    "rows": 15000,
-    "attack_ratio_actual": 0.08686666666666666,
-    "feature_columns": [
-      "f1",
-      "f2",
-      "f3",
-      "f4",
-      "f5",
-      "f6",
-      "f7",
-      "f8"
-    ],
-    "feature_contract": [
-      {
-        "feature": "f1",
-        "description": "Total authentication attempts inside the rolling window.",
-        "formula": "count(events in last window_seconds)",
-        "unit": "count",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f2",
-        "description": "Failure ratio inside the rolling window.",
-        "formula": "failed_attempts / total_attempts",
-        "unit": "ratio [0,1]",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f3",
-        "description": "Distinct usernames attempted from the same source IP in window.",
-        "formula": "cardinality(unique usernames)",
-        "unit": "count",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f4",
-        "description": "Burstiness: maximum attempts observed in any 10-second sub-window.",
-        "formula": "max(count(events between t and t+10s))",
-        "unit": "count",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f5",
-        "description": "Mean inter-arrival time between consecutive attempts.",
-        "formula": "mean(diff(sorted event timestamps))",
-        "unit": "seconds",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f6",
-        "description": "Standard deviation of inter-arrival times.",
-        "formula": "std(diff(sorted event timestamps))",
-        "unit": "seconds",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f7",
-        "description": "Temporal risk weight from historical hour/day baseline (UTC).",
-        "formula": "sigmoid((current_rate - baseline_mean) / baseline_std)",
-        "unit": "ratio [0,1]",
-        "window_seconds": 300
-      },
-      {
-        "feature": "f8",
-        "description": "Whitelist flag from IP/CIDR + optional user + optional expiry policy.",
-        "formula": "1.0 if whitelist rule matches else 0.0",
-        "unit": "binary {0,1}",
-        "window_seconds": 300
-      }
-    ]
+  "training_policy": "real_public_datasets_only",
+  "kaggle_file": "/Users/majd/hustle/LureGuard.ai/ml/datasets/true_labeled_dataset.csv",
+  "datasets": {
+    "kaggle_true_labeled": 500000,
+    "ait_ads": 0,
+    "extra_csv": 0,
+    "combined_rows": 500000
   },
+  "feature_columns": [
+    "rule_level",
+    "rule_id",
+    "decoder_hash",
+    "firedtimes_log",
+    "has_srcip",
+    "has_srcuser",
+    "has_dstip",
+    "has_url",
+    "has_syscheck",
+    "is_sshd",
+    "is_web",
+    "is_syscheck",
+    "is_rootcheck",
+    "is_active_response",
+    "is_ossec",
+    "is_auth_failed",
+    "is_auth_success",
+    "decoder_sshd",
+    "decoder_web",
+    "decoder_syscheck",
+    "full_log_len_log",
+    "hour_sin",
+    "hour_cos",
+    "weekday"
+  ],
   "training": {
     "cv_mean": {
-      "roc_auc": 0.919505827905207,
-      "average_precision": 0.8328051767189668,
-      "f1": 0.7847548547095398,
-      "precision": 0.7726473434915311,
-      "recall": 0.7984993867686315
+      "roc_auc": 0.9932107123046876,
+      "average_precision": 0.9943589694196053,
+      "f1": 0.9923096865889873,
+      "precision": 0.9996321527124186,
+      "recall": 0.9850937500000001
     },
     "cv_std": {
-      "roc_auc": 0.011418985461309894,
-      "average_precision": 0.02458658981389995,
-      "f1": 0.019653971903877018,
-      "precision": 0.024393595974750895,
-      "recall": 0.03360789466787606
+      "roc_auc": 0.0003017643622291969,
+      "average_precision": 0.00016409937750809977,
+      "f1": 0.00012863099006363353,
+      "precision": 4.7442734656131317e-05,
+      "recall": 0.00025078003309671047
     },
     "threshold_selection": {
-      "threshold": 0.5077951759931455,
-      "precision": 0.7935779816513762,
-      "recall": 0.8317307692307693,
-      "f_beta": 0.8238095238093182
+      "threshold": 0.7847848226002514,
+      "precision": 0.9997463924323502,
+      "recall": 0.985525,
+      "f_beta": 0.9883368182477169
     },
     "test_default_threshold_0_5": {
-      "roc_auc": 0.9242298346992988,
-      "average_precision": 0.8425859504776873,
-      "precision": 0.7785977859778598,
-      "recall": 0.8084291187739464,
-      "f2": 0.8022813688212928,
+      "roc_auc": 0.992406835,
+      "average_precision": 0.993864998719982,
+      "precision": 0.9996951529316126,
+      "recall": 0.9838,
+      "f2": 0.9869384643165265,
       "confusion_matrix": [
         [
-          2679,
-          60
+          49985,
+          15
         ],
         [
-          50,
-          211
+          810,
+          49190
         ]
       ]
     },
     "test_tuned_threshold": {
-      "threshold": 0.5077951759931455,
-      "roc_auc": 0.9242298346992988,
-      "average_precision": 0.8425859504776873,
-      "precision": 0.7873134328358209,
-      "recall": 0.8084291187739464,
-      "f2": 0.8041158536585366,
+      "threshold": 0.7847848226002514,
+      "roc_auc": 0.992406835,
+      "average_precision": 0.993864998719982,
+      "precision": 0.9996951529316126,
+      "recall": 0.9838,
+      "f2": 0.9869384643165265,
       "confusion_matrix": [
         [
-          2682,
-          57
+          49985,
+          15
         ],
         [
-          50,
-          211
+          810,
+          49190
         ]
       ],
-      "classification_report": "              precision    recall  f1-score   support\n\n           0     0.9817    0.9792    0.9804      2739\n           1     0.7873    0.8084    0.7977       261\n\n    accuracy                         0.9643      3000\n   macro avg     0.8845    0.8938    0.8891      3000\nweighted avg     0.9648    0.9643    0.9645      3000\n"
+      "classification_report": "              precision    recall  f1-score   support\n\n           0     0.9841    0.9997    0.9918     50000\n           1     0.9997    0.9838    0.9917     50000\n\n    accuracy                         0.9918    100000\n   macro avg     0.9919    0.9918    0.9917    100000\nweighted avg     0.9919    0.9918    0.9917    100000\n"
     },
     "splits": {
-      "train": 9600,
-      "validation": 2400,
-      "test": 3000
+      "train": 320000,
+      "validation": 80000,
+      "test": 100000
     }
   },
-  "parity": {
-    "extractor": "LureGuardExtractor.update_from_raw",
-    "status": "train_and_serve_use_same_extractor"
-  }
+  "learning_curve": [
+    {
+      "train_rows": 2400,
+      "fraction_of_trainval": 0.02,
+      "test_accuracy": 0.9922,
+      "test_precision": 0.9994588012447572,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9933661866666668
+    },
+    {
+      "train_rows": 6000,
+      "fraction_of_trainval": 0.05,
+      "test_accuracy": 0.9922,
+      "test_precision": 0.9994588012447572,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.993276911111111
+    },
+    {
+      "train_rows": 12000,
+      "fraction_of_trainval": 0.1,
+      "test_accuracy": 0.9922,
+      "test_precision": 0.9994588012447572,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9924012888888889
+    },
+    {
+      "train_rows": 24000,
+      "fraction_of_trainval": 0.2,
+      "test_accuracy": 0.9923,
+      "test_precision": 0.9996616821165166,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9923803555555556
+    },
+    {
+      "train_rows": 42000,
+      "fraction_of_trainval": 0.35,
+      "test_accuracy": 0.9923,
+      "test_precision": 0.9996616821165166,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9925254800000001
+    },
+    {
+      "train_rows": 60000,
+      "fraction_of_trainval": 0.5,
+      "test_accuracy": 0.9923,
+      "test_precision": 0.9996616821165166,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9925171066666668
+    },
+    {
+      "train_rows": 90000,
+      "fraction_of_trainval": 0.75,
+      "test_accuracy": 0.9923,
+      "test_precision": 0.9996616821165166,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9925275377777778
+    },
+    {
+      "train_rows": 120000,
+      "fraction_of_trainval": 1.0,
+      "test_accuracy": 0.9923666666666666,
+      "test_precision": 0.9997969817960344,
+      "test_recall": 0.9849333333333333,
+      "test_roc_auc": 0.9925713266666665
+    }
+  ],
+  "confusion_matrix_explained": {
+    "tn": 49985,
+    "fp": 15,
+    "fn": 810,
+    "tp": 49190,
+    "note": "34 in prior report was FN (missed attacks), not FP. FP=0."
+  },
+  "test_accuracy": 0.99175
 }

@@ -7,11 +7,21 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.coverage
+htmlcov/
 dist/
 *.egg-info/
 
-# ML models (large files — use Git LFS or share manually)
-ml/models/*.joblib
+# Pre-trained classifier ships in Git: ml/models/model.joblib, scaler.joblib
+# (do not gitignore — teammates should not need `make train` on first clone)
+
+# Training data (large — auto-download via kagglehub when running `make train`)
+ml/datasets/true_labeled_dataset.csv
+ml/datasets/*.csv
+ml/datasets/hf-wazuh-alerts.json
+ml/datasets/ait-ads/
+ml/models/.mplcache/
+ml/models/training_*.png
 
 # Docker
 .docker/

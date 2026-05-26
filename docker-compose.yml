@@ -25,11 +25,17 @@ services:
       dockerfile: core/Dockerfile
     container_name: lureguard-core
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
     networks:
       - lureguard-net
     depends_on:
       postgres:
         condition: service_healthy
+      cowrie-dev:
+        condition: service_started
+      cowrie-db:
+        condition: service_started
     ports:
       - "8080:8080"
     env_file:
@@ -50,6 +56,8 @@ services:
       - lureguard-net
     depends_on:
       - lureguard-core
+      - cowrie-dev
+      - cowrie-db
     ports:
       - "1514:1514/tcp"
       - "1515:1515/tcp"
@@ -63,6 +71,34 @@ services:
       - ./wazuh/local_rules.xml:/var/ossec/etc/rules/local_rules.xml:ro
       - ./wazuh/integrations/custom-lureguard:/var/ossec/integrations/custom-lureguard:ro
       - ./wazuh/integrations/custom-lureguard.py:/var/ossec/integrations/custom-lureguard.py:ro
+      - cowrie_dev_logs:/var/log/cowrie/dev-server:ro
+      - cowrie_db_logs:/var/log/cowrie/db-server:ro
+
+  cowrie-dev:
+    image: cowrie/cowrie:latest
+    container_name: cowrie-dev
+    restart: unless-stopped
+    networks:
+      - lureguard-net
+    hostname: dev-machine
+    ports:
+      - "2222:2222"
+    volumes:
+      - ./cowrie/dev-server/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - cowrie_dev_logs:/cowrie/cowrie-git/var/log/cowrie
+
+  cowrie-db:
+    image: cowrie/cowrie:latest
+    container_name: cowrie-db
+    restart: unless-stopped
+    networks:
+      - lureguard-net
+    hostname: db-prod-01
+    ports:
+      - "2223:2222"
+    volumes:
+      - ./cowrie/db-server/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
+      - cowrie_db_logs:/cowrie/cowrie-git/var/log/cowrie
 
 networks:
   lureguard-net:
@@ -73,3 +109,5 @@ volumes:
   wazuh_etc:
   wazuh_data:
   wazuh_logs:
+  cowrie_dev_logs:
+  cowrie_db_logs:

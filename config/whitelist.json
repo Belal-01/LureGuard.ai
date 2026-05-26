@@ -1,6 +1,0 @@
-{
-  "_comment": "Optional seed only — copied into Postgres on first startup if whitelist table is empty. Prefer: POST /config/whitelist?ip=... or SQL.",
-  "entries": [
-    { "ip": "192.168.1.108", "note": "Your SSH client — remove after seed or manage via DB" }
-  ]
-}

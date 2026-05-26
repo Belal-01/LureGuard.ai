@@ -92,16 +92,24 @@ success "Docker is running"
 [ -f wazuh/integrations/custom-lureguard.py ] || error "wazuh/integrations/custom-lureguard.py not found."
 [ -f wazuh/integrations/custom-lureguard ] || error "wazuh/integrations/custom-lureguard not found."
 [ -f docker-compose.yml ]     || error "docker-compose.yml not found."
-chmod +x wazuh/integrations/custom-lureguard scripts/setup_venv.sh scripts/ensure_ml_artifacts.sh 2>/dev/null || true
+chmod +x wazuh/integrations/custom-lureguard 2>/dev/null || true
 success "Repo files OK"
 
 # ── Python venv (repo root) ─────────────────────────────────
 step "Setting up Python virtualenv at .venv/"
-bash scripts/setup_venv.sh
+if [[ ! -d .venv ]]; then
+    python3 -m venv .venv
+fi
+.venv/bin/pip install --upgrade pip -q
+.venv/bin/pip install -e ".[dev,train]" -q
+success "Python venv ready (.venv/)"
 
-# ── ML model artifacts (ml/models) ────────────────────────
-step "Ensuring ML model artifacts"
-bash scripts/ensure_ml_artifacts.sh
+# ── ML model artifacts (shipped in Git) ───────────────────
+step "Checking ML model artifacts"
+if [[ ! -f ml/models/model.joblib || ! -f ml/models/scaler.joblib ]]; then
+    error "Missing ml/models/model.joblib — run: git pull  (or make train to rebuild)"
+fi
+success "ML artifacts OK (~2 MB model.joblib in repo)"
 
 # ── Secrets ───────────────────────────────────────────────
 step "Generating secrets"

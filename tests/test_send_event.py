@@ -46,16 +46,6 @@ def _pipeline_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODELS_DIR", str(REPO_ROOT / "ml" / "models"))
 
 
-def _reload_telegram_notifier() -> None:
-    import importlib
-
-    import connectors.telegram as tg
-    import modules.alerting as alerting
-
-    importlib.reload(tg)
-    alerting.telegram_notifier = tg.TelegramNotifier()
-
-
 async def _run_pipeline(bruteforce_alert: dict) -> dict:
     from modules.collector import normalize_event
     from modules.decision_policy import process_event
@@ -84,9 +74,9 @@ async def _run_pipeline(bruteforce_alert: dict) -> dict:
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    _reload_telegram_notifier()
-
-    with patch("modules.decision_policy.apply_dnat"):
+    with patch("modules.decision_policy.apply_dnat"), patch(
+        "modules.alerting.send_alert", new=AsyncMock()
+    ):
         await process_event(event, db)
 
     return {

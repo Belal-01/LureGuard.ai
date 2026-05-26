@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -13,6 +15,30 @@ CORE_ROOT = REPO_ROOT / "core"
 for path in (str(REPO_ROOT), str(CORE_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
+
+
+@pytest.fixture(autouse=True)
+def _no_real_telegram(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unit tests must not call the Telegram API (set TELEGRAM_LIVE_TESTS=1 to opt in)."""
+    if os.getenv("TELEGRAM_LIVE_TESTS") == "1":
+        return
+
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "")
+
+    async def _noop_send_alert(*_args, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "modules.alerting.send_alert",
+        AsyncMock(side_effect=_noop_send_alert),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "modules.alerting.send_non_ssh_alert",
+        AsyncMock(side_effect=_noop_send_alert),
+        raising=False,
+    )
 
 
 @pytest.fixture(autouse=True)

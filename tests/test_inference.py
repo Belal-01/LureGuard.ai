@@ -34,8 +34,14 @@ def test_load_model_from_repo_artifacts(models_path: Path):
         inf._scaler = None
         inf.load_model()
 
-    raw = np.array([5, 0.8, 2, 3, 1.0, 0.2, 0.6, 0], dtype=np.float32)
-    result = inf.infer(raw)
+    cols = inf.get_feature_columns()
+    if len(cols) == 8:
+        raw = np.array([5, 0.8, 2, 3, 1.0, 0.2, 0.6, 0], dtype=np.float32)
+        result = inf.infer(raw)
+    else:
+        row = {c: 0.0 for c in cols}
+        row.update({"rule_level": 5.0, "rule_id": 5710.0, "is_sshd": 1.0, "is_auth_failed": 1.0})
+        result = inf.infer_event(row)
     assert 0.0 <= result["p"] <= 1.0
     assert result["model_version"] != "stub-0.0.0"
 
