@@ -50,10 +50,20 @@ AsyncSessionLocal = async_sessionmaker(
 
 
 async def init_db() -> None:
-    """Create all tables (used in dev/test — Alembic handles production)."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("✅ Database tables verified/created")
+    """Run Alembic migrations to ensure database schema is up-to-date."""
+    import asyncio
+    
+    def _run_alembic():
+        from alembic.config import Config
+        from alembic import command
+        alembic_ini_path = _REPO_ROOT / "migrations" / "alembic.ini"
+        alembic_cfg = Config(str(alembic_ini_path))
+        alembic_cfg.set_main_option("script_location", str(_REPO_ROOT / "migrations"))
+        command.upgrade(alembic_cfg, "head")
+
+    logger.info("Running database migrations...")
+    await asyncio.to_thread(_run_alembic)
+    logger.info("✅ Database schema is up-to-date")
 
 
 async def get_db():
