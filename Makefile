@@ -30,6 +30,10 @@ db-wait:
 	done; \
 	echo "Postgres not ready — run: docker compose logs postgres"; exit 1
 
+db-revision: venv
+	@if [ -z "$(m)" ]; then echo "Usage: make db-revision m=\"message\""; exit 1; fi
+	$(PYTHON) -m alembic -c migrations/alembic.ini revision --autogenerate -m "$(m)"
+
 core: venv db-up db-wait
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	export DATABASE_URL="$${DATABASE_URL:-postgresql+asyncpg://lureguard:lureguard@localhost:5433/lureguard}"; \

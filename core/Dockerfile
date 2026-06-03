@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir --default-timeout=120 -e .
 COPY core/ ./core/
 COPY connectors/ ./connectors/
 COPY config/ ./config/
+COPY migrations/ ./migrations/
 
 EXPOSE 8080
 
