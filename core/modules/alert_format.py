@@ -89,6 +89,7 @@ def format_ssh_alert(
         f"<b>{label}</b>",
         f"<i>{html.escape(subtitle)}</i>",
         "",
+        f"<b>Category</b>  SSH",
         f"<b>When</b>  {_format_ts(event.ts)}",
         _host_line(event),
         f"<b>What</b>  {what}",
@@ -110,7 +111,7 @@ def format_ssh_alert(
     return "\n".join(lines)
 
 
-def format_non_ssh_alert(event: NormalizedEvent) -> str:
+def format_fim_alert(event: NormalizedEvent) -> str:
     what = html.escape(_EVENT_LABELS.get(event.event_type, event.event_type))
     path = html.escape(event.syscheck_path or "—")
     change = html.escape(event.syscheck_event or "—")
@@ -118,6 +119,7 @@ def format_non_ssh_alert(event: NormalizedEvent) -> str:
     lines = [
         f"<b>🟡 {html.escape(event.channel.upper())}</b>",
         "",
+        f"<b>Category</b>  FIM",
         f"<b>When</b>  {_format_ts(event.ts)}",
         _host_line(event),
         f"<b>What</b>  {what}",
@@ -128,6 +130,64 @@ def format_non_ssh_alert(event: NormalizedEvent) -> str:
     if event.syscheck_path:
         lines.append(f"<b>Path</b>  <code>{path}</code>")
         lines.append(f"<b>Change</b>  {change}")
+    if event.raw_ref:
+        lines.append(f"<b>Log line</b>  <code>{html.escape(_truncate(event.raw_ref))}</code>")
+    return "\n".join(lines)
+
+
+def format_cowrie_alert(event: NormalizedEvent) -> str:
+    what = html.escape(_EVENT_LABELS.get(event.event_type, event.event_type))
+    lines = [
+        f"<b>🟡 COWRIE</b>",
+        "",
+        f"<b>Category</b>  COWRIE",
+        f"<b>When</b>  {_format_ts(event.ts)}",
+        _host_line(event),
+        f"<b>What</b>  {what}",
+    ]
+    if event.src_ip:
+        lines.append(f"<b>Client</b>  <code>{html.escape(event.src_ip)}</code>")
+    if event.username:
+        lines.append(f"<b>User</b>  <code>{html.escape(event.username)}</code>")
+    if event.location:
+        lines.append(f"<b>Log source</b>  <code>{html.escape(event.location)}</code>")
+    if event.raw_ref:
+        lines.append(f"<b>Log line</b>  <code>{html.escape(_truncate(event.raw_ref))}</code>")
+    return "\n".join(lines)
+
+
+def format_web_alert(event: NormalizedEvent) -> str:
+    what = html.escape(_EVENT_LABELS.get(event.event_type, event.event_type))
+    lines = [
+        f"<b>🟡 WEB</b>",
+        "",
+        f"<b>Category</b>  WEB",
+        f"<b>When</b>  {_format_ts(event.ts)}",
+        _host_line(event),
+        f"<b>What</b>  {what}",
+    ]
+    if event.src_ip:
+        lines.append(f"<b>Client</b>  <code>{html.escape(event.src_ip)}</code>")
+    if event.location:
+        lines.append(f"<b>Log source</b>  <code>{html.escape(event.location)}</code>")
+    if event.raw_ref:
+        lines.append(f"<b>Log line</b>  <code>{html.escape(_truncate(event.raw_ref))}</code>")
+    return "\n".join(lines)
+
+
+def format_windows_alert(event: NormalizedEvent) -> str:
+    what = html.escape(_EVENT_LABELS.get(event.event_type, event.event_type))
+    lines = [
+        f"<b>🟡 WINDOWS</b>",
+        "",
+        f"<b>Category</b>  WINDOWS",
+        f"<b>When</b>  {_format_ts(event.ts)}",
+        _host_line(event),
+        f"<b>What</b>  {what}",
+        _wazuh_rule_line(event),
+    ]
+    if event.location:
+        lines.append(f"<b>Log source</b>  <code>{html.escape(event.location)}</code>")
     if event.raw_ref:
         lines.append(f"<b>Log line</b>  <code>{html.escape(_truncate(event.raw_ref))}</code>")
     return "\n".join(lines)
