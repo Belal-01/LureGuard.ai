@@ -36,6 +36,7 @@ class TelegramNotifier:
             os.getenv("TELEGRAM_CHAT_ID", "").strip()
             or _read_secret_file("telegram_chat_id.txt")
         )
+        self.message_thread_id = os.getenv("TELEGRAM_MESSAGE_THREAD_ID", "").strip()
         self.timeout_seconds = _get_float_env("TELEGRAM_TIMEOUT_SECONDS", 3.0)
 
     @property
@@ -48,6 +49,8 @@ class TelegramNotifier:
 
         url = f"https://api.telegram.org/bot{self.token}/sendMessage"
         fields: dict[str, str] = {"chat_id": self.chat_id, "text": message}
+        if self.message_thread_id:
+            fields["message_thread_id"] = self.message_thread_id
         if parse_mode:
             fields["parse_mode"] = parse_mode
         body = parse.urlencode(fields).encode("utf-8")

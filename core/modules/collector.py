@@ -68,15 +68,27 @@ def normalize_event(alert: WazuhAlert) -> NormalizedEvent:
             break
 
     data = alert.data
-    status = str(data.get("status", "")).lower()
-    success = status in ("valid", "success")
+    is_cowrie = "lureguard_custom" in groups or channel == "cowrie"
+    
+    src_ip = data.get("src_ip") if is_cowrie else data.get("srcip")
+    if not src_ip:
+        src_ip = data.get("srcip") or data.get("src_ip")
+        
+    username = data.get("username") if is_cowrie else data.get("srcuser")
+    if not username:
+        username = data.get("srcuser") or data.get("username")
+        
+    if is_cowrie:
+        success = alert.rule_id == 100002 or "success" in str(alert.rule_description or "").lower()
+    else:
+        status = str(data.get("status", "")).lower()
+        success = status in ("valid", "success")
 
     syscheck = alert.syscheck or {}
 
     event_ts = parse_event_datetime(alert.timestamp or None)
 
     full_log = (alert.full_log or "").strip()
-    username = data.get("srcuser")
     if not username and full_log:
         user_match = re.search(r"\buser=(\S+)", full_log)
         if user_match:
@@ -84,7 +96,7 @@ def normalize_event(alert: WazuhAlert) -> NormalizedEvent:
 
     return NormalizedEvent(
         ts=event_ts.replace(tzinfo=None),
-        src_ip=data.get("srcip"),
+        src_ip=src_ip,
         channel=channel,
         event_type=event_type,
         username=username,

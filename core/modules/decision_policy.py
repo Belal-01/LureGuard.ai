@@ -127,5 +127,5 @@ def _handle_non_ssh(event: NormalizedEvent) -> None:
     from modules.alerting import send_non_ssh_alert
     import asyncio
 
-    if event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7:
+    if (event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7) or event.channel == "cowrie":
         asyncio.create_task(send_non_ssh_alert(event))

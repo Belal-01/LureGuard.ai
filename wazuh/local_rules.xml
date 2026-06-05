@@ -6,21 +6,21 @@
     <decoded_as>json</decoded_as>
     <field name="eventid">cowrie.login.failed</field>
     <description>Cowrie: Failed login attempt on honeypot</description>
-    <group>cowrie,authentication_failed,lureguard_custom,</group>
+    <group>cowrie,authentication_failed,lureguard_custom</group>
   </rule>
 
   <rule id="100002" level="10">
     <decoded_as>json</decoded_as>
     <field name="eventid">cowrie.login.success</field>
     <description>Cowrie: Successful login to honeypot</description>
-    <group>cowrie,authentication_success,lureguard_custom,</group>
+    <group>cowrie,authentication_success,lureguard_custom</group>
   </rule>
 
   <rule id="100003" level="12">
     <decoded_as>json</decoded_as>
     <field name="eventid">cowrie.command.input</field>
     <description>Cowrie: Command executed in honeypot</description>
-    <group>cowrie,lureguard_custom,</group>
+    <group>cowrie,lureguard_custom</group>
   </rule>
 
 </group>

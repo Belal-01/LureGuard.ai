@@ -8,7 +8,6 @@ modules
 tests
 cowrie
 wazuh
-migrations
 install.sh
 Makefile
 *.md
