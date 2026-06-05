@@ -3,6 +3,7 @@ Enforcer — applies iptables DNAT rules via subprocess.
 Requires CAP_NET_ADMIN on the container.
 """
 import subprocess
+import socket
 from datetime import datetime, timedelta
 from typing import Optional
 from loguru import logger
@@ -27,7 +28,12 @@ def apply_dnat(src_ip: str, profile_id: str) -> None:
         logger.error(f"Unknown profile_id: {profile_id}")
         return
 
-    target = f"{profile.host}:{profile.port}"
+    try:
+        ip = socket.gethostbyname(profile.host)
+    except socket.gaierror:
+        logger.warning(f"Could not resolve hostname {profile.host}, using as-is")
+        ip = profile.host
+    target = f"{ip}:{profile.port}"
 
     cmd = [
         "iptables", "-t", "nat", "-A", "PREROUTING",
@@ -52,7 +58,11 @@ def remove_dnat(src_ip: str) -> None:
     profile = settings.cowrie_profiles.get(rule["profile"])
     if not profile:
         return
-    target = f"{profile.host}:{profile.port}"
+    try:
+        ip = socket.gethostbyname(profile.host)
+    except socket.gaierror:
+        ip = profile.host
+    target = f"{ip}:{profile.port}"
     cmd = [
         "iptables", "-t", "nat", "-D", "PREROUTING",
         "-s", src_ip, "-p", "tcp", "--dport", "22",
