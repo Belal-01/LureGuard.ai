@@ -15,10 +15,10 @@ def _cooldown_seconds() -> float:
         return 90.0
 
 
-def should_send_telegram(src_ip: str | None, decision: str) -> bool:
-    """One Telegram per source IP per cooldown (alert+redirect share the window)."""
-    _ = decision
-    key = src_ip or "unknown"
+def should_send_telegram(src_ip: str | None, category: str) -> bool:
+    """One Telegram per source IP + category per cooldown."""
+    ip_part = src_ip or "unknown"
+    key = f"{ip_part}:{category}"
     now = time.monotonic()
     last = _last_sent.get(key, 0.0)
     if now - last < _cooldown_seconds():
