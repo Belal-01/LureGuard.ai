@@ -36,7 +36,6 @@ db-revision: venv
 
 core: venv db-up db-wait
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-	export DATABASE_URL="$${DATABASE_URL:-postgresql+asyncpg://lureguard:lureguard@localhost:5433/lureguard}"; \
 	cd core && PYTHONPATH=.. CONFIG_PATH=../config/core.yaml MODELS_DIR=../ml/models \
 	../$(PYTHON) -m uvicorn main:app --host 0.0.0.0 --port 8080 --reload
 

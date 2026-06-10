@@ -25,6 +25,10 @@ ml/models/training_*.png
 
 # Docker
 .docker/
+grafana/Grafana_Data/
+
+# Ali's prototype branch committed runtime DB dumps — never track
+DataBase/postgres_data/
 
 # OS
 .DS_Store

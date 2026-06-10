@@ -43,7 +43,6 @@ services:
     environment:
       MODELS_DIR: /app/models
       CONFIG_PATH: /app/config/core.yaml
-      DATABASE_URL: postgresql+asyncpg://lureguard:lureguard@postgres:5432/lureguard
     volumes:
       - ./ml/models:/app/models:ro
       - ./config:/app/config:ro
@@ -101,12 +100,35 @@ services:
       - ./cowrie/db-server/cowrie.cfg:/cowrie/cowrie-git/etc/cowrie.cfg:ro
       - cowrie_db_logs:/cowrie/cowrie-git/var/log/cowrie
 
+  grafana:
+    image: grafana/grafana-oss:11.4.0
+    container_name: lureguard-grafana
+    restart: unless-stopped
+    networks:
+      - lureguard-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      POSTGRES_PASSWORD: lureguard
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./grafana/provisioning/dashboards/json:/etc/grafana/provisioning/dashboards/json:ro
+      - lureguard_grafana:/var/lib/grafana
+
 networks:
   lureguard-net:
     driver: bridge
 
 volumes:
   lureguard_pg:
+  lureguard_grafana:
   wazuh_etc:
   wazuh_data:
   wazuh_logs:

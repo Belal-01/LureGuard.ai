@@ -20,13 +20,23 @@ def _read_local_db_password() -> str | None:
     return None
 
 
+def _in_core_container() -> bool:
+    """True when Core runs inside the Docker image (models mounted at /app/models)."""
+    return Path("/app/models").exists()
+
+
 def _get_db_url() -> str:
+    # Optional override for custom deployments only — not required in .env
     if url := os.getenv("DATABASE_URL", "").strip():
         return url
 
     docker_secret = Path("/run/secrets/db_password")
     if docker_secret.exists():
         pw = quote_plus(docker_secret.read_text(encoding="utf-8").strip())
+        return f"postgresql+asyncpg://lureguard:{pw}@postgres:5432/lureguard"
+
+    if _in_core_container():
+        pw = quote_plus(os.getenv("POSTGRES_PASSWORD", "lureguard"))
         return f"postgresql+asyncpg://lureguard:{pw}@postgres:5432/lureguard"
 
     host = os.getenv("POSTGRES_HOST", "localhost")
