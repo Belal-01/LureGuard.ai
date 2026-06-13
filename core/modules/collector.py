@@ -84,6 +84,10 @@ def normalize_event(alert: WazuhAlert) -> NormalizedEvent:
         status = str(data.get("status", "")).lower()
         success = status in ("valid", "success")
 
+    agent_ip = alert.agent_ip or None
+    if not src_ip and agent_ip:
+        src_ip = agent_ip
+
     syscheck = alert.syscheck or {}
 
     event_ts = parse_event_datetime(alert.timestamp or None)

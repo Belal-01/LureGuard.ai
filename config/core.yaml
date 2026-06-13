@@ -1,4 +1,4 @@
-# LureGuard Core Configuration
+# LureGuard Core — ML scoring + honeypot redirect (agent analysis uses opencode + .env)
 
 thresholds:
   t1: 0.55
@@ -6,13 +6,6 @@ thresholds:
 
 policy:
   min_attempts_for_alert: 8
-
-llm:
-  provider: disabled
-  model: ""
-  base_url: ""
-  timeout_seconds: 60
-  max_tokens: 512
 
 cowrie_profiles:
   dev-server:
@@ -23,5 +16,4 @@ cowrie_profiles:
     port: 2223
 
 window_seconds: 300
-tick_interval_seconds: 2
 dnat_ttl_minutes: 60

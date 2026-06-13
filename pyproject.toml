@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "lureguard"
 version = "1.0.0"
-description = "Host-Level SIEM with AI-Driven Detection and Dynamic SSH Honeypot Deception"
+description = "Plug-and-play AI security analyst for Wazuh — agentic triage, investigation, and reporting"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -31,8 +31,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-llm-openai     = ["openai>=1.40.0"]
-llm-anthropic  = ["anthropic>=0.30.0"]
 train = [
     "kagglehub>=0.3.0",
 ]
@@ -40,6 +38,11 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=5.0.0",
+]
+mcp = [
+    "mcp>=1.2.0",
+    "psycopg2-binary>=2.9.9",
+    "asyncssh>=2.14.0",
 ]
 lint = [
     "ruff>=0.4.0",
@@ -60,7 +63,7 @@ ignore_missing_imports = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ml*"]
+include = ["ml*", "lureguard_mcp*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

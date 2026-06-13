@@ -8,7 +8,6 @@ modules
 tests
 cowrie
 wazuh
-install.sh
 Makefile
 *.md
 .DS_Store

@@ -1,0 +1,101 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "format": "table", "rawSql": "SELECT count(*) AS total FROM hosts", "refId": "A" }
+      ],
+      "title": "Total hosts",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS active FROM hosts WHERE wazuh_status = 'active'",
+          "refId": "A"
+        }
+      ],
+      "title": "Active agents",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS disconnected FROM hosts WHERE wazuh_status = 'disconnected'",
+          "refId": "A"
+        }
+      ],
+      "title": "Disconnected",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS agent_enrolled FROM hosts WHERE enrolled_by = 'agent'",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent-onboarded",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 6 },
+      "id": 5,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT agent_id, name, host(ip) AS ip, os, wazuh_status, enrolled_by, enrolled_at, last_seen FROM hosts ORDER BY name",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet inventory",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 18 },
+      "id": 6,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT agent_id, name, host(ip) AS ip, os, wazuh_status, enrolled_by, enrolled_at, last_seen FROM hosts ORDER BY last_seen DESC NULLS LAST",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts detail",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["lureguard", "fleet"],
+  "time": { "from": "now-24h", "to": "now" },
+  "title": "LureGuard Fleet and Hosts",
+  "uid": "lureguard-fleet-hosts",
+  "version": 1
+}

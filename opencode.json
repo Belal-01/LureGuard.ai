@@ -1,0 +1,24 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "AGENTS.md",
+    "skills/_shared.md",
+    "skills/opencode-mcp.md"
+  ],
+  "model": "opencode/big-pickle",
+  "experimental": {
+    "mcp_timeout": 180000
+  },
+  "mcp": {
+    "lureguard": {
+      "type": "local",
+      "enabled": true,
+      "command": [".venv/bin/python", "-m", "lureguard_mcp"],
+      "timeout": 180000,
+      "environment": {
+        "POSTGRES_HOST": "localhost",
+        "POSTGRES_PORT": "5433"
+      }
+    }
+  }
+}

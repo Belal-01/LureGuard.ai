@@ -120,4 +120,4 @@ def reset_feature_window(_=Depends(_verify_token)):
 @router.get("/health", include_in_schema=False)
 async def health(db: AsyncSession = Depends(get_db)):
     # TODO: ping each subsystem
-    return {"db": "ok", "ml": "ok", "llm": settings.llm.provider}
+    return {"db": "ok", "ml": "ok"}

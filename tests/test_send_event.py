@@ -4,7 +4,7 @@ Integration tests — synthetic Wazuh SSH brute-force alert through the Core pip
 Run locally (mocked DB):
   pytest tests/test_send_event.py -v
 
-POST to running Core (requires make core):
+POST to running Core (requires `docker compose up -d`):
   pytest tests/test_send_event.py -v -m integration
 """
 from __future__ import annotations
@@ -123,7 +123,7 @@ async def test_bruteforce_pipeline_runs_with_mocked_db(bruteforce_alert: dict) -
 
 @pytest.mark.integration
 def test_post_wazuh_event_to_running_core(bruteforce_alert: dict) -> None:
-    """POST /wazuh/event when Core is up (make core). Skips if unreachable."""
+    """POST /wazuh/event when Core container is up. Skips if unreachable."""
     body = json.dumps(bruteforce_alert).encode("utf-8")
     req = urllib.request.Request(
         "http://127.0.0.1:8080/wazuh/event",

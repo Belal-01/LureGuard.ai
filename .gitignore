@@ -30,6 +30,9 @@ grafana/Grafana_Data/
 # Ali's prototype branch committed runtime DB dumps — never track
 DataBase/postgres_data/
 
+# Generated incident reports (keep directory via .gitkeep)
+reports/*.md
+
 # OS
 .DS_Store
 Thumbs.db

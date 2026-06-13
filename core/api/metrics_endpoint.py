@@ -23,9 +23,6 @@ infer_latency = Histogram(
 dnat_active = Gauge(
     "lureguard_enforcer_rules_active", "Active DNAT rules"
 )
-llm_calls = Counter(
-    "lureguard_llm_calls_total", "LLM summarization calls", ["provider", "status"]
-)
 model_info = Info("lureguard_model", "Active ML model metadata")
 
 

@@ -1,4 +1,4 @@
-"""Decision and summary result schemas."""
+"""Decision result schema."""
 import uuid
 from datetime import datetime
 from typing import Optional, Literal
@@ -18,15 +18,3 @@ class DecisionResult(BaseModel):
     features_hash: str
     profile_id: Optional[str] = None
     reason: str
-
-
-class SummaryResult(BaseModel):
-    text: Optional[str] = None
-    tokens_in: int = 0
-    tokens_out: int = 0
-    provider: str
-    model: str
-    latency_ms: int = 0
-    status: Literal["OK", "DISABLED", "FAILED"]
-    error: Optional[str] = None
-    prompt_hash: str = ""

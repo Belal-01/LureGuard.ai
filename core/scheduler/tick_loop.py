@@ -23,6 +23,18 @@ async def _refresh_whitelist_cache() -> None:
         await db.commit()
 
 
+async def _sync_hosts() -> None:
+    from modules.hosts_sync import sync_hosts_from_wazuh
+
+    await sync_hosts_from_wazuh()
+
+
+async def _backfill_ip_geo() -> None:
+    from modules.ip_geo_backfill import backfill_missing_ip_geolocations
+
+    await backfill_missing_ip_geolocations(limit=20)
+
+
 async def _tick() -> None:
     """Main tick — called every 2 seconds."""
     cleanup_expired()
@@ -32,5 +44,7 @@ async def _tick() -> None:
 
 def start_scheduler() -> None:
     scheduler.add_job(_tick, "interval", seconds=2, id="main_tick")
+    scheduler.add_job(_sync_hosts, "interval", seconds=60, id="hosts_sync")
+    scheduler.add_job(_backfill_ip_geo, "interval", seconds=60, id="ip_geo_backfill")
     scheduler.start()
     logger.info("✅ APScheduler started")

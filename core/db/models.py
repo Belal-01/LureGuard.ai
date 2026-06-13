@@ -29,6 +29,9 @@ class Event(Base):
     profile_id = Column(String(32))                   # dev-server|db-server|null
     wazuh_rule_id = Column(Integer)
     wazuh_rule_level = Column(Integer)
+    agent_id = Column(String(16))
+    agent_name = Column(String(128))
+    agent_ip = Column(INET)
     ingestion_path = Column(String(16), default="wazuh")
     syscheck_path = Column(Text)
     syscheck_event = Column(String(16))
@@ -37,6 +40,7 @@ class Event(Base):
 
     __table_args__ = (
         Index("ix_events_src_ip_ts", "src_ip", "ts"),
+        Index("ix_events_agent_id_ts", "agent_id", "ts"),
     )
 
 
@@ -129,3 +133,146 @@ class AuditLog(Base):
     action = Column(String(128))
     before = Column(JSONB)
     after = Column(JSONB)
+
+
+class Investigation(Base):
+    __tablename__ = "investigations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    trigger = Column(String(32), nullable=False)  # human | wazuh_event
+    subject = Column(String(256), nullable=False)
+    status = Column(String(16), nullable=False, default="open")  # open | closed
+    verdict = Column(String(32))  # true_positive | false_positive | undetermined
+    confidence = Column(String(16))  # confirmed | high | medium | low
+    severity = Column(String(8))  # P1 | P2 | P3 | P4
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    closed_at = Column(DateTime)
+    summary = Column(Text)
+
+    actions = relationship("AgentAction", back_populates="investigation")
+    reports = relationship("Report", back_populates="investigation")
+
+    __table_args__ = (
+        Index("ix_investigations_started_at", "started_at"),
+    )
+
+
+class AgentAction(Base):
+    __tablename__ = "agent_actions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id"))
+    tool_name = Column(String(128), nullable=False)
+    args = Column(JSONB)
+    result_summary = Column(Text)
+    duration_ms = Column(Integer)
+    ts = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    investigation = relationship("Investigation", back_populates="actions")
+
+    __table_args__ = (
+        Index("ix_agent_actions_ts", "ts"),
+        Index("ix_agent_actions_investigation_id", "investigation_id"),
+    )
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id"))
+    title = Column(String(256), nullable=False)
+    file_path = Column(Text, nullable=False)
+    format = Column(String(16), default="markdown")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    investigation = relationship("Investigation", back_populates="reports")
+
+
+class IpGeolocation(Base):
+    __tablename__ = "ip_geolocation"
+
+    ip = Column(INET, primary_key=True)
+    country_code = Column(String(2))
+    country_name = Column(String(128))
+    lat = Column(Float)
+    lon = Column(Float)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class Host(Base):
+    __tablename__ = "hosts"
+
+    agent_id = Column(String(16), primary_key=True)
+    name = Column(String(128), nullable=False)
+    ip = Column(INET)
+    os = Column(String(128))
+    wazuh_status = Column(String(32))  # active | disconnected | never_connected | pending
+    enrolled_by = Column(String(16), default="manual")  # agent | manual | sync
+    enrolled_at = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime)
+
+
+class CveFinding(Base):
+    __tablename__ = "cve_findings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(String(16), ForeignKey("hosts.agent_id", ondelete="CASCADE"), nullable=False)
+    package_name = Column(String(256), nullable=False)
+    package_version = Column(String(128), nullable=False)
+    cve_id = Column(String(32), nullable=False)
+    severity = Column(String(16), nullable=False)
+    cvss = Column(Float)
+    fix_version = Column(String(128))
+    summary = Column(Text)
+    source = Column(String(16), default="osv", nullable=False)
+    scanned_at = Column(DateTime, nullable=False)
+    actionable = Column(Boolean, default=True, nullable=False)
+    service_running = Column(Boolean, default=False, nullable=False)
+    on_kev = Column(Boolean, default=False, nullable=False)
+    priority_score = Column(Integer)
+
+    __table_args__ = (
+        Index("ix_cve_findings_agent_id", "agent_id"),
+        Index("ix_cve_findings_severity", "severity"),
+        Index("ix_cve_findings_scanned_at", "scanned_at"),
+        Index("ix_cve_findings_actionable", "actionable"),
+        Index("ix_cve_findings_priority_score", "priority_score"),
+    )
+
+
+class ExposureFinding(Base):
+    __tablename__ = "exposure_findings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id = Column(String(16), ForeignKey("hosts.agent_id", ondelete="CASCADE"), nullable=False)
+    port = Column(Integer, nullable=False)
+    protocol = Column(String(16), nullable=False)
+    process = Column(String(256))
+    local_address = Column(String(64))
+    state = Column(String(32))
+    risk_level = Column(String(16), nullable=False)
+    bind_scope = Column(String(32))
+    scanned_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index("ix_exposure_findings_agent_id", "agent_id"),
+        Index("ix_exposure_findings_risk_level", "risk_level"),
+    )
+
+
+class DetectionCoverage(Base):
+    __tablename__ = "detection_coverage"
+
+    agent_id = Column(String(16), ForeignKey("hosts.agent_id", ondelete="CASCADE"), primary_key=True)
+    fim_enabled = Column(Boolean, default=False, nullable=False)
+    rootcheck_enabled = Column(Boolean, default=False, nullable=False)
+    alerts_24h = Column(Integer, default=0, nullable=False)
+    rules_firing = Column(JSONB)
+    silent_rules_count = Column(Integer, default=0, nullable=False)
+    channels_active = Column(JSONB)
+    events_last_at = Column(DateTime)
+    rules_firing_count = Column(Integer, default=0, nullable=False)
+    scanned_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (Index("ix_detection_coverage_scanned_at", "scanned_at"),)

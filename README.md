@@ -1,175 +1,130 @@
 # LureGuard.ai
 
-Host-level SIEM that ingests Wazuh alerts, scores SSH authentication with a pre-trained classifier, and redirects high-risk attackers to Cowrie honeypots via DNAT.
+**Plug-and-play AI security analyst for developers.** One `docker compose up -d`. Wazuh is the embedded SIEM engine. Talk to it in plain language via [opencode](https://opencode.ai); it triages alerts, investigates hosts, writes reports, and enrolls agents — with every action logged to Postgres and shown in Grafana.
 
-**Stack:** Wazuh 4.14 · FastAPI Core · PostgreSQL · Cowrie ×2 · scikit-learn (RandomForest, ~2 MB model in repo)
+> *An AI-augmented SOC for people who don't have a SOC.*
+
+**Stack:** Wazuh 4.14 · FastAPI Core · PostgreSQL · Grafana · MCP · opencode (BYO-LLM)
+
+> **Product status checklist:** see [`PRODUCT-STATUS.md`](PRODUCT-STATUS.md) for end-to-end use cases, what's done, blockers, and Tier I replacement gate.
 
 ---
 
 ## What it does
 
-1. **Wazuh Agent** on Linux targets collects `auth.log`, syslog, FIM, rootcheck, and Cowrie JSON.
-2. **Wazuh Manager** applies rules and forwards matching alerts to Core through **integratord**.
-3. **LureGuard Core** normalizes events, stores them in Postgres, runs ML inference, and applies a three-way policy:
-   - **Allow** — log only  
-   - **Alert** — Telegram notification  
-   - **Redirect** — Telegram + iptables DNAT to a Cowrie profile (`dev-server` :2222 or `db-server` :2223)
+1. **Wazuh** collects logs from Linux agents (SSH, FIM, syslog) and forwards alerts to Core.
+2. **Core** stores events in Postgres (no `.log` files for the agent layer).
+3. **You** run `opencode` and ask in plain language: *"triage the last hour"*, *"investigate 203.0.113.5"*, *"protect my VM at 192.168.1.50"*.
+4. **LureGuard MCP server** gives the AI tools: query alerts, enrich IOCs, inspect Wazuh agents, write reports, onboard hosts via SSH.
+5. **Grafana** shows SIEM events, agent investigations, tool-call audit trail, and fleet status.
 
-FIM and rootcheck events are stored and can trigger Telegram when rule level ≥ 7. Full multi-channel ML scoring is on the roadmap; production path today is **SSH brute-force / auth** on Linux agents.
+**Trust posture:** Tier-2 brains, Tier-1 hands — advisory only. The agent never blocks, isolates, or changes firewall rules without you.
 
 ---
 
 ## Architecture
 
 ```mermaid
-flowchart LR
-  subgraph agents [Linux agents]
-    A[auth.log / syslog / FIM / Cowrie logs]
-  end
-  WM[Wazuh Manager]
-  INT[integratord]
-  CORE[LureGuard Core]
-  PG[(PostgreSQL)]
-  C1[Cowrie dev-server :2222]
-  C2[Cowrie db-server :2223]
-  TG[Telegram]
-
-  A --> WM --> INT -->|POST /wazuh/event| CORE
-  CORE --> PG
-  CORE -->|redirect| C1
-  CORE -->|redirect| C2
-  CORE --> TG
+flowchart TD
+  Human[Developer via opencode] --> AG[Agent + skills/*.md]
+  AG --> MCP[LureGuard MCP server]
+  MCP --> PG[(PostgreSQL)]
+  MCP --> WAPI[Wazuh Manager API]
+  WZ[Wazuh alerts] --> CORE[Core /wazuh/event] --> PG
+  MCP --> PG
+  PG --> GRAF[Grafana dashboards]
+  MCP --> REP[reports/*.md]
 ```
 
-| Service | Port (host) | Role |
-|---------|-------------|------|
-| `lureguard-core` | 8080 | API, ML, policy, enforcement |
-| `postgres` | 5433 | Events, decisions, whitelist |
-| `wazuh-manager` | 1514 / 1515 | Agent comms + registration |
-| `cowrie-dev` | 2222 | Honeypot profile `dev-server` |
-| `cowrie-db` | 2223 | Honeypot profile `db-server` |
+| Service | Port | Role |
+|---------|------|------|
+| `lureguard-core` | 8080 | Wazuh webhook ingest, scheduler |
+| `postgres` | 5433 | Events, investigations, agent audit log |
+| `wazuh-manager` | 1514/1515/55000 | SIEM + Manager API |
+| `grafana` | 3000 | SOC + Agent Activity + Fleet dashboards |
+| MCP (host) | stdio | opencode tool bridge |
 
 ---
 
-## Prerequisites
-
-- **Docker** and Docker Compose v2 (Desktop on macOS/Windows; native on Linux)
-- **Python 3.11+** for local dev (`make venv`, tests, optional retrain)
-- **Linux lab VM** (optional) for a real Wazuh agent — see [`install.sh`](install.sh) and [`wazuh/wazuh-setup.md`](wazuh/wazuh-setup.md)
-- **Telegram** bot token + chat ID (optional; alerts are skipped if unset)
-
----
-
-## Quick start (Docker)
+## Quick start
 
 ```bash
 git clone <repo-url> && cd LureGuard.ai
 
 cp .env.example .env
-# Edit .env: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (recommended)
+# Edit: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (optional)
+# Optional: VIRUSTOTAL_API_KEY, ABUSEIPDB_API_KEY, ONBOARD_SSH_PASSWORD
 
-docker compose build
 docker compose up -d
+make venv          # installs .[mcp] for MCP + doctor
+make doctor        # verify stack + opencode config/MCP
+opencode           # uses free opencode/big-pickle by default (no API key)
 ```
 
-Verify:
+**First prompts to try:**
+
+```
+Read skills/triage.md and triage alerts from the last 2 hours
+```
+
+```
+Read skills/investigate-host.md and investigate 10.0.0.5
+```
+
+```
+Read skills/onboard-host.md and protect 192.168.1.100 (ubuntu user)
+```
+
+Headless:
 
 ```bash
-curl -s http://localhost:8080/health
-# {"status":"ok","service":"lureguard-core"}
-
-docker exec wazuh-manager /var/ossec/bin/wazuh-control status | grep wazuh-db
+opencode run "Read AGENTS.md and skills/triage.md — triage last hour"
 ```
-
-**ML model:** `ml/models/model.joblib` and `scaler.joblib` are committed (~2 MB total). No training step is required for a standard clone.
-
-### Enroll a Linux agent (lab)
-
-On your machine (repo root):
-
-```bash
-./install.sh
-```
-
-Interactive script: Wazuh Manager (via Compose), secrets under `secrets/`, agent install on an Ubuntu VM, and integratord smoke test. For manual steps, see [`wazuh/wazuh-setup.md`](wazuh/wazuh-setup.md).
-
-### Trigger a test alert
-
-From another host, fail SSH login to the agent VM several times (integratord forwards to Core), or run the integration test against a live Core:
-
-```bash
-make core    # terminal 1
-make test    # or: pytest tests/test_send_event.py -v -m integration
-```
-
-Watch Core logs: `docker logs -f lureguard-core`
 
 ---
 
-## Configuration
+## Doctor
 
-| File | Purpose |
-|------|---------|
-| [`.env`](.env.example) | DB URL, Telegram, paths (`CONFIG_PATH`, `MODELS_DIR`) |
-| [`config/core.yaml`](config/core.yaml) | T1/T2 thresholds, Cowrie profiles, policy gates |
-| [`wazuh/ossec.conf`](wazuh/ossec.conf) | integratord hook URL and alert **group** filter |
-| [`wazuh/agent-ossec.conf`](wazuh/agent-ossec.conf) | Agent log sources (template for lab VMs) |
-| `secrets/` | `db_password.txt`, `admin_token.txt` (created by `install.sh`, gitignored) |
-
-Default decision thresholds (`config/core.yaml`):
-
-- **T1** = 0.55 — below → Allow  
-- **T2** = 0.85 — between T1 and T2 → Alert; above → Redirect  
-- **min_attempts_for_alert** = 8 — dampens single typo logins on the SSH feature window  
-
-Admin API (Bearer token from `secrets/admin_token.txt` or `dev-token` in dev):
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET/PUT | `/config/thresholds` | Read/update T1, T2 |
-| GET/POST/DELETE | `/config/whitelist` | Trusted IPs (Postgres-backed) |
-| POST | `/config/panic-flush` | Clear active DNAT rules |
-| POST | `/config/reset-feature-window` | Clear in-memory SSH counters |
-| GET | `/metrics` | Prometheus exposition (partial wiring) |
-| GET | `/docs` | OpenAPI (Swagger) |
-
----
-
-## Development
+Like career-ops `npm run doctor`:
 
 ```bash
-make venv          # .venv + pip install -e ".[dev,train]"
-make ensure-ml     # verify model.joblib present
-make test          # unit tests (excludes live Core integration)
-make lint          # ruff + mypy (optional)
-make core          # Postgres in Docker + uvicorn on :8080 with reload
+make doctor
 ```
 
-| Target | Description |
-|--------|-------------|
-| `make up` / `make down` | Docker Compose stack |
-| `make train` | Retrain on Kaggle data (auto-download via `kagglehub`) |
-| `make fetch-dataset` | Download CSV only |
-| `make train-full` | Full ~2.6M-row training (slow) |
-
-Training data is **not** in Git. See [`ml/datasets/README.md`](ml/datasets/README.md).
+Checks Docker services, Postgres schema, Core health, Wazuh API, integratord hook, Grafana, `.env`, opencode + MCP imports.
 
 ---
 
-## Machine learning
+## Grafana
 
-| Artifact | Size | In Git |
-|----------|------|--------|
-| `ml/models/model.joblib` | ~2.0 MB | Yes |
-| `ml/models/scaler.joblib` | ~2 KB | Yes |
-| `ml/models/model_registry.json` | ~1 KB | Yes (SHA-256, metrics) |
+Open http://localhost:3000 (admin / password from `.env`).
 
-Classifier: **RandomForest** on 24 Wazuh alert features (`ml/alert_features.py`). Inference runs in-process at startup with registry hash verification.
+| Dashboard | Shows |
+|-----------|--------|
+| **LureGuard SOC Overview** | Events by channel, alert levels, top IPs |
+| **LureGuard Agent Activity** | Investigations, verdicts, tool calls, reports |
+| **LureGuard Fleet and Hosts** | Enrolled agents, Wazuh status |
 
-Retrain only when changing features or refreshing public datasets:
+---
+
+## Flagship demo (for evaluators)
 
 ```bash
-make train
+# 1. Stack up
+docker compose up -d && make doctor
+
+# 2. Onboard a lab VM (set ONBOARD_SSH_PASSWORD in .env)
+opencode
+> Read skills/onboard-host.md and onboard 192.168.1.50
+
+# 3. Generate noise (from another machine)
+ssh baduser@192.168.1.50   # failed logins → Wazuh alerts
+
+# 4. Triage + report
+> Read skills/triage.md and triage the last 30 minutes
+> Read skills/incident-report.md and write a report for the top alert
+
+# 5. Show Grafana Agent Activity + Fleet dashboards
 ```
 
 ---
@@ -177,56 +132,47 @@ make train
 ## Project layout
 
 ```
-├── core/              # FastAPI app (collector, policy, inference, enforcer)
-├── ml/                # Training, features, shipped model artifacts
-├── wazuh/             # Manager config, integratord, custom rules
-├── cowrie/            # Per-profile honeypot config
-├── config/            # core.yaml
-├── tests/
-├── docker-compose.yml
-├── Makefile
-└── install.sh         # Lab Wazuh agent bootstrap
+AGENTS.md              # Agent constitution
+skills/                # Mode playbooks (triage, investigate, report, …)
+lureguard_mcp/         # MCP server + doctor
+opencode.json          # MCP wiring for opencode
+core/                  # FastAPI ingest + scheduler
+wazuh/                 # Manager config, integratord, agent template
+grafana/provisioning/  # Dashboards (Postgres datasource)
+reports/               # Generated incident reports
 ```
 
 ---
 
-## Security notes
+## Configuration
 
-- Do **not** commit `.env` or `secrets/`.
-- Change default admin token before any exposed deployment.
-- Core container requires `NET_ADMIN` for iptables DNAT.
-- Cowrie and Wazuh manager ports should stay on lab/management networks in production.
-- Customer/production traffic must **not** be used to retrain models (`training_policy` in registry).
-
----
-
-## Team
-
-| Member | Area |
-|--------|------|
-| Majd | Core, DB, enforcement, Wazuh Manager, deployment |
-| Ali | Data pipeline, features, Grafana |
-| Jalal | ML training & evaluation |
-| Belal | Wazuh agent, Cowrie, BYOLLM, Telegram |
+| Variable | Purpose |
+|----------|---------|
+| `TELEGRAM_*` | Alert notifications |
+| `WAZUH_API_*` | Manager API for MCP (default `wazuh:wazuh`) |
+| `VIRUSTOTAL_API_KEY` | Optional IOC enrichment |
+| `ABUSEIPDB_API_KEY` | Optional IP reputation |
+| `ONBOARD_SSH_PASSWORD` | VM enrollment via MCP |
 
 ---
 
-## Known limitations
+## Development
 
-- **Policy scope:** ML + redirect applies to SSH auth events; syslog, Apache, and Windows channels are collected in places but not fully scored or redirected.
-- **integratord filter:** Only alert groups listed in `wazuh/ossec.conf` reach Core (auth, FIM, rootcheck, `lureguard_custom` / Cowrie).
-- **LLM layer:** `core/modules/llm_abstraction.py` is a stub (Sprint 3).
-- **Metrics:** `/metrics` exists; full Prometheus wiring across the pipeline is incomplete.
-- **Grafana dashboards:** planned (Ali).
+```bash
+make venv
+make test
+make lint
+make migrate          # after schema changes
+make db-revision m="description"   # create new migration
+make train            # optional — retrain SSH classifier (models ship in repo)
+```
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
-
-Bundled or integrated third-party software (Wazuh, Cowrie, scikit-learn, etc.) remains under their respective licenses.
+MIT — see [LICENSE](LICENSE).
 
 ## Third-party
 
-[Wazuh](https://wazuh.com/) · [Cowrie](https://github.com/cowrie/cowrie) · scikit-learn
+Wazuh (GPLv2), Cowrie (BSD), Grafana (AGPL), scikit-learn (BSD).

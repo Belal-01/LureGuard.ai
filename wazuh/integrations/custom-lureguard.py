@@ -32,6 +32,7 @@ LOG_FILE = f"{pwd}/logs/integrations.log"
 ALERT_INDEX = 1
 WEBHOOK_INDEX = 3
 
+# Must match <group> in wazuh/ossec.conf integration block
 _FORWARD_GROUPS = frozenset(
     {
         "sshd",
@@ -39,6 +40,10 @@ _FORWARD_GROUPS = frozenset(
         "authentication_success",
         "authentication_failures",
         "invalid_login",
+        "syscheck",
+        "rootcheck",
+        "lureguard_custom",
+        "cowrie",
     }
 )
 

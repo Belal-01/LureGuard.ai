@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 from pathlib import Path
 from urllib import parse, request
 
+import httpx
+
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _SECRETS_DIR = _REPO_ROOT / "secrets"
+_DOCUMENT_TIMEOUT_SECONDS = 30.0
 
 
 def _read_secret_file(filename: str) -> str:
@@ -75,6 +79,58 @@ class TelegramNotifier:
 
     def send_alert(self, message: str) -> dict:
         return self.send_message(message)
+
+    def send_document(
+        self,
+        file_path: str | Path,
+        *,
+        caption: str = "",
+        filename: str | None = None,
+    ) -> dict:
+        """Upload a file to the configured Telegram chat (sendDocument)."""
+        if not self.enabled:
+            return {"sent": False, "reason": "telegram_not_configured"}
+
+        path = Path(file_path)
+        if not path.is_file():
+            return {"sent": False, "reason": f"file_not_found: {path}"}
+
+        upload_name = filename or path.name
+        mime_type = mimetypes.guess_type(upload_name)[0] or "application/octet-stream"
+        url = f"https://api.telegram.org/bot{self.token}/sendDocument"
+
+        data: dict[str, str] = {"chat_id": self.chat_id}
+        if caption.strip():
+            data["caption"] = caption.strip()[:1024]
+        if self.message_thread_id:
+            data["message_thread_id"] = self.message_thread_id
+
+        try:
+            with path.open("rb") as handle:
+                files = {"document": (upload_name, handle, mime_type)}
+                response = httpx.post(
+                    url,
+                    data=data,
+                    files=files,
+                    timeout=_DOCUMENT_TIMEOUT_SECONDS,
+                )
+            payload = response.json()
+            is_ok = bool(payload.get("ok"))
+            result: dict[str, str | bool] = {
+                "sent": is_ok,
+                "reason": "ok" if is_ok else "telegram_api_error",
+                "file_path": str(path),
+                "filename": upload_name,
+            }
+            if not is_ok:
+                result["detail"] = str(payload.get("description", ""))
+            return result
+        except Exception as exc:
+            return {
+                "sent": False,
+                "reason": f"telegram_send_failed: {type(exc).__name__}",
+                "file_path": str(path),
+            }
 
 
 telegram_notifier = TelegramNotifier()
