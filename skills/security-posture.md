@@ -8,7 +8,9 @@ Answer: *How exposed and monitored is the fleet?* using three pillars cached in 
 2. **Exposure** — open/listening ports with bind scope (`all_interfaces` vs `localhost`) and K8s-aware scoring
 3. **Detection coverage** — FIM, rootcheck, alerts/rules firing in last 24h (correlated by `agent_id`)
 
-**Do not block on live scans.** Read caches first; background scans refresh data.
+**Do not block on live scans.** Default: read **Postgres cache only** (`get_posture_snapshot`) — fast answers for "what's my posture?"
+
+**Do not** call `trigger_posture_scan` unless the user explicitly asks to rescan/refresh (see `skills/refresh-posture.md`). The 6h background scheduler keeps cache warm without blocking the user.
 
 ## Report quality bar (mandatory)
 
@@ -23,39 +25,36 @@ Answer: *How exposed and monitored is the fleet?* using three pillars cached in 
 ## Prerequisites
 
 - Active agents enrolled (`list_agents`)
-- Background scheduler runs every 6h when MCP server starts (or call `trigger_posture_scan`)
+- Background scheduler refreshes cache every 6h when MCP server starts
 
-## Workflow (fast path — default)
+## Workflow (fast path — default, cache only)
 
 1. `open_investigation(subject="Security posture check", trigger="human")`
 2. `list_agents(status=active)` — confirm fleet scope
 3. For each active agent (skip `000`):
    - `get_posture_snapshot(agent_id)` — **instant** read of all three Postgres caches
-4. If `needs_rescan: true` or `overall_status` is `never_scanned` / `stale`:
-   - `trigger_posture_scan(agent_id)` — returns immediately with `job_id`
-   - Tell user: scan running in background (~5 min per host); report uses cached data now
-   - Optionally `get_posture_scan_status(job_id)` to check progress
+4. If `needs_rescan: true`, `never_scanned`, or stale cache: **report from cache anyway** — note `cache_age_hours` / `overall_status` and tell user they can say **"rescan"** to queue a fresh scan (`refresh-posture.md`). **Do not** call `trigger_posture_scan` unless they ask.
 5. `get_fleet_posture_summary()` — fleet-wide cache status
 6. For findings worth escalating:
    - Actionable CVEs → `get_agent_vulnerabilities(agent_id)` (actionable-only default)
    - Risky ports → `get_agent_exposure(agent_id, risk_level=high)` or `critical`
    - Coverage gaps → `get_agent_detection_coverage(agent_id)`
    - `record_finding` with tool JSON citations
-7. `save_report(title="Security Posture [date]", markdown="...", send_telegram=true)` — saves and uploads **.md** (default)
+7. `save_report(title="Security Posture [date]", markdown="...", send_telegram=true)` — auto CVE/chart PNGs; Telegram gets PDF
 8. `close_investigation(verdict=undetermined, confidence=high, summary="...")`
 
-**PDF:** Never convert or send PDF unless the user explicitly asks.
+**PDF:** Telegram delivery is always PDF (`send_report_to_telegram` or `send_telegram=true`). Use `as_pdf=true` / `convert_report_to_pdf` only when the user wants a PDF file saved locally.
 
-## When to scan (background only)
+## When to scan (explicit user request only)
 
 | Situation | Action |
 |-----------|--------|
-| First run / empty cache | `trigger_posture_scan()` for fleet |
-| Cache older than 24h (`cache_age_hours > 24`) | `trigger_posture_scan(agent_id)` |
-| User asks for fresh data | `trigger_posture_scan(agent_id, force=true)` |
-| After patching hosts | `trigger_posture_scan(agent_id)` then re-check snapshot later |
+| User asks posture / CVEs / exposure | **Cache only** — `get_posture_snapshot` |
+| User says rescan / refresh / scan now / after patch | `skills/refresh-posture.md` → `trigger_posture_scan` |
+| Cache empty or stale | Report cache age; **offer** rescan — do not auto-start |
+| Background maintenance | 6h scheduler (no user action needed) |
 
-**Never** call `scan_agent_vulnerabilities` synchronously in the posture workflow unless user explicitly requests a blocking scan.
+**Never** run `trigger_posture_scan` across the fleet during a routine posture question — it is a heavy indexer (~5 min/host).
 
 ## Output format
 
@@ -83,14 +82,14 @@ Note: total listening vs risky_listening from snapshot
 1. Patch KEV / service-bound critical/high CVEs first
 2. Restrict or firewall ports with bind_scope=all_interfaces and risk medium+
 3. Enable FIM/rootcheck on agents with gaps
-4. Re-run `trigger_posture_scan` after changes
+4. If user wants updated numbers after changes → offer `refresh-posture.md` (do not auto-scan)
 ```
 
 ## Edge cases
 
 | Situation | Action |
 |-----------|--------|
-| `needs_rescan: true` | Call `trigger_posture_scan`; do not wait — report cached data + note scan in progress |
+| `needs_rescan: true` | Note in report; offer rescan — do **not** auto-call `trigger_posture_scan` |
 | Agent 000 (manager) | Skip |
 | Empty actionable CVE list | Report "no actionable CVEs after triage" — cite `actionable_counts` vs raw if needed (`include_noise=true`) |
 | `events_last_at` null + alerts_24h=0 | Flag possible ingestion gap; cite `get_soc_health` |
@@ -101,7 +100,7 @@ Note: total listening vs risky_listening from snapshot
 |------|------|
 | `get_posture_snapshot` | Primary — instant 3-pillar read |
 | `get_fleet_posture_summary` | Fleet cache status |
-| `trigger_posture_scan` | Background refresh (non-blocking) |
+| `trigger_posture_scan` | **Only** via `refresh-posture.md` when user asks |
 | `get_posture_scan_status` | Job progress |
 | `get_agent_vulnerabilities` / `get_fleet_vulnerability_summary` | CVE detail (actionable default) |
 | `get_agent_exposure` / `get_fleet_exposure_summary` | Port exposure detail |

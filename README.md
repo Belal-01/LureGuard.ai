@@ -139,8 +139,10 @@ opencode.json          # MCP wiring for opencode
 core/                  # FastAPI ingest + scheduler
 wazuh/                 # Manager config, integratord, agent template
 grafana/provisioning/  # Dashboards (Postgres datasource)
-reports/               # Generated incident reports
+reports/               # Generated incident reports (+ assets/*.png charts)
 ```
+
+**Reports:** `save_report` auto-embeds PNG charts in a `## Visual summary` section. PDF uses **WeasyPrint** (via `make venv`) for proper tables and chart images; xhtml2pdf is a fallback. Telegram delivery sends PDF by default.
 
 ---
 

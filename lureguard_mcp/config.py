@@ -66,6 +66,13 @@ def abuseipdb_api_key() -> str:
     return os.getenv("ABUSEIPDB_API_KEY", "").strip()
 
 
+def urlhaus_api_url() -> str:
+    return os.getenv(
+        "URLHAUS_API_URL",
+        "https://urlhaus-api.abuse.ch/v1/url/",
+    ).strip()
+
+
 def onboard_ssh_password() -> str:
     return os.getenv("ONBOARD_SSH_PASSWORD", "").strip()
 

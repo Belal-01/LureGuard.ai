@@ -145,15 +145,87 @@ class Investigation(Base):
     verdict = Column(String(32))  # true_positive | false_positive | undetermined
     confidence = Column(String(16))  # confirmed | high | medium | low
     severity = Column(String(8))  # P1 | P2 | P3 | P4
+    detection_source = Column(String(64))  # wazuh | human | scheduled
+    asset_criticality = Column(String(16))  # critical | high | medium | low
+    mttd_seconds = Column(Integer)
+    kill_chain_summary = Column(Text)
     started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     closed_at = Column(DateTime)
     summary = Column(Text)
 
     actions = relationship("AgentAction", back_populates="investigation")
     reports = relationship("Report", back_populates="investigation")
+    findings = relationship("Finding", back_populates="investigation")
+    timeline_events = relationship("TimelineEvent", back_populates="investigation")
+    iocs = relationship("Ioc", back_populates="investigation")
 
     __table_args__ = (
         Index("ix_investigations_started_at", "started_at"),
+    )
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False)
+    evidence_id = Column(String(16), nullable=False)
+    finding = Column(Text, nullable=False)
+    citation = Column(Text, nullable=False)
+    mitre_technique = Column(String(32))
+    mitre_tactic = Column(String(64))
+    severity = Column(String(8))
+    verdict = Column(String(32))
+    confidence = Column(String(16))
+    ioc_type = Column(String(32))
+    ioc_value = Column(Text)
+    ts = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    investigation = relationship("Investigation", back_populates="findings")
+
+    __table_args__ = (
+        Index("ix_findings_investigation_id", "investigation_id"),
+        Index("ix_findings_mitre_technique", "mitre_technique"),
+        Index("ix_findings_severity", "severity"),
+    )
+
+
+class TimelineEvent(Base):
+    __tablename__ = "timeline_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False)
+    ts_event = Column(DateTime, nullable=False)
+    phase = Column(String(32))  # identification | containment | eradication | recovery | lessons
+    description = Column(Text, nullable=False)
+    source = Column(String(128))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    investigation = relationship("Investigation", back_populates="timeline_events")
+
+    __table_args__ = (
+        Index("ix_timeline_events_investigation_id", "investigation_id"),
+        Index("ix_timeline_events_ts_event", "ts_event"),
+    )
+
+
+class Ioc(Base):
+    __tablename__ = "iocs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False)
+    type = Column(String(32), nullable=False)
+    value = Column(Text, nullable=False)
+    defanged = Column(Text)
+    reputation = Column(String(32))
+    source = Column(String(64))
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    investigation = relationship("Investigation", back_populates="iocs")
+
+    __table_args__ = (
+        Index("ix_iocs_investigation_id", "investigation_id"),
+        Index("ix_iocs_type", "type"),
     )
 
 

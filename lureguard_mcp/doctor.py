@@ -329,6 +329,40 @@ def check_optional_intel() -> Check:
     return Check("Threat intel keys", True, required=False)
 
 
+def check_report_rendering() -> Check:
+    missing = []
+    try:
+        import matplotlib  # noqa: F401
+    except ImportError:
+        missing.append("matplotlib")
+    try:
+        import markdown  # noqa: F401
+    except ImportError:
+        missing.append("markdown")
+    try:
+        from weasyprint import HTML  # noqa: F401
+
+        del HTML
+        pdf_engine = "weasyprint"
+    except (ImportError, OSError):
+        try:
+            from xhtml2pdf import pisa  # noqa: F401
+
+            del pisa
+            pdf_engine = "xhtml2pdf (fallback)"
+        except ImportError:
+            missing.append("weasyprint")
+            pdf_engine = ""
+    if missing:
+        return Check(
+            "Report charts + PDF (pip)",
+            False,
+            f"Run: make venv — missing: {', '.join(missing)}",
+            required=False,
+        )
+    return Check("Report charts + PDF (pip)", True, pdf_engine, required=False)
+
+
 def _print_check(c: Check) -> None:
     if c.ok:
         mark = _green("✓")
@@ -363,6 +397,7 @@ def run_doctor() -> int:
     optional_checks = [
         check_grafana(),
         check_optional_intel(),
+        check_report_rendering(),
     ]
 
     print("Required")

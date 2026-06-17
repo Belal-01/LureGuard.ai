@@ -28,10 +28,17 @@ Plug-and-play AI security analyst. One `docker compose up -d`. Wazuh is the embe
 | Source | Role |
 |--------|------|
 | Postgres `events` | Wazuh-ingested alerts (ground truth for SIEM queries) |
-| Postgres `investigations`, `agent_actions`, `reports` | What you did and why (shown in Grafana) |
+| Postgres `investigations`, `agent_actions`, `reports`, `findings`, `timeline_events`, `iocs` | What you did and why (shown in Grafana) |
 | Postgres `hosts` | Enrolled/protected machines |
 | Wazuh Manager API | Live agent fleet, syscollector, rules |
 | `reports/*.md` | Saved incident reports |
+
+## Reports vs Grafana
+
+**Grafana = live drill-down** for operators (volume charts, full inventory, every CVE row).  
+**Reports = self-contained briefings** for humans and Telegram — include **key metrics** (alert counts, fleet health, top CVEs, investigation status) **plus** analyst narrative (causality, verdict, kill-chain, MITRE, actions).
+
+Do not paste full dashboard tables (every agent, every CVE). Do not ship metrics-free reports that tell management to open Grafana.
 
 ## Mode routing
 
@@ -39,11 +46,13 @@ Plug-and-play AI security analyst. One `docker compose up -d`. Wazuh is the embe
 |-------------|------------|
 | triage, review alerts, last hour, shift handover | `skills/triage.md` |
 | investigate IP, host, user, brute force | `skills/investigate-host.md` |
+| web server, apache, nginx, HTTP attack | `skills/investigate-web.md` |
 | sweep IOC, hash, domain across fleet | `skills/ioc-sweep.md` |
 | write report, incident summary | `skills/incident-report.md` |
 | protect host, enroll agent, onboard VM | `skills/onboard-host.md` |
 | daily summary, SOC metrics, what happened today | `skills/daily-summary.md` |
 | posture, CVE, vulnerabilities, outdated packages | `skills/security-posture.md` |
+| rescan posture, refresh CVEs, run CVE scan | `skills/refresh-posture.md` |
 
 Load `skills/_shared.md` plus the mode file for every investigation workflow.
 
@@ -52,9 +61,10 @@ Load `skills/_shared.md` plus the mode file for every investigation workflow.
 Alerts: `get_recent_alerts`, `get_alerts_for_ip`, `get_event_timeline`, `search_events`  
 Fleet: `list_agents`, `get_agent_detail`, `get_rules_summary`, `get_manager_status`  
 Posture: `get_posture_snapshot`, `get_fleet_posture_summary`, `trigger_posture_scan`, `get_posture_scan_status`, `get_agent_vulnerabilities`, `get_fleet_vulnerability_summary`, `get_agent_exposure`, `get_fleet_exposure_summary`, `get_agent_detection_coverage`, `get_fleet_detection_coverage`, `get_soc_health`  
-Intel: `check_ip_reputation`, `check_ip_virustotal`, `check_hash`  
-Lifecycle: `open_investigation`, `record_finding`, `close_investigation`  
-Output: `save_report`, `convert_report_to_pdf`, `send_report_to_telegram`, `notify_telegram`  
+Intel: `check_ip_reputation`, `check_ip_virustotal`, `check_hash`, `check_url_virustotal`, `check_domain_virustotal`, `check_url_urlhaus`, `analyze_web_attack`, `defang_ioc`  
+Lifecycle: `open_investigation`, `record_finding`, `add_timeline_event`, `get_investigation_artifacts`, `close_investigation`  
+Charts: `generate_report_chart`, `generate_report_chart_preset`  
+Output: `save_report` (auto PNG charts; Telegram→PDF), `convert_report_to_pdf`, `send_report_to_telegram`, `notify_telegram`  
 Onboarding: `onboard_host_tool`, `list_enrolled_hosts`
 
 ## Headless / batch

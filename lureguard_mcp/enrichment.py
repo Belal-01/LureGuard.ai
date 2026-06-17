@@ -1,12 +1,41 @@
-"""Threat intelligence enrichment."""
+"""Threat intelligence enrichment and web-attack classification."""
 
 from __future__ import annotations
 
+import base64
 import json
+import re
+from typing import Any
+from urllib.parse import quote
 
 import httpx
 
-from lureguard_mcp.config import abuseipdb_api_key, virustotal_api_key
+from lureguard_mcp.config import abuseipdb_api_key, urlhaus_api_url, virustotal_api_key
+
+
+def defang_indicator(value: str, ioc_type: str | None = None) -> str:
+    """Defang an IOC for safe sharing in reports."""
+    text = value.strip()
+    kind = (ioc_type or "").lower()
+    if kind in {"url", "domain"} or "://" in text or text.startswith("www."):
+        text = re.sub(r"(?i)^https?://", lambda m: m.group(0).replace("ttp", "xxp"), text)
+        return text.replace(".", "[.]")
+    if kind == "email" or "@" in text:
+        return text.replace("@", "[at]")
+    if kind == "ip":
+        return text.replace(".", "[.]")
+    return text.replace(".", "[.]")
+
+
+def refang_indicator(value: str) -> str:
+    """Refang a defanged IOC for API lookups."""
+    text = value.strip()
+    text = re.sub(r"(?i)^hxxps?\[:\]//", lambda m: m.group(0).replace("xxp", "ttp").replace("[:]", ":"), text)
+    text = re.sub(r"(?i)^hxxps?://", lambda m: m.group(0).replace("xxp", "ttp"), text)
+    text = text.replace("[.]", ".")
+    text = text.replace("[:]", ":")
+    text = text.replace("[at]", "@")
+    return text
 
 
 def check_ip_reputation(ip: str) -> str:
@@ -82,3 +111,157 @@ def check_hash_virustotal(file_hash: str) -> str:
             },
             indent=2,
         )
+
+
+def _vt_url_id(url: str) -> str:
+    return base64.urlsafe_b64encode(url.encode("utf-8")).decode("utf-8").strip("=")
+
+
+def check_url_virustotal(url: str) -> str:
+    key = virustotal_api_key()
+    if not key:
+        return json.dumps({"configured": False, "message": "VIRUSTOTAL_API_KEY not set"})
+    clean = refang_indicator(url)
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.get(
+            f"https://www.virustotal.com/api/v3/urls/{_vt_url_id(clean)}",
+            headers={"x-apikey": key},
+        )
+        if resp.status_code == 404:
+            submit = client.post(
+                "https://www.virustotal.com/api/v3/urls",
+                headers={"x-apikey": key},
+                data={"url": clean},
+            )
+            submit.raise_for_status()
+            return json.dumps(
+                {
+                    "url": clean,
+                    "status": "submitted",
+                    "message": "URL submitted to VirusTotal; re-check in ~1 minute",
+                },
+                indent=2,
+            )
+        resp.raise_for_status()
+        attrs = resp.json().get("data", {}).get("attributes", {})
+        stats = attrs.get("last_analysis_stats", {})
+        return json.dumps(
+            {
+                "url": clean,
+                "malicious": stats.get("malicious", 0),
+                "suspicious": stats.get("suspicious", 0),
+                "harmless": stats.get("harmless", 0),
+                "categories": attrs.get("categories", {}),
+            },
+            indent=2,
+        )
+
+
+def check_domain_virustotal(domain: str) -> str:
+    key = virustotal_api_key()
+    if not key:
+        return json.dumps({"configured": False, "message": "VIRUSTOTAL_API_KEY not set"})
+    clean = refang_indicator(domain).lower()
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.get(
+            f"https://www.virustotal.com/api/v3/domains/{quote(clean, safe='')}",
+            headers={"x-apikey": key},
+        )
+        resp.raise_for_status()
+        attrs = resp.json().get("data", {}).get("attributes", {})
+        stats = attrs.get("last_analysis_stats", {})
+        return json.dumps(
+            {
+                "domain": clean,
+                "malicious": stats.get("malicious", 0),
+                "suspicious": stats.get("suspicious", 0),
+                "harmless": stats.get("harmless", 0),
+                "categories": attrs.get("categories", {}),
+                "registrar": attrs.get("registrar"),
+            },
+            indent=2,
+        )
+
+
+def check_url_urlhaus(url: str) -> str:
+    clean = refang_indicator(url)
+    api_url = urlhaus_api_url()
+    with httpx.Client(timeout=15.0) as client:
+        resp = client.post(
+            api_url,
+            data={"url": clean},
+            headers={"Accept": "application/json"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return json.dumps(
+            {
+                "url": clean,
+                "query_status": data.get("query_status"),
+                "threat": data.get("threat"),
+                "url_status": data.get("url_status"),
+                "tags": data.get("tags", []),
+                "blacklists": data.get("blacklists", {}),
+            },
+            indent=2,
+        )
+
+
+_WEB_PATTERNS: list[tuple[str, str, str, str]] = [
+    (r"(?i)(union\s+select|or\s+1\s*=\s*1|'\s*or\s*'1'='1)", "sqli", "T1190", "Initial Access"),
+    (r"(?i)(<script|javascript:|onerror=|onload=)", "xss", "T1189", "Initial Access"),
+    (r"(?i)(\.\./|\.\.\\|/etc/passwd|/proc/self)", "lfi", "T1190", "Initial Access"),
+    (r"(?i)(cmd=|exec\(|system\(|/bin/sh|wget\s+http)", "rce", "T1190", "Initial Access"),
+    (r"(?i)(sqlmap|nikto|nmap|masscan|gobuster|dirbuster)", "scanner_ua", "T1595", "Reconnaissance"),
+    (r"(?i)(wp-admin|phpmyadmin|\.env|/admin/config)", "probe", "T1190", "Initial Access"),
+]
+
+
+def analyze_web_attack(event_payload: str) -> str:
+    """Classify likely web attack patterns from event text or JSON payload."""
+    text = event_payload.strip()
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            parts = [
+                str(parsed.get(k, ""))
+                for k in ("raw_ref", "event_type", "username", "syscheck_path", "channel")
+            ]
+            text = " ".join(parts) + " " + text
+    except json.JSONDecodeError:
+        pass
+
+    matches: list[dict[str, Any]] = []
+    for pattern, attack_type, technique, tactic in _WEB_PATTERNS:
+        if re.search(pattern, text):
+            matches.append(
+                {
+                    "attack_type": attack_type,
+                    "mitre_technique": technique,
+                    "mitre_tactic": tactic,
+                    "pattern": pattern,
+                }
+            )
+
+    if not matches:
+        return json.dumps(
+            {
+                "classified": False,
+                "message": "No known web attack signature matched",
+                "input_preview": text[:500],
+            },
+            indent=2,
+        )
+
+    primary = matches[0]
+    return json.dumps(
+        {
+            "classified": True,
+            "primary_attack_type": primary["attack_type"],
+            "mitre_technique": primary["mitre_technique"],
+            "mitre_tactic": primary["mitre_tactic"],
+            "matches": matches,
+            "confidence": "high" if len(matches) > 1 else "medium",
+        },
+        indent=2,
+    )

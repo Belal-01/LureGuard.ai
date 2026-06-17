@@ -32,6 +32,8 @@ DataBase/postgres_data/
 
 # Generated incident reports (keep directory via .gitkeep)
 reports/*.md
+reports/*.pdf
+reports/assets/
 
 # OS
 .DS_Store

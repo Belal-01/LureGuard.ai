@@ -7,6 +7,7 @@ import inspect
 import json
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, TypeVar
 
@@ -14,9 +15,13 @@ from mcp.server.fastmcp import FastMCP
 
 from lureguard_mcp import context as inv_ctx
 from lureguard_mcp.db import (
+    add_timeline_event as db_add_timeline_event,
     close_investigation_db,
     get_alerts_for_ip as db_get_alerts_for_ip,
     get_event_timeline as db_get_event_timeline,
+    get_investigation_findings_db,
+    get_investigation_iocs_db,
+    get_investigation_timeline_db,
     get_recent_alerts as db_get_recent_alerts,
     get_soc_health_db,
     list_hosts_db,
@@ -28,9 +33,14 @@ from lureguard_mcp.db import (
 )
 from lureguard_mcp.config import REPORTS_DIR, REPO_ROOT
 from lureguard_mcp.enrichment import (
+    analyze_web_attack as enrich_analyze_web_attack,
+    check_domain_virustotal as enrich_domain_vt,
     check_hash_virustotal,
     check_ip_reputation as enrich_abuseipdb,
     check_ip_virustotal as enrich_vt_ip,
+    check_url_urlhaus as enrich_urlhaus,
+    check_url_virustotal as enrich_url_vt,
+    defang_indicator,
 )
 from lureguard_mcp.onboarding import onboard_host
 from lureguard_mcp.detection_scanner import (
@@ -45,7 +55,13 @@ from lureguard_mcp.posture_snapshot import (
     get_fleet_posture_summary as posture_fleet_summary,
     get_posture_snapshot as posture_get_snapshot,
 )
-from lureguard_mcp.report_pdf import convert_markdown_to_pdf, pandoc_available
+from lureguard_mcp.report_charts import (
+    enrich_report_markdown,
+    generate_chart_from_preset,
+    generate_chart_png,
+    report_stem_from_title,
+)
+from lureguard_mcp.report_pdf import convert_markdown_to_pdf, pdf_available, resolve_report_pdf_path
 from lureguard_mcp.scan_scheduler import (
     get_scan_job_status,
     start_scan_scheduler,
@@ -328,12 +344,58 @@ def check_hash(file_hash: str) -> str:
 
 @mcp.tool()
 @audited
-def open_investigation(subject: str, trigger: str = "human", severity: str = "") -> str:
+def check_url_virustotal(url: str) -> str:
+    """Check URL reputation via VirusTotal v3."""
+    return enrich_url_vt(url)
+
+
+@mcp.tool()
+@audited
+def check_domain_virustotal(domain: str) -> str:
+    """Check domain reputation via VirusTotal v3."""
+    return enrich_domain_vt(domain)
+
+
+@mcp.tool()
+@audited
+def check_url_urlhaus(url: str) -> str:
+    """Check URL against URLhaus (abuse.ch). No API key required."""
+    return enrich_urlhaus(url)
+
+
+@mcp.tool()
+@audited
+def defang_ioc(value: str, ioc_type: str = "") -> str:
+    """Defang an IOC (IP, URL, domain, email) for safe report sharing."""
+    return json.dumps(
+        {"original": value, "defanged": defang_indicator(value, ioc_type or None)},
+        indent=2,
+    )
+
+
+@mcp.tool()
+@audited
+def analyze_web_attack(event_payload: str) -> str:
+    """Classify web attack patterns (SQLi, XSS, LFI, RCE, scanner UA) from event text/JSON."""
+    return enrich_analyze_web_attack(event_payload)
+
+
+@mcp.tool()
+@audited
+def open_investigation(
+    subject: str,
+    trigger: str = "human",
+    severity: str = "",
+    detection_source: str = "",
+    asset_criticality: str = "",
+) -> str:
     """Open a new investigation. Always call this before triage or deep investigation."""
     inv = db_open_investigation(
         trigger=trigger,
         subject=subject,
         severity=severity or None,
+        detection_source=detection_source or None,
+        asset_criticality=asset_criticality or None,
     )
     inv_ctx.set_investigation_id(inv["id"])
     return json.dumps(inv, indent=2)
@@ -341,12 +403,84 @@ def open_investigation(subject: str, trigger: str = "human", severity: str = "")
 
 @mcp.tool()
 @audited
-def record_finding(finding: str, citation: str, investigation_id: str = "") -> str:
-    """Record a grounded finding with mandatory citation from tool output."""
+def record_finding(
+    finding: str,
+    citation: str,
+    investigation_id: str = "",
+    mitre_technique: str = "",
+    mitre_tactic: str = "",
+    severity: str = "",
+    verdict: str = "",
+    confidence: str = "",
+    ioc_type: str = "",
+    ioc_value: str = "",
+) -> str:
+    """Record a grounded finding with mandatory citation. Optional MITRE, severity, IOC fields."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
     if not inv_id:
         return json.dumps({"error": "No investigation open. Call open_investigation first."})
-    return json.dumps(db_record_finding(inv_id, finding, citation), indent=2)
+    return json.dumps(
+        db_record_finding(
+            inv_id,
+            finding,
+            citation,
+            mitre_technique=mitre_technique or None,
+            mitre_tactic=mitre_tactic or None,
+            severity=severity or None,
+            verdict=verdict or None,
+            confidence=confidence or None,
+            ioc_type=ioc_type or None,
+            ioc_value=ioc_value or None,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+@audited
+def add_timeline_event(
+    description: str,
+    ts_event: str,
+    phase: str = "",
+    source: str = "",
+    investigation_id: str = "",
+) -> str:
+    """Add a cited timeline event (ISO8601 ts_event). Phase: identification|containment|eradication|recovery|lessons."""
+    inv_id = investigation_id or inv_ctx.get_investigation_id()
+    if not inv_id:
+        return json.dumps({"error": "No investigation open. Call open_investigation first."})
+    try:
+        event_ts = datetime.fromisoformat(ts_event.replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return json.dumps({"error": "ts_event must be ISO8601 (e.g. 2026-06-16T12:00:00Z)"})
+    return json.dumps(
+        db_add_timeline_event(
+            inv_id,
+            ts_event=event_ts,
+            description=description,
+            phase=phase or None,
+            source=source or None,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+@audited
+def get_investigation_artifacts(investigation_id: str = "") -> str:
+    """Return structured findings, timeline events, and IOCs for an investigation."""
+    inv_id = investigation_id or inv_ctx.get_investigation_id()
+    if not inv_id:
+        return json.dumps({"error": "No investigation id provided."})
+    return json.dumps(
+        {
+            "investigation_id": inv_id,
+            "findings": get_investigation_findings_db(inv_id),
+            "timeline": get_investigation_timeline_db(inv_id),
+            "iocs": get_investigation_iocs_db(inv_id),
+        },
+        indent=2,
+    )
 
 
 @mcp.tool()
@@ -356,13 +490,24 @@ def close_investigation(
     confidence: str,
     summary: str,
     investigation_id: str = "",
+    detection_source: str = "",
+    asset_criticality: str = "",
+    mttd_seconds: int = 0,
+    kill_chain_summary: str = "",
 ) -> str:
     """Close investigation with verdict: true_positive | false_positive | undetermined."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
     if not inv_id:
         return json.dumps({"error": "No investigation id provided."})
     result = close_investigation_db(
-        inv_id, verdict=verdict, confidence=confidence, summary=summary
+        inv_id,
+        verdict=verdict,
+        confidence=confidence,
+        summary=summary,
+        detection_source=detection_source or None,
+        asset_criticality=asset_criticality or None,
+        mttd_seconds=mttd_seconds or None,
+        kill_chain_summary=kill_chain_summary or None,
     )
     if not result:
         return json.dumps({"error": f"Investigation {inv_id} not found."})
@@ -391,6 +536,80 @@ def _telegram_notifier():
     return telegram_notifier
 
 
+def _send_report_document(report_path: Path, caption: str, *, as_pdf: bool = True) -> dict[str, Any]:
+    upload_path = report_path
+    out: dict[str, Any] = {"format": "markdown", "source": str(report_path)}
+    if as_pdf:
+        try:
+            upload_path, pdf_mode = resolve_report_pdf_path(report_path)
+            out["format"] = "pdf"
+            out["pdf_path"] = str(upload_path)
+            out["pdf_mode"] = pdf_mode
+        except (RuntimeError, OSError, UnicodeDecodeError, ValueError, FileNotFoundError) as exc:
+            out["pdf_error"] = str(exc)
+            out["pdf_available"] = pdf_available()
+            upload_path = report_path if report_path.suffix.lower() == ".md" else report_path.with_suffix(".md")
+            if not upload_path.is_file():
+                upload_path = report_path
+            out["format"] = "markdown" if upload_path.suffix.lower() == ".md" else "pdf"
+    result = _telegram_notifier().send_document(upload_path, caption=caption)
+    result.update(out)
+    return result
+
+
+@mcp.tool()
+@audited
+def generate_report_chart(
+    title: str,
+    chart_type: str,
+    labels_json: str,
+    values_json: str,
+    report_stem: str = "",
+    investigation_id: str = "",
+) -> str:
+    """Generate a PNG chart and return markdown image embed. labels_json/values_json are JSON arrays."""
+    stem = report_stem or report_stem_from_title(investigation_id or title or "report")
+    labels = json.loads(labels_json)
+    values = json.loads(values_json)
+    if not isinstance(labels, list) or not isinstance(values, list):
+        return json.dumps({"error": "labels_json and values_json must be JSON arrays"}, indent=2)
+    result = generate_chart_png(
+        title,
+        chart_type,
+        [str(x) for x in labels],
+        [float(x) for x in values],
+        report_stem=stem,
+    )
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+@audited
+def generate_report_chart_preset(
+    preset: str,
+    report_stem: str = "",
+    hours: int = 24,
+    agent_id: str = "",
+    investigation_id: str = "",
+) -> str:
+    """Generate a PNG from a named preset (events_by_channel, alert_level_distribution, cve_by_severity, investigation_timeline)."""
+    stem = report_stem or report_stem_from_title(investigation_id or preset)
+    inv_id = investigation_id or inv_ctx.get_investigation_id() or ""
+    try:
+        result = generate_chart_from_preset(
+            preset,
+            report_stem=stem,
+            hours=hours,
+            agent_id=agent_id,
+            investigation_id=inv_id,
+        )
+    except ValueError as exc:
+        return json.dumps({"error": str(exc)}, indent=2)
+    if not result:
+        return json.dumps({"generated": False, "preset": preset, "message": "no data"}, indent=2)
+    return json.dumps({"generated": True, "preset": preset, **result}, indent=2)
+
+
 @mcp.tool()
 @audited
 def save_report(
@@ -398,20 +617,43 @@ def save_report(
     markdown: str,
     investigation_id: str = "",
     send_telegram: bool = False,
+    as_pdf: bool = False,
 ) -> str:
-    """Save an incident report as markdown file and DB record. Set send_telegram=true to upload the .md file."""
+    """Save report markdown (auto PNG charts in Visual summary), optional PDF and Telegram (Telegram sends PDF)."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
+    stem = report_stem_from_title(title)
+    enriched = enrich_report_markdown(
+        markdown,
+        title=title,
+        investigation_id=inv_id or "",
+        report_stem=stem,
+    )
     result = save_report_db(
         title=title,
-        markdown=markdown,
+        markdown=enriched["markdown"],
         investigation_id=inv_id or None,
     )
+    result["charts_added"] = enriched.get("charts_added", [])
+    result["report_stem"] = stem
+
+    report_path = _resolve_report_path(result["file_path"])
+
+    if as_pdf:
+        try:
+            pdf_path, pdf_mode = resolve_report_pdf_path(report_path)
+            result["pdf_path"] = str(pdf_path)
+            result["relative_pdf_path"] = str(pdf_path.relative_to(REPO_ROOT))
+            result["pdf_mode"] = pdf_mode
+        except (RuntimeError, OSError, UnicodeDecodeError, ValueError, FileNotFoundError) as exc:
+            result["pdf_error"] = str(exc)
+            result["pdf_available"] = pdf_available()
+
     if send_telegram:
         try:
-            report_path = _resolve_report_path(result["file_path"])
-            result["telegram"] = _telegram_notifier().send_document(
+            result["telegram"] = _send_report_document(
                 report_path,
                 caption=title,
+                as_pdf=True,
             )
         except ValueError as exc:
             result["telegram"] = {"sent": False, "reason": str(exc)}
@@ -421,21 +663,33 @@ def save_report(
 @mcp.tool()
 @audited
 def convert_report_to_pdf(file_path: str) -> str:
-    """Convert a saved markdown report under reports/ to PDF. Use only when the user explicitly asks for PDF."""
+    """Convert a saved markdown report under reports/ to PDF (WeasyPrint; embeds PNG charts)."""
     try:
         report_path = _resolve_report_path(file_path)
     except ValueError as exc:
         return json.dumps({"ok": False, "error": str(exc)}, indent=2)
+    if report_path.suffix.lower() == ".pdf":
+        return json.dumps(
+            {
+                "ok": True,
+                "source": str(report_path),
+                "pdf_path": str(report_path),
+                "relative_pdf_path": str(report_path.relative_to(REPO_ROOT)),
+                "already_pdf": True,
+            },
+            indent=2,
+        )
     try:
-        pdf_path = convert_markdown_to_pdf(report_path)
-    except RuntimeError as exc:
-        return json.dumps({"ok": False, "error": str(exc), "pandoc_installed": pandoc_available()}, indent=2)
+        pdf_path, pdf_mode = resolve_report_pdf_path(report_path)
+    except (RuntimeError, OSError, UnicodeDecodeError, ValueError, FileNotFoundError) as exc:
+        return json.dumps({"ok": False, "error": str(exc), "pdf_available": pdf_available()}, indent=2)
     return json.dumps(
         {
             "ok": True,
             "source": str(report_path),
             "pdf_path": str(pdf_path),
             "relative_pdf_path": str(pdf_path.relative_to(REPO_ROOT)),
+            "pdf_mode": pdf_mode,
         },
         indent=2,
     )
@@ -443,25 +697,20 @@ def convert_report_to_pdf(file_path: str) -> str:
 
 @mcp.tool()
 @audited
-def send_report_to_telegram(file_path: str, caption: str = "", as_pdf: bool = False) -> str:
-    """Send a saved report to Telegram as a document. Default: .md file. Set as_pdf=true only when user explicitly asked for PDF."""
+def send_report_to_telegram(file_path: str, caption: str = "") -> str:
+    """Send a saved report to Telegram as PDF. Pass the `.md` path (preferred) or existing `.pdf`. Falls back to .md only if PDF conversion fails."""
     try:
         report_path = _resolve_report_path(file_path)
     except ValueError as exc:
         return json.dumps({"sent": False, "reason": str(exc)}, indent=2)
 
-    upload_path = report_path
-    if as_pdf:
-        try:
-            upload_path = convert_markdown_to_pdf(report_path)
-        except RuntimeError as exc:
-            return json.dumps(
-                {"sent": False, "reason": str(exc), "pandoc_installed": pandoc_available()},
-                indent=2,
-            )
-
-    result = _telegram_notifier().send_document(upload_path, caption=caption)
-    result["format"] = "pdf" if as_pdf else "markdown"
+    try:
+        result = _send_report_document(report_path, caption=caption or report_path.stem, as_pdf=True)
+    except Exception as exc:
+        return json.dumps(
+            {"sent": False, "reason": str(exc), "pdf_available": pdf_available()},
+            indent=2,
+        )
     return json.dumps(result, indent=2)
 
 
