@@ -159,6 +159,21 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 60 },
+      "id": 12,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT e.ts, host(e.src_ip) AS src_ip, e.geo_country, e.channel, e.wazuh_rule_level, e.wazuh_rule_description, d.p AS ml_score, d.decision FROM events e LEFT JOIN decisions d ON d.event_id = e.id WHERE $__timeFilter(e.ts) ORDER BY e.ts DESC LIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Attack timeline (events + ML score)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
       "id": 11,
       "options": { "showHeader": true },
@@ -179,5 +194,5 @@
   "time": { "from": "now-24h", "to": "now" },
   "title": "LureGuard Agent Activity",
   "uid": "lureguard-agent-activity",
-  "version": 2
+  "version": 3
 }

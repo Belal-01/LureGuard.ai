@@ -76,6 +76,38 @@ def log_agent_action(
             )
 
 
+def _event_enriched_select(where_clause: str) -> str:
+  return f"""
+        SELECT e.id, e.ts, host(e.src_ip) AS src_ip, e.channel, e.event_type, e.username,
+               e.wazuh_rule_id, e.wazuh_rule_level, e.wazuh_rule_description,
+               e.geo_country, e.geo_city, e.agent_id, e.agent_name,
+               e.syscheck_path, e.syscheck_event, e.raw_ref, e.profile_id,
+               d.p AS ml_score, d.decision
+        FROM events e
+        LEFT JOIN decisions d ON d.event_id = e.id
+        WHERE {where_clause}
+    """
+
+
+def _infer_attack_phases(events: list[dict]) -> list[str]:
+    phases: list[str] = []
+    channels = {e.get("channel") for e in events}
+    types = {e.get("event_type") for e in events}
+    if "auth_failed" in types or channels & {"sshd"}:
+        phases.append("brute_force")
+    if channels & {"cowrie"} or "cowrie_session" in types:
+        phases.append("honeypot_contact")
+    if channels & {"syscheck"} or "fim_change" in types:
+        phases.append("file_integrity")
+    if channels & {"rootcheck"}:
+        phases.append("rootkit_detection")
+    if channels & {"web", "docker"} or types & {"web_attack", "web_scan"}:
+        phases.append("web_attack")
+    if "auth_success" in types:
+        phases.append("initial_access_attempt")
+    return phases
+
+
 def get_recent_alerts(
     *,
     limit: int = 50,
@@ -85,20 +117,13 @@ def get_recent_alerts(
     clauses = ["1=1"]
     params: list[Any] = []
     if min_level is not None:
-        clauses.append("wazuh_rule_level >= %s")
+        clauses.append("e.wazuh_rule_level >= %s")
         params.append(min_level)
     if channel:
-        clauses.append("channel = %s")
+        clauses.append("e.channel = %s")
         params.append(channel)
     params.append(limit)
-    sql = f"""
-        SELECT id, ts, host(src_ip) AS src_ip, channel, event_type, username,
-               wazuh_rule_id, wazuh_rule_level, profile_id
-        FROM events
-        WHERE {' AND '.join(clauses)}
-        ORDER BY ts DESC
-        LIMIT %s
-    """
+    sql = _event_enriched_select(" AND ".join(clauses)) + " ORDER BY e.ts DESC LIMIT %s"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
@@ -109,34 +134,86 @@ def get_alerts_for_ip(ip: str, *, limit: int = 100) -> list[dict]:
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
-                """
-                SELECT id, ts, host(src_ip) AS src_ip, channel, event_type, username,
-                       wazuh_rule_id, wazuh_rule_level, syscheck_path, raw_ref
-                FROM events
-                WHERE src_ip = %s::inet
-                ORDER BY ts DESC
-                LIMIT %s
-                """,
+                _event_enriched_select("e.src_ip = %s::inet") + " ORDER BY e.ts DESC LIMIT %s",
                 (ip, limit),
             )
             return [_row_to_dict(dict(r)) for r in cur.fetchall()]
 
 
-def get_event_timeline(ip: str, *, window_hours: int = 24) -> list[dict]:
+def get_event_timeline(ip: str, *, window_hours: int = 24) -> dict[str, Any]:
     since = datetime.utcnow() - timedelta(hours=window_hours)
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(
+                _event_enriched_select("e.src_ip = %s::inet AND e.ts >= %s")
+                + " ORDER BY e.ts ASC",
+                (ip, since),
+            )
+            events = [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            cur.execute(
                 """
-                SELECT ts, channel, event_type, username, wazuh_rule_level, wazuh_rule_id,
-                       syscheck_path, syscheck_event
+                SELECT min(ts) AS first_seen, max(ts) AS last_seen,
+                       EXTRACT(EPOCH FROM max(ts) - min(ts)) AS duration_seconds,
+                       max(wazuh_rule_level) AS peak_level,
+                       array_agg(DISTINCT channel) AS channels_seen,
+                       max(geo_country) AS geo_country,
+                       max(geo_city) AS geo_city
                 FROM events
                 WHERE src_ip = %s::inet AND ts >= %s
-                ORDER BY ts ASC
                 """,
                 (ip, since),
             )
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            agg = dict(cur.fetchone() or {})
+    first_seen = agg.get("first_seen")
+    last_seen = agg.get("last_seen")
+    duration_seconds = int(agg.get("duration_seconds") or 0)
+    geo_country = agg.get("geo_country") or (events[0].get("geo_country") if events else None)
+    geo_city = agg.get("geo_city") or (events[0].get("geo_city") if events else None)
+    channels = agg.get("channels_seen") or []
+    if isinstance(channels, list):
+        channels_seen = [str(c) for c in channels if c]
+    else:
+        channels_seen = []
+    geo_parts = [p for p in (geo_country, geo_city) if p]
+    return {
+        "ip": ip,
+        "window_hours": window_hours,
+        "geo": " / ".join(geo_parts) if geo_parts else None,
+        "geo_country": geo_country,
+        "geo_city": geo_city,
+        "first_seen": first_seen.isoformat() if hasattr(first_seen, "isoformat") else first_seen,
+        "last_seen": last_seen.isoformat() if hasattr(last_seen, "isoformat") else last_seen,
+        "duration_seconds": duration_seconds,
+        "duration_minutes": round(duration_seconds / 60, 1) if duration_seconds else 0,
+        "channels_seen": channels_seen,
+        "peak_level": int(agg.get("peak_level") or 0),
+        "attack_phases": _infer_attack_phases(events),
+        "events": events,
+    }
+
+
+def get_attack_summary(ip: str, *, window_hours: int = 48) -> dict[str, Any]:
+    timeline = get_event_timeline(ip, window_hours=window_hours)
+    events = timeline.get("events") or []
+    rule_counts: dict[str, int] = {}
+    for ev in events:
+        desc = ev.get("wazuh_rule_description") or f"rule_{ev.get('wazuh_rule_id')}"
+        rule_counts[desc] = rule_counts.get(desc, 0) + 1
+    top_rules = sorted(rule_counts.items(), key=lambda x: -x[1])[:5]
+    return {
+        "ip": ip,
+        "geo": timeline.get("geo"),
+        "first_seen": timeline.get("first_seen"),
+        "last_seen": timeline.get("last_seen"),
+        "duration_minutes": timeline.get("duration_minutes"),
+        "event_count": len(events),
+        "channels_seen": timeline.get("channels_seen"),
+        "peak_level": timeline.get("peak_level"),
+        "attack_phases": timeline.get("attack_phases"),
+        "top_rules": [{"rule": r, "count": c} for r, c in top_rules],
+        "honeypot_contact": "honeypot_contact" in (timeline.get("attack_phases") or []),
+        "max_ml_score": max((e.get("ml_score") or 0 for e in events), default=None),
+    }
 
 
 def search_events(
@@ -150,26 +227,19 @@ def search_events(
     clauses = ["1=1"]
     params: list[Any] = []
     if ip:
-        clauses.append("src_ip = %s::inet")
+        clauses.append("e.src_ip = %s::inet")
         params.append(ip)
     if channel:
-        clauses.append("channel = %s")
+        clauses.append("e.channel = %s")
         params.append(channel)
     if min_level is not None:
-        clauses.append("wazuh_rule_level >= %s")
+        clauses.append("e.wazuh_rule_level >= %s")
         params.append(min_level)
     if username:
-        clauses.append("username ILIKE %s")
+        clauses.append("e.username ILIKE %s")
         params.append(f"%{username}%")
     params.append(limit)
-    sql = f"""
-        SELECT id, ts, host(src_ip) AS src_ip, channel, event_type, username,
-               wazuh_rule_level, wazuh_rule_id
-        FROM events
-        WHERE {' AND '.join(clauses)}
-        ORDER BY ts DESC
-        LIMIT %s
-    """
+    sql = _event_enriched_select(" AND ".join(clauses)) + " ORDER BY e.ts DESC LIMIT %s"
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
@@ -518,7 +588,7 @@ def list_hosts_db() -> list[dict]:
             cur.execute(
                 """
                 SELECT agent_id, name, host(ip) AS ip, os, wazuh_status,
-                       enrolled_by, enrolled_at, last_seen
+                       enrolled_by, enrolled_at, last_seen, criticality
                 FROM hosts ORDER BY name
                 """
             )
@@ -1036,7 +1106,7 @@ def get_host_ip_db(agent_id: str) -> str | None:
 
 
 def get_soc_health_db() -> dict[str, Any]:
-    """Fleet ingestion health — event volume and last-seen timestamps."""
+    """Fleet ingestion health — event volume, SLA metrics, last-seen timestamps."""
     since = datetime.utcnow() - timedelta(hours=24)
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -1060,6 +1130,38 @@ def get_soc_health_db() -> dict[str, Any]:
                 (since,),
             )
             legacy_row = cur.fetchone()
+            cur.execute(
+                """
+                SELECT avg(EXTRACT(EPOCH FROM (i.started_at - e.ts))) AS avg_mttd_seconds
+                FROM investigations i
+                JOIN events e ON e.ts <= i.started_at
+                WHERE i.started_at >= %s AND i.detection_source = 'wazuh'
+                """,
+                (since,),
+            )
+            mttd_row = cur.fetchone()
+            cur.execute(
+                """
+                SELECT avg(EXTRACT(EPOCH FROM (closed_at - started_at))) AS avg_mttr_seconds
+                FROM investigations
+                WHERE status = 'closed' AND closed_at >= %s
+                """,
+                (since,),
+            )
+            mttr_row = cur.fetchone()
+            cur.execute(
+                """
+                SELECT
+                    count(*) FILTER (WHERE verdict = 'false_positive') AS fp_count,
+                    count(*) AS total_count
+                FROM investigations
+                WHERE status = 'closed' AND closed_at >= %s
+                """,
+                (since,),
+            )
+            fpr_row = cur.fetchone()
+    fp = int(fpr_row["fp_count"] or 0) if fpr_row else 0
+    total = int(fpr_row["total_count"] or 0) if fpr_row else 0
     return {
         "window_hours": 24,
         "events_24h": int(vol_row["cnt"] or 0) if vol_row else 0,
@@ -1077,6 +1179,20 @@ def get_soc_health_db() -> dict[str, Any]:
             }
             for r in by_agent
         ],
+        "sla": {
+            "avg_mttd_seconds": (
+                round(float(mttd_row["avg_mttd_seconds"]), 1)
+                if mttd_row and mttd_row.get("avg_mttd_seconds") is not None
+                else None
+            ),
+            "avg_mttr_seconds": (
+                round(float(mttr_row["avg_mttr_seconds"]), 1)
+                if mttr_row and mttr_row.get("avg_mttr_seconds") is not None
+                else None
+            ),
+            "false_positive_rate": round(fp / total, 3) if total > 0 else None,
+            "closed_investigations_24h": total,
+        },
     }
 
 
@@ -1420,3 +1536,218 @@ def get_posture_scan_job_db(job_id: str) -> dict[str, Any] | None:
             if not row:
                 return None
             return _row_to_dict(dict(row))
+
+
+# ── Blocklist ────────────────────────────────────────────────────────────────
+
+
+def add_blocklist_db(
+    *,
+    ip: str,
+    reason: str,
+    investigation_id: str | None = None,
+    added_by: str = "agent",
+) -> dict[str, Any]:
+    block_id = str(uuid.uuid4())
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO blocklist (id, ip, reason, investigation_id, added_by, added_at, executed)
+                VALUES (%s, %s::inet, %s, %s, %s, %s, false)
+                ON CONFLICT (ip) DO UPDATE SET
+                    reason = EXCLUDED.reason,
+                    investigation_id = COALESCE(EXCLUDED.investigation_id, blocklist.investigation_id),
+                    added_by = EXCLUDED.added_by,
+                    added_at = EXCLUDED.added_at,
+                    executed = false,
+                    executed_at = NULL
+                RETURNING id, host(ip) AS ip, reason, executed, added_at
+                """,
+                (block_id, ip, reason, investigation_id, added_by, datetime.utcnow()),
+            )
+            row = cur.fetchone()
+    return {
+        "block_id": str(row[0]),
+        "ip": str(row[1]),
+        "reason": row[2],
+        "executed": row[3],
+        "added_at": row[4].isoformat() if row[4] else None,
+        "status": "pending_human_confirmation",
+    }
+
+
+def confirm_blocklist_db(block_id: str, *, notes: str | None = None) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                UPDATE blocklist
+                SET executed = true, executed_at = %s, notes = COALESCE(%s, notes)
+                WHERE id = %s
+                RETURNING id, host(ip) AS ip, reason, investigation_id, executed_at
+                """,
+                (datetime.utcnow(), notes, block_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return _row_to_dict(dict(row))
+
+
+def list_blocklist_db(*, pending_only: bool = False) -> list[dict]:
+    clause = "WHERE executed = false" if pending_only else ""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"""
+                SELECT id, host(ip) AS ip, reason, investigation_id, added_by,
+                       added_at, executed, executed_at, notes
+                FROM blocklist {clause}
+                ORDER BY added_at DESC
+                """
+            )
+            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+
+
+def get_blocklist_entry_db(block_id: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, host(ip) AS ip, reason, investigation_id, executed
+                FROM blocklist WHERE id = %s
+                """,
+                (block_id,),
+            )
+            row = cur.fetchone()
+            return _row_to_dict(dict(row)) if row else None
+
+
+def set_host_criticality_db(agent_id: str, criticality: str) -> dict[str, Any]:
+    allowed = {"critical", "high", "medium", "low"}
+    crit = criticality.lower().strip()
+    if crit not in allowed:
+        raise ValueError(f"criticality must be one of {sorted(allowed)}")
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE hosts SET criticality = %s WHERE agent_id = %s RETURNING agent_id, criticality",
+                (crit, agent_id),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise ValueError(f"host {agent_id} not found")
+    return {"agent_id": row[0], "criticality": row[1]}
+
+
+def get_host_criticality_db(agent_id: str) -> str | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT criticality FROM hosts WHERE agent_id = %s", (agent_id,))
+            row = cur.fetchone()
+            return row[0] if row else None
+
+
+def replace_container_cve_findings_db(
+    *,
+    agent_id: str,
+    image_ref: str,
+    findings: list[dict[str, Any]],
+    scanned_at: datetime,
+) -> int:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM container_cve_findings WHERE agent_id = %s AND image_ref = %s",
+                (agent_id, image_ref),
+            )
+            for item in findings:
+                cur.execute(
+                    """
+                    INSERT INTO container_cve_findings (
+                        id, agent_id, image_ref, cve_id, package_name,
+                        installed_version, fixed_version, severity, cvss, scanned_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        agent_id,
+                        image_ref,
+                        item.get("cve_id"),
+                        item.get("package_name"),
+                        item.get("installed_version"),
+                        item.get("fixed_version"),
+                        item.get("severity"),
+                        item.get("cvss"),
+                        scanned_at,
+                    ),
+                )
+    return len(findings)
+
+
+def get_container_cve_findings_db(
+    agent_id: str,
+    *,
+    image_ref: str | None = None,
+    limit: int = 200,
+) -> list[dict]:
+    clauses = ["agent_id = %s"]
+    params: list[Any] = [agent_id]
+    if image_ref:
+        clauses.append("image_ref = %s")
+        params.append(image_ref)
+    params.append(limit)
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                f"""
+                SELECT cve_id, package_name, installed_version, fixed_version,
+                       severity, cvss, image_ref, scanned_at
+                FROM container_cve_findings
+                WHERE {' AND '.join(clauses)}
+                ORDER BY cvss DESC NULLS LAST, severity
+                LIMIT %s
+                """,
+                params,
+            )
+            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+
+
+def mark_event_watched_db(event_id: str, investigation_id: str | None = None) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO watched_events (event_id, watched_at, investigation_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (event_id) DO NOTHING
+                """,
+                (event_id, datetime.utcnow(), investigation_id),
+            )
+
+
+def is_event_watched_db(event_id: str) -> bool:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM watched_events WHERE event_id = %s", (event_id,))
+            return cur.fetchone() is not None
+
+
+def get_high_level_events_since_db(since: datetime, min_level: int) -> list[dict]:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT e.id, e.ts, host(e.src_ip) AS src_ip, e.channel, e.event_type,
+                       e.wazuh_rule_id, e.wazuh_rule_level, e.wazuh_rule_description,
+                       e.agent_id, e.agent_name
+                FROM events e
+                LEFT JOIN watched_events w ON w.event_id = e.id
+                WHERE e.ts >= %s AND e.wazuh_rule_level >= %s AND w.event_id IS NULL
+                ORDER BY e.ts ASC
+                LIMIT 50
+                """,
+                (since, min_level),
+            )
+            return [_row_to_dict(dict(r)) for r in cur.fetchall()]

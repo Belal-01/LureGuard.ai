@@ -623,6 +623,74 @@
       ],
       "title": "Posture summary by host",
       "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
+      "id": 29,
+      "panels": [],
+      "title": "SOC SLA (24h)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 59 },
+      "id": 30,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT round(avg(EXTRACT(EPOCH FROM (i.started_at - e.ts)))) AS avg_mttd_sec FROM investigations i JOIN events e ON e.ts <= i.started_at WHERE i.started_at >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "title": "Avg MTTD (sec)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 59 },
+      "id": 31,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT round(avg(EXTRACT(EPOCH FROM (closed_at - started_at)))) AS avg_mttr_sec FROM investigations WHERE status = 'closed' AND closed_at >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "title": "Avg MTTR (sec)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 59 },
+      "id": 32,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT round(count(*) FILTER (WHERE verdict = 'false_positive')::numeric / NULLIF(count(*), 0), 3) AS fpr FROM investigations WHERE status = 'closed' AND closed_at >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "title": "False positive rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 59 },
+      "id": 33,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS pending_blocks FROM blocklist WHERE executed = false",
+          "refId": "A"
+        }
+      ],
+      "title": "Pending IP blocks",
+      "type": "stat"
     }
   ],
   "refresh": "10s",
@@ -632,5 +700,5 @@
   "time": { "from": "now-6h", "to": "now" },
   "title": "LureGuard SOC Overview",
   "uid": "lureguard-soc-overview",
-  "version": 5
+  "version": 6
 }

@@ -60,6 +60,7 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
         logger.info(f"[{event.src_ip}] {reason}")
         dec = DecisionResult(
             id=uuid.uuid4(),
+            event_id=event.id,
             ts=datetime.utcnow(),
             decision=decision,
             p=p,
@@ -102,6 +103,7 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
 
     dec = DecisionResult(
         id=uuid.uuid4(),
+        event_id=event.id,
         ts=datetime.utcnow(),
         decision=decision,
         p=p,

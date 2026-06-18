@@ -113,6 +113,20 @@ Cite: get_agent_users (risky users only)
 | `events_last_at` null + alerts_24h=0 | Flag possible ingestion gap; cite `get_soc_health` |
 | `eol_os: true` | Flag in executive summary; recommend OS upgrade path |
 
+## Container images (Docker apps)
+
+Host-level CVE scan (`get_agent_vulnerabilities`) covers **OS packages on the VM** (dockerd, kernel, nginx on host).
+
+**Not covered by host scan:** npm/Node.js/Python dependencies **inside** Docker image layers.
+
+When user asks about containerized apps (Next.js, Python API, etc.):
+
+1. Identify running image: `get_agent_detail` or ask user for `image_ref`
+2. `scan_container_image(agent_id, image_ref)` — Trivy scan via SSH (slow; one image at a time)
+3. `get_container_vulnerabilities(agent_id, image_ref)` — read cached results
+4. Report top critical/high image CVEs separately from host OS CVEs
+5. Call out blast radius if container runs privileged or mounts docker.sock
+
 ## MCP tools (posture)
 
 | Tool | Role |
@@ -126,4 +140,6 @@ Cite: get_agent_users (risky users only)
 | `get_agent_detection_coverage` / `get_fleet_detection_coverage` | Detection detail |
 | `get_agent_sca_summary` / `get_fleet_sca_summary` | SCA/CIS compliance |
 | `get_agent_users` | Local user inventory with risk levels |
+| `scan_container_image` / `get_container_vulnerabilities` | Container image CVEs (Trivy) |
+| `check_tls` | TLS cert/cipher check for exposed services |
 | `get_soc_health` | Ingestion proof for daily/posture context |

@@ -104,3 +104,7 @@ def wazuh_agent_register_ip() -> str:
 
 def manager_container() -> str:
     return os.getenv("WAZUH_MANAGER_CONTAINER", "wazuh-manager")
+
+
+def auto_triage_level() -> int:
+    return int(os.getenv("AUTO_TRIAGE_LEVEL", "12"))

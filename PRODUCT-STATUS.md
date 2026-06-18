@@ -1,6 +1,6 @@
 # LureGuard — Product Status & Engineering Checklist
 
-**Last updated:** 2026-06-13  
+**Last updated:** 2026-06-18  
 **Purpose:** End-to-end map of what LureGuard is, what it can do, what's built, and what's left — for you (and anyone joining) to see **where we are** and **where we're going**.
 
 **Legend**
@@ -13,11 +13,77 @@
 | 🚫 | Explicitly out of scope or cancelled |
 | 🔴 | **Blocker** — gates Tier I replacement |
 
-**Overall Tier I analyst replacement:** ~**35%** · **Blocker:** Postgres `events` empty (ingestion not proven)
+**Overall Tier I analyst replacement:** ~**45% code complete** · **E2E proof pending** (see §0 below)
 
 ---
 
-## 1. Product thesis (locked)
+## 0. Verification status (what actually proves it works)
+
+**Legend for this section:** ✅ proven in this environment · 🟡 code + unit tests only · ⬜ not tested yet
+
+| Layer | Status | How to verify |
+|-------|--------|---------------|
+| Unit / integration tests | ✅ | `make test` → **101 passed** (includes `tests/test_investigation_quality.py`) |
+| DB migration `h8i9j0k1l2m3` | 🟡 | `make migrate` then `\d events` shows `wazuh_rule_description`, `geo_country`; `\d blocklist` exists |
+| Alert ingestion | ✅ | `get_soc_health()` → `events_24h > 0`, `last_event_at` recent |
+| Rich timeline / attack summary | 🟡 | `.venv/bin/python -c "from lureguard_mcp.db import get_event_timeline; ..."` returns geo, duration, phases |
+| `get_ip_context` compound enrichment | 🟡 | Returns `internal` for RFC1918; needs VT/AbuseIPDB keys for external IPs |
+| ML score in timeline | 🟡 | Only SSH `auth_failed`/`auth_success` rows; requires `decisions.event_id` populated on **new** events after deploy |
+| `recommend_block_ip` / `confirm_block_ip` | ⬜ | Not run on lab hosts together — needs explicit human test before trusting iptables |
+| `alert_watcher` auto-triage | ⬜ | Starts with MCP server; needs level ≥ 12 event + `opencode` in PATH + Telegram configured |
+| Web/docker log coverage | ⬜ | Code merged; agent on `.131` must receive updated `agent-ossec.conf` and be restarted |
+| `scan_container_image` (Trivy) | ⬜ | Needs Docker + outbound pull on target host; not run in lab yet |
+| `check_tls` / firewall in exposure | ⬜ | Tool exists; not smoke-tested against a live HTTPS endpoint |
+| opencode triage → saved report | ⬜ | **Gate B1** — run together before calling Tier I done |
+| Grafana new panels | 🟡 | Attack timeline + SLA rows in dashboards; need reload + populated data |
+
+**What we have not done together yet:** a full investigate → `recommend_block_ip` → human `confirm_block_ip` run, a saved triage report citing `get_ip_context`, or an auto-triage fire from a real level-12 alert.
+
+**Recommended joint test script** (run after `make migrate`):
+
+```bash
+make test
+make migrate && make doctor
+
+# Ingestion + SLA
+.venv/bin/python -c "from lureguard_mcp.db import get_soc_health_db; import json; print(json.dumps(get_soc_health_db(), indent=2))"
+
+# Rich timeline (pick an IP from get_recent_alerts)
+.venv/bin/python -c "
+from lureguard_mcp.db import get_attack_summary, get_event_timeline
+ip = '127.0.0.1'  # replace with src_ip from alerts
+import json
+print(json.dumps(get_attack_summary(ip), indent=2))
+print(json.dumps(get_event_timeline(ip), indent=2)[:2000])
+"
+
+# Full agent workflow (you + opencode)
+opencode run "Read skills/triage.md and triage alerts from the last 2 hours"
+opencode run "Read skills/investigate-host.md and investigate <src_ip>"
+```
+
+## Tier 1 investigation quality (2026-06-18 — code landed, E2E pending)
+
+New capabilities added in the investigation quality roadmap. All are **implemented in code**; see §0 for proof status.
+
+| Feature | MCP / code | Skill / config |
+|---------|------------|----------------|
+| Richer events | `wazuh_rule_description`, geo on `events`; `decisions.event_id` → `ml_score` in queries | — |
+| Mandatory enrichment | `get_ip_context` | `skills/triage.md`, `skills/investigate-host.md` |
+| Attack narrative | `get_event_timeline`, `get_attack_summary` | `skills/investigate-host.md` |
+| IP block path | `recommend_block_ip`, `confirm_block_ip`, `list_blocklist` | `skills/_shared.md` containment section |
+| Always-on triage | `lureguard_mcp/alert_watcher.py` | `AUTO_TRIAGE_LEVEL=12`, `.opencode/command/auto-triage.md` |
+| Generic log coverage | integratord + `collector.py` web/docker channels | `wazuh/agent-ossec.conf` docker stdout + nginx/apache |
+| Container CVEs | `scan_container_image`, `get_container_vulnerabilities` | `skills/security-posture.md` |
+| Asset criticality | `set_host_criticality`, `hosts.criticality` | `onboard_host_tool(..., criticality=)` |
+| SLA metrics | `get_soc_health` → `sla.avg_mttd_seconds`, MTTR, FPR | Grafana SOC Overview SLA row |
+| TLS + firewall | `check_tls`, `get_agent_exposure` → `firewall_rules` | — |
+
+**New Postgres objects:** `blocklist`, `container_cve_findings`, `watched_events`; columns on `events`, `decisions`, `hosts`.
+
+**Migration:** `migrations/versions/h8i9j0k1l2m3_investigation_quality.py`
+
+---
 
 - [x] **One-liner:** Plug-and-play AI security analyst — `docker compose up -d`, talk in plain language via opencode.
 - [x] **Wazuh invisible:** Embedded SIEM engine; user never configures Wazuh directly.
@@ -35,16 +101,16 @@ What a developer asks for, and whether the product delivers today.
 
 | # | Use case (plain language) | Skill / command | Status | Notes |
 |---|---------------------------|-----------------|--------|-------|
-| U1 | "Triage alerts from the last hour" | `skills/triage.md` · `/triage` | 🟡 | Skill + MCP exist; **no events in DB** → can't prove quality |
-| U2 | "Investigate IP / host / brute force" | `skills/investigate-host.md` · `/investigate` | 🟡 | Workflow defined; needs live `events` + sample report |
+| U1 | "Triage alerts from the last hour" | `skills/triage.md` · `/triage` | 🟡 | Skill + MCP + `get_ip_context`; needs proven report on live traffic |
+| U2 | "Investigate IP / host / brute force" | `skills/investigate-host.md` · `/investigate` | 🟡 | Rich timeline + attack summary + block recommend path |
 | U3 | "Sweep this hash/domain across fleet" | `skills/ioc-sweep.md` | 🟡 | VT/AbuseIPDB MCP tools exist; no sample output |
 | U4 | "Write an incident report" | `skills/incident-report.md` · `/report` | 🟡 | `save_report` works; old samples weak on citations |
 | U5 | "Protect / onboard this VM" | `skills/onboard-host.md` · `/onboard` | ✅ | Agents 007, 008, 011 enrolled on K8s lab |
 | U6 | "What happened today? / shift handover" | `skills/daily-summary.md` | 🟡 | Skill updated; old report didn't prove ingestion |
 | U7 | "Security posture / CVEs / open ports" | `skills/security-posture.md` · `/posture` | 🟡 | Pipeline fixed; **regenerate report** post-fix |
 | U8 | "Send report to Telegram" | `save_report(..., send_telegram=true)` | ✅ | Sends `.md` only by default |
-| U9 | "Auto-investigate when Wazuh fires" | Event trigger (future) | ⬜ | Manual opencode only today |
-| U10 | "Block this IP" | — | 🚫 | Advisory only — human executes |
+| U9 | "Auto-investigate when Wazuh fires" | `alert_watcher.py` · level ≥ 12 | 🟡 | Code complete; not E2E proven with opencode |
+| U10 | "Block this IP" | `recommend_block_ip` / `confirm_block_ip` | 🟡 | Human-confirmed iptables; not tested on lab hosts together |
 
 ---
 
@@ -56,8 +122,8 @@ What a developer asks for, and whether the product delivers today.
 |------|--------------|--------|----------|
 | 1 | User: "protect 192.168.x.x" | ✅ | `onboard_host_tool` · SSH enroll · Wazuh agent active |
 | 2 | Attacker hits SSH / honeypot | 🟡 | Cowrie + Wazuh rules exist; lab attack not scripted in docs |
-| 3 | Wazuh alert → Core → Postgres | 🔴 | Integratord configured; **`events` table empty in practice** |
-| 4 | Agent auto-triage (event trigger) | ⬜ | No webhook → opencode automation |
+| 3 | Wazuh alert → Core → Postgres | ✅ | Integratord configured; `events_24h > 0` in lab |
+| 4 | Agent auto-triage (event trigger) | 🟡 | `alert_watcher.py` at level ≥ 12 |
 | 5 | User: "investigate …" via opencode | 🟡 | MCP + skills ready; blocked on step 3 |
 | 6 | Enrich IP (AbuseIPDB / VT) | ✅ | MCP tools; keys optional in `.env` |
 | 7 | Decoy confirms malicious | 🟡 | Cowrie logs → Wazuh; `check_decoy_contact` not in MCP yet |
@@ -68,7 +134,7 @@ What a developer asks for, and whether the product delivers today.
 
 | Step | Status | Subtasks |
 |------|--------|----------|
-| Check ingestion health | 🟡 | `get_soc_health` MCP tool ✅ · returns empty until events flow |
+| Check ingestion health | 🟡 | `get_soc_health` ✅ · includes SLA block; triage report not saved yet |
 | Pull recent alerts | 🟡 | `get_recent_alerts` ✅ · needs data |
 | Triage clusters (TP/FP/P1–P4) | ⬜ | No proven triage report in `reports/` |
 | Shift handover summary | 🟡 | `daily-summary` skill ✅ · old sample invalid |
@@ -78,7 +144,7 @@ What a developer asks for, and whether the product delivers today.
 
 | Step | Status | Subtasks |
 |------|--------|----------|
-| Read cached posture (instant) | ✅ | `get_posture_snapshot` · 3 pillars from Postgres |
+| Read cached posture (instant) | ✅ | `get_posture_snapshot` · 5 pillars from Postgres |
 | Background refresh (6h) | ✅ | `scan_scheduler` · `trigger_posture_scan` |
 | CVE scan (OSV + syscollector) | ✅ | `vuln_scanner.py` · per-agent |
 | CVE triage (noise filter) | ✅ | `cve_triage.py` · KEV · patched-version · service-aware |
@@ -102,11 +168,11 @@ What a developer asks for, and whether the product delivers today.
 | Grafana :3000 | ✅ | Provisioned datasources + 4 dashboards |
 | `.env` secrets model | ✅ | Telegram, VT, AbuseIPDB, Wazuh API, SSH onboard |
 | `make doctor` health checks | ✅ | Docker, Postgres, Wazuh API, MCP import |
-| `make migrate` Alembic | ✅ | 6 migrations through `d4e5f6a7b8c9` |
+| `make migrate` Alembic | ✅ | Through `h8i9j0k1l2m3_investigation_quality` |
 | One-liner curl installer | 🚫 | Removed; use Quick start in README |
 | README appliance story | 🟡 | Exists; Tier I gate not documented until this file |
 
-### 4.2 Alert ingestion (Epic E1 + **Tier I Gate A** 🔴)
+### 4.2 Alert ingestion (Epic E1 + **Tier I Gate A** ✅)
 
 | Item | Status | Details |
 |------|--------|---------|
@@ -114,13 +180,13 @@ What a developer asks for, and whether the product delivers today.
 | Core `/wazuh/event` endpoint | ✅ | `core/api/wazuh_endpoint.py` |
 | Group filter (sshd, syscheck, rootcheck, cowrie) | ✅ | `wazuh/ossec.conf` + integration script |
 | Collector normalization | ✅ | `core/modules/collector.py` · tested |
-| Persist to `events` table | 🟡 | Code ✅ · **DB empty in lab** |
-| `agent_id` / `agent_name` / `agent_ip` on events | ✅ | Migration + crud + collector |
-| Dedup on ingest | ✅ | `ingest_dedup.py` |
-| Syslog / apache / nginx groups forwarded | ⬜ | Not in integratord filter |
+| Persist to `events` table | ✅ | Code ✅ · lab has events |
+| `wazuh_rule_description` + geo on events | ✅ | Migration h8i9j0k1l2m3 |
+| `decisions.event_id` → ML score in timeline | ✅ | SSH auth events only |
+| Syslog / apache / nginx / docker groups forwarded | ✅ | integratord + agent-ossec.conf |
 | Windows events forwarded | ⬜ | No Windows agent in lab |
 | Ingestion lag ≤ 5s (SRS) | ⬜ | Not measured |
-| Verify: test SSH fail → row in `events` | ⬜ | **Do this to unblock Tier I** |
+| Verify: test SSH fail → row in `events` | ✅ | `get_soc_health()` events_24h > 0 |
 
 ### 4.3 Core decision pipeline (legacy ML path — parallel to agentic layer)
 
@@ -144,7 +210,13 @@ What a developer asks for, and whether the product delivers today.
 | **Alerts & search** | | |
 | └ `get_recent_alerts` | ✅ | |
 | └ `get_alerts_for_ip` | ✅ | |
-| └ `get_event_timeline` | ✅ | |
+| └ `get_event_timeline` | 🟡 | Rich shape; E2E narrative not saved yet |
+| └ `get_attack_summary` | 🟡 | Unit-tested helpers |
+| └ `get_ip_context` | 🟡 | Mandatory in skills; external IP needs API keys |
+| └ `recommend_block_ip` / `confirm_block_ip` / `list_blocklist` | 🟡 | Not iptables-tested on lab |
+| └ `set_host_criticality` | 🟡 | DB + MCP; use during onboard |
+| └ `scan_container_image` / `get_container_vulnerabilities` | 🟡 | Trivy path not run on lab |
+| └ `check_tls` | 🟡 | Not smoke-tested |
 | └ `search_events` | ✅ | |
 | └ `get_soc_health` | ✅ | Ingestion proof for daily summary |
 | **Fleet & Wazuh** | | |
@@ -157,9 +229,9 @@ What a developer asks for, and whether the product delivers today.
 | └ `scan_agent_vulnerabilities` | ✅ | OSV batch (slow) |
 | └ `get_agent_vulnerabilities` | ✅ | Actionable-only default |
 | └ `get_fleet_vulnerability_summary` | ✅ | |
-| └ `get_agent_exposure` / fleet | ✅ | |
+| └ `get_agent_exposure` / fleet | 🟡 | Includes `firewall_rules` via SSH; not verified |
 | └ `get_agent_detection_coverage` / fleet | ✅ | |
-| └ `get_posture_snapshot` | ✅ | Instant 3-pillar read |
+| └ `get_posture_snapshot` | ✅ | Instant 5-pillar read |
 | └ `get_fleet_posture_summary` | ✅ | |
 | └ `trigger_posture_scan` | ✅ | Background job |
 | └ `get_posture_scan_status` | ✅ | |
@@ -182,7 +254,7 @@ What a developer asks for, and whether the product delivers today.
 | **Not in MCP yet** | | |
 | └ `check_decoy_contact` (E6) | ⬜ | |
 | └ `enrich` caching layer | ⬜ | Rate-limit cache |
-| └ Event-triggered agent invoke | ⬜ | |
+| └ Event-triggered agent invoke | 🟡 | `alert_watcher.py` — not E2E proven |
 
 ### 4.5 Agent skills & constitution (Epic E5)
 
@@ -198,7 +270,7 @@ What a developer asks for, and whether the product delivers today.
 | `skills/daily-summary.md` | 🟡 | Updated with `get_soc_health` |
 | `skills/security-posture.md` | 🟡 | Max 10 CVEs, no IOC section, bind_scope |
 | `skills/opencode-mcp.md` | ✅ | MCP contract for opencode |
-| `.opencode/command/*` | ✅ | triage, investigate, onboard, posture, report |
+| `.opencode/command/*` | ✅ | triage, investigate, onboard, posture, report, **auto-triage** |
 | Headless `opencode run` | 🟡 | Documented · not CI-gated |
 
 ### 4.6 Grounding & audit (Epic E4)
@@ -219,7 +291,7 @@ What a developer asks for, and whether the product delivers today.
 | Plain-language → SSH enroll | ✅ | `onboard_host_tool` |
 | Wazuh agent install + start | ✅ | Linux |
 | Verify agent active in manager | ✅ | 007, 008, 011 on lab K8s VMs |
-| Verify telemetry in Postgres | 🔴 | Blocked on ingestion |
+| Verify telemetry in Postgres | 🟡 | Ingestion ✅; agent-attributed events sparse in lab |
 | Windows onboard (E10) | ⬜ | Not tested |
 | Stale agent cleanup (002–010) | ⬜ | Fleet noise in summaries |
 
@@ -233,6 +305,8 @@ What a developer asks for, and whether the product delivers today.
 | `detection_coverage` cache | ✅ | rules_firing_count, events_last_at |
 | APScheduler 6h background scan | ✅ | Starts with MCP `main()` |
 | Host sync from Wazuh → `hosts` | ✅ | Core tick every 60s |
+| SCA + user inventory (5 pillars) | ✅ | `sca_scanner.py`, `user_scanner.py`, EPSS in CVE triage |
+| Container image CVE (Trivy) | 🟡 | `container_scanner.py` — not run on lab |
 | Wazuh native vuln-detection + indexer | 🚫 | Indexer not in compose; we use OSV |
 
 ### 4.9 Threat intel (Epic E9)
@@ -251,7 +325,7 @@ What a developer asks for, and whether the product delivers today.
 |------|--------|---------|
 | Cowrie dev-server + db-server | ✅ | Docker |
 | Wazuh local_rules for Cowrie | ✅ | `lureguard_custom` group |
-| Logs → Wazuh → integratord | 🟡 | Same ingestion blocker |
+| Logs → Wazuh → integratord | 🟡 | Ingestion ✅; docker/web groups need agent config push |
 | DNAT redirect high-score SSH | ✅ | Core enforcer |
 | `check_decoy_contact` MCP tool | ⬜ | |
 | Decoy panel in Grafana | ⬜ | |
@@ -260,8 +334,8 @@ What a developer asks for, and whether the product delivers today.
 
 | Dashboard | Status | Panels |
 |-----------|--------|--------|
-| `lureguard-overview` | 🟡 | Events/decisions — empty without ingest |
-| `agent-activity` | 🟡 | Investigations, tool calls |
+| `lureguard-overview` | 🟡 | Events + **SLA row** (MTTD/MTTR/FPR/pending blocks) |
+| `agent-activity` | 🟡 | Investigations + **attack timeline panel** |
 | `fleet-hosts` | ✅ | Enrolled hosts |
 | `cve-posture` | ✅ | CVE + exposure + detection |
 | Wazuh full parity (A–H in old spec) | ⬜ | Many panels not built |
@@ -282,7 +356,7 @@ What a developer asks for, and whether the product delivers today.
 
 | Item | Status | Details |
 |------|--------|---------|
-| Unit tests (collector, policy, ML) | ✅ | `tests/` · 14 files |
+| Unit tests (collector, policy, ML, investigation) | ✅ | `tests/` · **101 passed** locally |
 | Integration test (live Core) | 🟡 | Marker in pytest |
 | MCP smoke test in CI | ⬜ | |
 | End-to-end playbook doc | ⬜ | Tier I Gate E |
@@ -293,8 +367,12 @@ What a developer asks for, and whether the product delivers today.
 
 | Table | Purpose | Populated? |
 |-------|---------|------------|
-| `events` | Wazuh alerts (SIEM ground truth) | 🔴 Empty |
-| `decisions` | ML allow/alert/redirect | 🟡 Depends on events |
+| `events` | Wazuh alerts (SIEM ground truth) | ✅ |
+| `decisions` | ML allow/alert/redirect + `event_id` FK | 🟡 |
+| `blocklist` | Pending/executed IP blocks | 🟡 empty until used |
+| `container_cve_findings` | Trivy image scan cache | 🟡 empty until scanned |
+| `watched_events` | Auto-triage dedup | 🟡 |
+| `sca_findings` / `user_findings` | Posture pillars 4–5 | ✅ |
 | `investigations` | Agent investigation sessions | 🟡 When opencode runs |
 | `agent_actions` | MCP audit log | ✅ |
 | `reports` | Saved report metadata | 🟡 |
@@ -311,7 +389,7 @@ What a developer asks for, and whether the product delivers today.
 
 All must pass before claiming **Tier I analyst replaced**:
 
-- [ ] 🔴 **A. Ingestion proven** — `get_soc_health()` shows recent `last_event_at` + `events_24h > 0`
+- [x] 🔴 **A. Ingestion proven** — `get_soc_health()` shows recent `last_event_at` + `events_24h > 0`
 - [ ] **B1. Triage report** on real alerts — clustered, TP/FP, P1–P4, tool citations
 - [ ] **B2. Daily summary** — leads with ingestion health; skeptical silence
 - [ ] **B3. Investigation sample** — timeline + evidence + handoff quality
@@ -328,8 +406,8 @@ Tracked in Notion: [Product Backlog → Tier I Gate cards](https://www.notion.so
 
 | Epic | Name | Status | Notes |
 |------|------|--------|-------|
-| E1 | Appliance (compose, Wazuh hidden) | 🟡 In progress | Stack runs; ingest blocked |
-| E2 | MCP server | 🟡 In progress | 30+ tools; Dev done on surface |
+| E1 | Appliance (compose, Wazuh hidden) | 🟡 In progress | Ingestion proven; E2E investigation pending |
+| E2 | MCP server | 🟡 In progress | 40+ tools; new investigation tools need E2E proof |
 | E3 | Onboarding flow | ✅ Dev done | Telemetry verify pending |
 | E4 | Grounding + audit | 🟡 In progress | Tables live; report discipline weak |
 | E5 | Skills + NIST IR | 🟡 In progress | All skills written; proof missing |
@@ -344,22 +422,20 @@ Tracked in Notion: [Product Backlog → Tier I Gate cards](https://www.notion.so
 
 ## 8. Where we're going (priority order)
 
-1. **Fix alert ingestion** (Gate A) — unblock everything that reads `events`
-2. **Generate test traffic** — SSH fail, syscheck, cowrie session
-3. **Prove triage + daily** (Gate B1, B2) — save reports to `reports/`
-4. **Regenerate posture report** (Gate C)
-5. **Tier III review** (Gate D)
-6. **Flagship demo script** (E11) — onboard → attack → investigate → Telegram
-7. **Event-triggered agent** (U9) — Wazuh webhook → opencode (optional automation)
-8. **Grafana parity + agent layer** (E8) — investigations timeline, decoy hits
-9. **Windows + syslog expansion** — broader log coverage
-10. **Production hardening** — installer, CI, caching, stale agent cleanup
+1. **Joint E2E proof** — triage + investigate reports saved to `reports/` (Gates B1–B3)
+2. **Test block path** — `recommend_block_ip` → human `confirm_block_ip` on lab host
+3. **Push agent config** — docker stdout + web logs on `.131`
+4. **Auto-triage smoke** — level ≥ 12 event → watcher → opencode
+5. **Container scan** — `scan_container_image` on one running image
+6. **Tier III review** (Gate D)
+7. **Flagship demo script** (E11)
 
 ---
 
 ## 9. Explicitly out of scope (don't block MVP)
 
-- [x] Autonomous containment (block IP, isolate host, firewall changes)
+- [x] **Autonomous** containment (agent never calls `confirm_block_ip` alone)
+- [ ] **Human-confirmed** block via `recommend_block_ip` → `confirm_block_ip` (implemented, not E2E tested)
 - [x] Bundled LLM in Docker (BYO-LLM via opencode)
 - [x] Wazuh Indexer / OpenSearch stack (we use Postgres + OSV)
 - [x] PDF reports by default (opt-in pandoc)
@@ -369,17 +445,16 @@ Tracked in Notion: [Product Backlog → Tier I Gate cards](https://www.notion.so
 
 ---
 
-## 10. Lab environment snapshot (2026-06-13)
+## 10. Lab environment snapshot (2026-06-18)
 
 | Resource | Value |
 |----------|-------|
 | Active agents | 007 (cp-131), 008 (vm3-134), 011 (k8s-133) |
 | Agent IPs | 192.168.28.131, .134, .133 |
-| Stale agents | 002, 003, 004, 005, 006, 009, 010 — cleanup pending |
-| Posture cache | Fresh for 007/008/011 |
-| Actionable CVEs (007) | 57 (147 raw after OSV) |
-| Exposure (007) | 25 listening / 2 risky |
-| Events in Postgres | **0** (blocker) |
+| Posture cache | Fresh for 007/008/011 (5 pillars: CVE, exposure, detection, SCA, users) |
+| Events in Postgres | **8+** in 24h window (ingestion proven) |
+| Closed investigations (24h) | 6 (SLA metrics populated — review FPR sanity) |
+| New MCP tools (uncommitted) | See § Tier 1 investigation quality |
 
 ---
 
@@ -395,9 +470,19 @@ make migrate && make doctor
 # Posture snapshot
 .venv/bin/python -c "from lureguard_mcp.posture_snapshot import get_posture_snapshot; import json; print(json.dumps(get_posture_snapshot('007'), indent=2)[:1500])"
 
-# Agent workflows
-opencode run "Read skills/triage.md and triage alerts from the last 2 hours"
-opencode run "Read skills/security-posture.md and run a posture check"
+# Rich timeline + attack summary
+.venv/bin/python -c "
+from lureguard_mcp.db import get_attack_summary, get_event_timeline
+import json
+ip = '127.0.0.1'
+print(json.dumps(get_attack_summary(ip), indent=2))
+"
+
+# IP context (set VIRUSTOTAL_API_KEY / ABUSEIPDB_API_KEY for external IPs)
+.venv/bin/python -c "from lureguard_mcp.enrichment import get_ip_context; print(get_ip_context('8.8.8.8'))"
+
+# Blocklist (pending entries)
+.venv/bin/python -c "from lureguard_mcp.blocklist import list_blocklist; print(list_blocklist())"
 ```
 
 ---

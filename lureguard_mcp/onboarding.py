@@ -10,7 +10,7 @@ from pathlib import Path
 import asyncssh
 
 from lureguard_mcp.config import AGENT_CONFIG_TEMPLATE, manager_container, onboard_ssh_password, wazuh_agent_manager_ip
-from lureguard_mcp.db import upsert_host_db
+from lureguard_mcp.db import set_host_criticality_db, upsert_host_db
 from lureguard_mcp.wazuh_client import WazuhClient
 
 
@@ -95,6 +95,7 @@ async def onboard_host(
     ssh_password: str | None = None,
     agent_name: str | None = None,
     agent_id: str | None = None,
+    criticality: str = "medium",
 ) -> dict:
     password = ssh_password or onboard_ssh_password()
     if not password:
@@ -200,6 +201,10 @@ async def onboard_host(
             wazuh_status=wazuh_status,
             enrolled_by="agent",
         )
+        try:
+            set_host_criticality_db(aid, criticality)
+        except ValueError:
+            pass
 
         if wazuh_status != "active":
             return {

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import subprocess
 from datetime import datetime
 from typing import Any
 
+from lureguard_mcp.config import onboard_ssh_password
 from lureguard_mcp.db import (
     get_agent_exposure_counts_db,
     get_agent_exposure_findings_db,
     get_agent_exposure_last_scan_db,
     get_fleet_exposure_summary_db,
+    get_host_ip_db,
     replace_agent_exposure_findings_db,
 )
 from lureguard_mcp.wazuh_client import WazuhClient
@@ -169,6 +172,25 @@ def scan_agent_exposure(
     }
 
 
+def _fetch_firewall_rules(agent_id: str) -> str | None:
+    host_ip = get_host_ip_db(agent_id)
+    password = onboard_ssh_password()
+    if not host_ip or not password:
+        return None
+    cmd = (
+        f"sshpass -p {password!r} ssh -o StrictHostKeyChecking=no -T "
+        f"ubuntu@{host_ip} "
+        f"\"(echo {password!r} | sudo -S iptables -L INPUT -n --line-numbers 2>/dev/null | head -40) "
+        f"|| (echo {password!r} | sudo -S ufw status verbose 2>/dev/null | head -40)\""
+    )
+    try:
+        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=25)
+        output = (proc.stdout or proc.stderr or "").strip()
+        return output[:4000] if output else None
+    except Exception:
+        return None
+
+
 def get_agent_exposure(
     agent_id: str,
     *,
@@ -178,6 +200,7 @@ def get_agent_exposure(
     items = get_agent_exposure_findings_db(agent_id, risk_level=risk_level, limit=limit)
     counts = get_agent_exposure_counts_db(agent_id)
     scanned_at = get_agent_exposure_last_scan_db(agent_id)
+    firewall_rules = _fetch_firewall_rules(agent_id)
     return {
         "agent_id": agent_id,
         "source": "postgres+syscollector",
@@ -185,6 +208,7 @@ def get_agent_exposure(
         "counts": counts,
         "total": sum(counts.values()),
         "findings": items,
+        "firewall_rules": firewall_rules,
         "hint": "Run trigger_posture_scan if data is stale or empty",
     }
 

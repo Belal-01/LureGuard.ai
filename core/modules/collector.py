@@ -17,6 +17,15 @@ _CHANNEL_MAP = {
     "syscheck": "syscheck",
     "rootcheck": "rootcheck",
     "lureguard_custom": "cowrie",
+    "cowrie": "cowrie",
+    "web": "web",
+    "apache": "web",
+    "nginx": "web",
+    "web-accesslog": "web",
+    "web-attack": "web",
+    "docker": "docker",
+    "attack": "web",
+    "scanner": "web",
 }
 
 _PROFILE_KEYWORDS = {
@@ -47,6 +56,12 @@ def normalize_event(alert: WazuhAlert) -> NormalizedEvent:
         event_type = "rootkit_detected"
     elif "lureguard_custom" in groups:
         event_type = "cowrie_session"
+    elif any(g in groups for g in ("web-attack", "sql_injection", "xss", "attack")):
+        event_type = "web_attack"
+    elif any(g in groups for g in ("web", "apache", "nginx", "web-accesslog", "scanner")):
+        event_type = "web_scan" if "scanner" in groups else "web_error"
+    elif "docker" in groups:
+        event_type = "docker_event"
     elif "authentication_failed" in groups:
         event_type = "auth_failed"
     elif "authentication_success" in groups:

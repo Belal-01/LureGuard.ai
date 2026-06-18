@@ -18,6 +18,7 @@ from lureguard_mcp.db import (
     add_timeline_event as db_add_timeline_event,
     close_investigation_db,
     get_alerts_for_ip as db_get_alerts_for_ip,
+    get_attack_summary as db_get_attack_summary,
     get_event_timeline as db_get_event_timeline,
     get_investigation_findings_db,
     get_investigation_iocs_db,
@@ -30,6 +31,7 @@ from lureguard_mcp.db import (
     record_finding as db_record_finding,
     save_report_db,
     search_events as db_search_events,
+    set_host_criticality_db,
 )
 from lureguard_mcp.config import REPORTS_DIR, REPO_ROOT
 from lureguard_mcp.enrichment import (
@@ -38,9 +40,20 @@ from lureguard_mcp.enrichment import (
     check_hash_virustotal,
     check_ip_reputation as enrich_abuseipdb,
     check_ip_virustotal as enrich_vt_ip,
+    check_tls as enrich_check_tls,
     check_url_urlhaus as enrich_urlhaus,
     check_url_virustotal as enrich_url_vt,
     defang_indicator,
+    get_ip_context as enrich_get_ip_context,
+)
+from lureguard_mcp.blocklist import (
+    confirm_block_ip as blocklist_confirm,
+    list_blocklist as blocklist_list,
+    recommend_block_ip as blocklist_recommend,
+)
+from lureguard_mcp.container_scanner import (
+    get_container_vulnerabilities as container_get_vulns,
+    scan_container_image as container_scan_image,
 )
 from lureguard_mcp.onboarding import onboard_host
 from lureguard_mcp.detection_scanner import (
@@ -162,9 +175,77 @@ def get_alerts_for_ip(ip: str, limit: int = 100) -> str:
 @mcp.tool()
 @audited
 def get_event_timeline(ip: str, window_hours: int = 24) -> str:
-    """Chronological event timeline for an IP within a time window."""
-    rows = db_get_event_timeline(ip, window_hours=min(window_hours, 168))
-    return json.dumps({"ip": ip, "window_hours": window_hours, "events": rows}, indent=2)
+    """Chronological attack timeline for an IP with geo, duration, ML scores, and phases."""
+    timeline = db_get_event_timeline(ip, window_hours=min(window_hours, 168))
+    return json.dumps(timeline, indent=2)
+
+
+@mcp.tool()
+@audited
+def get_attack_summary(ip: str, window_hours: int = 48) -> str:
+    """Aggregate attack summary for an IP — duration, channels, top rules, honeypot contact."""
+    summary = db_get_attack_summary(ip, window_hours=min(window_hours, 168))
+    return json.dumps(summary, indent=2)
+
+
+@mcp.tool()
+@audited
+def get_ip_context(ip: str) -> str:
+    """Mandatory compound enrichment: geo + AbuseIPDB + VirusTotal + verdict in one call."""
+    return enrich_get_ip_context(ip)
+
+
+@mcp.tool()
+@audited
+def check_tls(host: str, port: int = 443) -> str:
+    """Check TLS certificate expiry and negotiated cipher for host:port."""
+    return enrich_check_tls(host, port=port)
+
+
+@mcp.tool()
+@audited
+def recommend_block_ip(ip: str, reason: str, investigation_id: str = "") -> str:
+    """Recommend blocking an IP after investigation. Requires human confirm_block_ip to execute."""
+    result = blocklist_recommend(ip, reason, investigation_id)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+@audited
+def confirm_block_ip(block_id: str, notes: str = "") -> str:
+    """Human-confirmed: apply iptables DROP for a pending blocklist entry across active hosts."""
+    result = blocklist_confirm(block_id, notes=notes)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+@audited
+def list_blocklist(pending_only: bool = False) -> str:
+    """List blocklist entries (pending and executed)."""
+    return blocklist_list(pending_only=pending_only)
+
+
+@mcp.tool()
+@audited
+def set_host_criticality(agent_id: str, criticality: str) -> str:
+    """Set persistent asset criticality: critical | high | medium | low."""
+    return json.dumps(set_host_criticality_db(agent_id, criticality), indent=2)
+
+
+@mcp.tool()
+@audited
+def scan_container_image(agent_id: str, image_ref: str) -> str:
+    """Scan a Docker image on a host with Trivy and persist container CVE findings."""
+    result = container_scan_image(agent_id, image_ref)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+@audited
+def get_container_vulnerabilities(agent_id: str, image_ref: str = "", limit: int = 200) -> str:
+    """Return cached container image CVE findings for an agent."""
+    result = container_get_vulns(agent_id, image_ref=image_ref, limit=limit)
+    return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -757,6 +838,7 @@ async def onboard_host_tool(
     ssh_user: str = "ubuntu",
     ssh_password: str = "",
     agent_name: str = "",
+    criticality: str = "medium",
 ) -> str:
     """Enroll one Linux VM into Wazuh. This is the ONLY supported onboarding path.
 
@@ -769,6 +851,7 @@ async def onboard_host_tool(
         ssh_user,
         ssh_password=ssh_password or None,
         agent_name=agent_name or None,
+        criticality=criticality or "medium",
     )
     return json.dumps(result, indent=2)
 

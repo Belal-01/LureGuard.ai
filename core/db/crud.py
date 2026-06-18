@@ -46,6 +46,16 @@ async def ensure_ip_geolocation(db: AsyncSession, ip: str | None) -> None:
 
 
 async def insert_event(db: AsyncSession, event: NormalizedEvent) -> None:
+    geo_country = None
+    geo_city = None
+    if event.src_ip:
+        existing = await db.execute(
+            select(IpGeolocation).where(IpGeolocation.ip == str(event.src_ip))
+        )
+        geo_row = existing.scalar_one_or_none()
+        if geo_row:
+            geo_country = geo_row.country_code
+            geo_city = geo_row.country_name
     db.add(Event(
         id=event.id,
         ts=event.ts,
@@ -57,6 +67,7 @@ async def insert_event(db: AsyncSession, event: NormalizedEvent) -> None:
         profile_id=event.profile_id,
         wazuh_rule_id=event.wazuh_rule_id,
         wazuh_rule_level=event.wazuh_rule_level,
+        wazuh_rule_description=event.wazuh_rule_description,
         agent_id=event.agent_id,
         agent_name=event.agent_name,
         agent_ip=str(event.agent_ip) if event.agent_ip else None,
@@ -65,6 +76,8 @@ async def insert_event(db: AsyncSession, event: NormalizedEvent) -> None:
         syscheck_event=event.syscheck_event,
         syscheck_sha256_after=event.syscheck_sha256_after,
         raw_ref=event.raw_ref,
+        geo_country=geo_country,
+        geo_city=geo_city,
     ))
     await ensure_ip_geolocation(db, str(event.src_ip) if event.src_ip else None)
 
@@ -73,6 +86,7 @@ async def insert_decision(db: AsyncSession, dec: DecisionResult) -> None:
     db.add(Decision(
         id=dec.id,
         session_id=dec.session_id,
+        event_id=dec.event_id,
         ts=dec.ts,
         decision=dec.decision,
         p=dec.p,

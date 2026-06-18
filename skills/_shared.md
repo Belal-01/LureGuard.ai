@@ -74,7 +74,17 @@ LureGuard CVE scanning uses **Wazuh syscollector packages on the enrolled host**
 | Worker node, dev VM | medium |
 | Honeypot (cowrie), lab, disconnected host | low |
 
-Set via `open_investigation(asset_criticality=...)` and refine with `get_agent_detail`.
+Set via `set_host_criticality(agent_id, ...)` or `open_investigation(asset_criticality=...)` and refine with `get_agent_detail`.
+
+**Priority:** check `list_enrolled_hosts` → `criticality` column before applying keyword heuristics below.
+
+## Post-investigation containment (advisory)
+
+After `close_investigation` with verdict `true_positive` and severity P1/P2:
+
+1. `recommend_block_ip(ip, reason, investigation_id)` — writes pending blocklist entry
+2. `notify_telegram` with summary + `confirm_block_ip(block_id='...')` command for human operator
+3. **Never** call `confirm_block_ip` autonomously — human must execute containment
 
 ## NIST IR lifecycle (advisory — human executes containment)
 
@@ -211,9 +221,10 @@ Score each 0–2 (0=missing, 1=partial, 2=complete). Target **≥14/16** for inc
 |------|------|
 | Recent alerts | `get_recent_alerts` |
 | Ingestion health | `get_soc_health` |
-| IP history | `get_alerts_for_ip`, `get_event_timeline` |
+| IP history | `get_alerts_for_ip`, `get_event_timeline`, `get_attack_summary` |
 | Filter search | `search_events` |
-| IP reputation | `check_ip_reputation`, `check_ip_virustotal` |
+| IP context (mandatory) | `get_ip_context` |
+| IP reputation (legacy) | `check_ip_reputation`, `check_ip_virustotal` |
 | URL/domain reputation | `check_url_virustotal`, `check_domain_virustotal`, `check_url_urlhaus` |
 | Web attack classify | `analyze_web_attack` |
 | Hash check | `check_hash` |
@@ -231,3 +242,7 @@ Score each 0–2 (0=missing, 1=partial, 2=complete). Target **≥14/16** for inc
 | Report to Telegram | `send_report_to_telegram` — **always PDF**; pass `.md` path; never skip PDF for Telegram |
 | Local PDF file | `convert_report_to_pdf` or `save_report(..., as_pdf=true)` — when user asks for a PDF on disk |
 | Notify (text) | `notify_telegram` |
+| Block IP (advisory) | `recommend_block_ip`, `confirm_block_ip`, `list_blocklist` |
+| Asset criticality | `set_host_criticality` |
+| Container CVEs | `scan_container_image`, `get_container_vulnerabilities` |
+| TLS check | `check_tls` |

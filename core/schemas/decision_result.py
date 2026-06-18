@@ -8,6 +8,7 @@ from pydantic import BaseModel
 class DecisionResult(BaseModel):
     id: uuid.UUID
     session_id: Optional[uuid.UUID] = None
+    event_id: Optional[uuid.UUID] = None
     ts: datetime
     decision: Literal["allow", "alert", "redirect"]
     p: float

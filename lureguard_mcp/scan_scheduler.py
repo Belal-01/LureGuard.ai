@@ -21,6 +21,7 @@ from lureguard_mcp.posture_snapshot import get_posture_snapshot
 from lureguard_mcp.sca_scanner import scan_agent_sca
 from lureguard_mcp.user_scanner import scan_agent_users
 from lureguard_mcp.vuln_scanner import scan_agent_vulnerabilities
+from lureguard_mcp.alert_watcher import start_alert_watcher
 from lureguard_mcp.wazuh_client import WazuhClient
 
 logger = logging.getLogger(__name__)
@@ -235,6 +236,7 @@ def start_scan_scheduler() -> None:
     )
     _scheduler.start()
     logger.info("Posture scan scheduler started (every %sh)", SCAN_INTERVAL_HOURS)
+    start_alert_watcher()
 
 
 def stop_scan_scheduler() -> None:

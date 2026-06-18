@@ -13,6 +13,176 @@ import httpx
 from lureguard_mcp.config import abuseipdb_api_key, urlhaus_api_url, virustotal_api_key
 
 
+def _is_private_ip(ip: str) -> bool:
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return True
+    try:
+        octets = [int(p) for p in parts]
+    except ValueError:
+        return True
+    if octets[0] == 10:
+        return True
+    if octets[0] == 172 and 16 <= octets[1] <= 31:
+        return True
+    if octets[0] == 192 and octets[1] == 168:
+        return True
+    if octets[0] == 127:
+        return True
+    return False
+
+
+def _lookup_geo_db(ip: str) -> dict[str, Any]:
+    from lureguard_mcp.db import get_conn
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT country_code, country_name, lat, lon
+                FROM ip_geolocation WHERE ip = %s::inet
+                """,
+                (ip,),
+            )
+            row = cur.fetchone()
+    if not row:
+        return {}
+    return {
+        "country": row[0],
+        "city": row[1],
+        "lat": row[2],
+        "lon": row[3],
+    }
+
+
+def _abuseipdb_dict(ip: str) -> dict[str, Any]:
+    key = abuseipdb_api_key()
+    if not key:
+        return {"configured": False}
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            resp = client.get(
+                "https://api.abuseipdb.com/api/v2/check",
+                headers={"Key": key, "Accept": "application/json"},
+                params={"ipAddress": ip, "maxAgeInDays": 90},
+            )
+            resp.raise_for_status()
+            data = resp.json().get("data", {})
+            return {
+                "configured": True,
+                "score": data.get("abuseConfidenceScore"),
+                "reports": data.get("totalReports"),
+                "country": data.get("countryCode"),
+                "isp": data.get("isp"),
+                "usage_type": data.get("usageType"),
+                "is_whitelisted": data.get("isWhitelisted"),
+            }
+    except Exception as exc:
+        return {"configured": True, "error": str(exc)}
+
+
+def _virustotal_ip_dict(ip: str) -> dict[str, Any]:
+    key = virustotal_api_key()
+    if not key:
+        return {"configured": False}
+    try:
+        with httpx.Client(timeout=12.0) as client:
+            resp = client.get(
+                f"https://www.virustotal.com/api/v3/ip_addresses/{ip}",
+                headers={"x-apikey": key},
+            )
+            resp.raise_for_status()
+            attrs = resp.json().get("data", {}).get("attributes", {})
+            stats = attrs.get("last_analysis_stats", {})
+            return {
+                "configured": True,
+                "malicious": stats.get("malicious", 0),
+                "suspicious": stats.get("suspicious", 0),
+                "harmless": stats.get("harmless", 0),
+                "country": attrs.get("country"),
+                "as_owner": attrs.get("as_owner"),
+            }
+    except Exception as exc:
+        return {"configured": True, "error": str(exc)}
+
+
+def _derive_verdict(abuse: dict[str, Any], vt: dict[str, Any]) -> tuple[str, str]:
+    abuse_score = abuse.get("score") or 0
+    vt_mal = vt.get("malicious") or 0
+    vt_susp = vt.get("suspicious") or 0
+    if abuse_score >= 75 or vt_mal >= 5:
+        return "malicious", "high"
+    if abuse_score >= 25 or vt_mal >= 1 or vt_susp >= 2:
+        return "suspicious", "medium"
+    if abuse.get("is_whitelisted"):
+        return "benign", "high"
+    if not abuse.get("configured") and not vt.get("configured"):
+        return "undetermined", "low"
+    return "benign", "medium"
+
+
+def get_ip_context(ip: str) -> str:
+    """Compound enrichment: geo + AbuseIPDB + VirusTotal in one call."""
+    clean = refang_indicator(ip).strip()
+    if _is_private_ip(clean):
+        return json.dumps(
+            {
+                "ip": clean,
+                "private": True,
+                "geo": {},
+                "abuse": {"skipped": "private IP"},
+                "virustotal": {"skipped": "private IP"},
+                "verdict": "internal",
+                "verdict_confidence": "high",
+            },
+            indent=2,
+        )
+    geo = _lookup_geo_db(clean)
+    abuse = _abuseipdb_dict(clean)
+    vt = _virustotal_ip_dict(clean)
+    verdict, confidence = _derive_verdict(abuse, vt)
+    return json.dumps(
+        {
+            "ip": clean,
+            "geo": geo,
+            "abuse": abuse,
+            "virustotal": vt,
+            "verdict": verdict,
+            "verdict_confidence": confidence,
+        },
+        indent=2,
+    )
+
+
+def check_tls(host: str, port: int = 443) -> str:
+    """Check TLS certificate and cipher for a host:port."""
+    import socket
+    import ssl
+    from datetime import datetime, timezone
+
+    result: dict[str, Any] = {"host": host, "port": port}
+    try:
+        ctx = ssl.create_default_context()
+        with socket.create_connection((host, port), timeout=10) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
+                cert = ssock.getpeercert()
+                cipher = ssock.cipher()
+                result["cipher"] = cipher[0] if cipher else None
+                result["protocol"] = cipher[1] if cipher else None
+                if cert:
+                    result["subject"] = dict(x[0] for x in cert.get("subject", ()))
+                    not_after = cert.get("notAfter")
+                    result["not_after"] = not_after
+                    if not_after:
+                        expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+                        days_left = (expiry.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).days
+                        result["days_until_expiry"] = days_left
+                        result["expired"] = days_left < 0
+    except Exception as exc:
+        result["error"] = str(exc)
+    return json.dumps(result, indent=2)
+
+
 def defang_indicator(value: str, ioc_type: str | None = None) -> str:
     """Defang an IOC for safe sharing in reports."""
     text = value.strip()

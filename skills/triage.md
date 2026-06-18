@@ -11,9 +11,9 @@ Replace Tier-1 SOC analyst: pull recent alerts, dedupe, enrich, assign verdict a
 3. `get_recent_alerts(limit=100, min_level=3)` — note channels and top IPs
 4. Group by `src_ip` + `event_type`; skip obvious duplicates
 5. For each distinct cluster (max 10 per session):
-   - Determine **asset criticality** (see `_shared.md` rules); check `list_agents` if host-linked
-   - `check_ip_reputation` + `check_ip_virustotal` for external IPs
-   - `analyze_web_attack` if channel suggests web (apache/nginx, cowrie web)
+   - Determine **asset criticality** — check `list_enrolled_hosts` for `criticality` column first; fall back to `_shared.md` heuristics
+   - `get_ip_context(src_ip)` for every unique external IP — **mandatory, not optional**
+   - `analyze_web_attack` if channel suggests web (apache/nginx, cowrie web, docker)
    - `add_timeline_event` for first/last event in cluster
    - `record_finding` with verdict, MITRE if applicable, IOC fields
    - Assign P1–P4 using triage matrix

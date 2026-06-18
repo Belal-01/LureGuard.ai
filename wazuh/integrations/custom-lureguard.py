@@ -44,6 +44,16 @@ _FORWARD_GROUPS = frozenset(
         "rootcheck",
         "lureguard_custom",
         "cowrie",
+        "web",
+        "apache",
+        "nginx",
+        "web-accesslog",
+        "web-attack",
+        "sql_injection",
+        "xss",
+        "scanner",
+        "attack",
+        "docker",
     }
 )
 

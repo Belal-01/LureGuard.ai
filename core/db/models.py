@@ -37,6 +37,9 @@ class Event(Base):
     syscheck_event = Column(String(16))
     syscheck_sha256_after = Column(String(64))
     raw_ref = Column(Text)
+    wazuh_rule_description = Column(Text)
+    geo_country = Column(String(2))
+    geo_city = Column(String(128))
 
     __table_args__ = (
         Index("ix_events_src_ip_ts", "src_ip", "ts"),
@@ -74,6 +77,7 @@ class Decision(Base):
     features_hash = Column(String(64))
     profile_id = Column(String(32))
     reason = Column(Text)
+    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"))
 
     session = relationship("Session", back_populates="decisions")
     alerts = relationship("Alert", back_populates="decision")
