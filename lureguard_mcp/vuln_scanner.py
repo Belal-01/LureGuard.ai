@@ -7,13 +7,20 @@ from typing import Any
 
 import httpx
 
-from lureguard_mcp.cve_triage import process_names_from_packages, triage_finding
+from lureguard_mcp.cve_triage import (
+    fetch_epss_batch,
+    is_eol_os,
+    normalize_cve_id,
+    process_names_from_packages,
+    triage_finding,
+)
 from lureguard_mcp.db import (
     get_agent_cve_counts_db,
     get_agent_cve_findings_db,
     get_agent_cve_last_scan_db,
     get_fleet_cve_summary_db,
     replace_agent_cve_findings_db,
+    set_host_eol_os_db,
 )
 from lureguard_mcp.wazuh_client import WazuhClient
 
@@ -204,6 +211,11 @@ def scan_agent_vulnerabilities(
         os_item = {}
 
     ecosystem = _osv_ecosystem(os_item)
+    os_platform = str(os_item.get("platform") or os_item.get("name") or "")
+    os_version = str(os_item.get("version") or os_item.get("major") or "")
+    os_name = str(os_item.get("name") or "")
+    eol_os = is_eol_os(os_platform, os_version, os_name)
+    set_host_eol_os_db(agent_id, eol_os)
     packages = _fetch_all_packages(wazuh, agent_id)
     try:
         running = process_names_from_packages(_fetch_all_processes(wazuh, agent_id))
@@ -225,6 +237,7 @@ def scan_agent_vulnerabilities(
 
     findings: list[dict[str, Any]] = []
     vuln_cache: dict[str, dict[str, Any]] = {}
+    pending: list[dict[str, Any]] = []
     with httpx.Client(timeout=120.0) as client:
         for start in range(0, len(packages), BATCH_SIZE):
             batch_pkgs = packages[start : start + BATCH_SIZE]
@@ -262,6 +275,7 @@ def scan_agent_vulnerabilities(
                             break
                     if not cve_id:
                         continue
+                    cve_id = normalize_cve_id(cve_id)
                     cvss, severity = _parse_cvss(detail)
                     fix_version = _extract_fix_version(detail, ecosystem, pkg_name)
                     triage = triage_finding(
@@ -273,10 +287,11 @@ def scan_agent_vulnerabilities(
                         severity=severity,
                         cvss=cvss,
                         running_processes=running,
+                        eol_os=eol_os,
                     )
                     if triage is None:
                         continue
-                    findings.append(
+                    pending.append(
                         {
                             "package_name": pkg_name,
                             "package_version": pkg_version,
@@ -290,7 +305,21 @@ def scan_agent_vulnerabilities(
                         }
                     )
 
+    epss_scores = fetch_epss_batch([p["cve_id"] for p in pending])
+    for item in pending:
+        epss = epss_scores.get(normalize_cve_id(item["cve_id"]))
+        if epss is not None:
+            item["epss_score"] = epss
+            priority = int(item.get("priority_score") or 0)
+            if epss > 0.5:
+                priority += 25
+            elif epss > 0.1:
+                priority += 10
+            item["priority_score"] = priority
+        findings.append(item)
+
     replace_agent_cve_findings_db(agent_id=agent_id, findings=findings, scanned_at=scanned_at)
+    backfill_agent_epss_scores(agent_id)
     counts = _count_findings(findings)
     actionable_counts = _count_findings(findings, actionable_only=True)
     return {
@@ -298,6 +327,7 @@ def scan_agent_vulnerabilities(
         "name": agent_meta.get("name", ""),
         "ip": agent_meta.get("ip", ""),
         "ecosystem": ecosystem,
+        "eol_os": eol_os,
         "packages_scanned": len(packages),
         "findings_count": len(findings),
         "actionable_count": sum(actionable_counts.values()),
@@ -311,6 +341,36 @@ def scan_agent_vulnerabilities(
         )[:100],
         "truncated": len(findings) > 100,
     }
+
+
+def backfill_agent_epss_scores(agent_id: str) -> int:
+    """Fill epss_score on cached CVE rows (handles UBUNTU-CVE-* IDs)."""
+    from lureguard_mcp.db import get_conn
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT cve_id FROM cve_findings WHERE agent_id = %s AND epss_score IS NULL",
+                (agent_id,),
+            )
+            raw_ids = [row[0] for row in cur.fetchall()]
+    if not raw_ids:
+        return 0
+
+    scores = fetch_epss_batch(raw_ids)
+    updated = 0
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            for raw in raw_ids:
+                epss = scores.get(normalize_cve_id(raw))
+                if epss is None:
+                    continue
+                cur.execute(
+                    "UPDATE cve_findings SET epss_score = %s WHERE agent_id = %s AND cve_id = %s",
+                    (epss, agent_id, raw),
+                )
+                updated += cur.rowcount
+    return updated
 
 
 def _count_findings(

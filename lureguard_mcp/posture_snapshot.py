@@ -11,10 +11,17 @@ from lureguard_mcp.db import (
     get_agent_detection_coverage_db,
     get_agent_exposure_counts_db,
     get_agent_exposure_last_scan_db,
+    get_agent_sca_last_scan_db,
+    get_agent_sca_summary_db,
+    get_agent_user_last_scan_db,
+    get_agent_user_risk_counts_db,
+    get_host_eol_os_db,
     get_host_ip_db,
 )
 from lureguard_mcp.detection_scanner import get_agent_detection_coverage
 from lureguard_mcp.exposure_scanner import get_agent_exposure
+from lureguard_mcp.sca_scanner import get_agent_sca_summary
+from lureguard_mcp.user_scanner import get_agent_users
 from lureguard_mcp.vuln_scanner import get_agent_vulnerabilities
 
 CACHE_STALE_HOURS = 24
@@ -52,27 +59,32 @@ def _pillar_status(scanned_at: str | None) -> dict[str, Any]:
 
 
 def get_posture_snapshot(agent_id: str) -> dict[str, Any]:
-    """Instant posture read from Postgres — CVE, exposure, detection coverage."""
+    """Instant posture read from Postgres — five pillars from cache."""
     cve_scanned = get_agent_cve_last_scan_db(agent_id)
     exposure_scanned = get_agent_exposure_last_scan_db(agent_id)
     detection_row = get_agent_detection_coverage_db(agent_id)
     detection_scanned = detection_row.get("scanned_at") if detection_row else None
+    sca_scanned = get_agent_sca_last_scan_db(agent_id)
+    user_scanned = get_agent_user_last_scan_db(agent_id)
 
     cve_status = _pillar_status(cve_scanned)
     exposure_status = _pillar_status(exposure_scanned)
     detection_status = _pillar_status(detection_scanned)
+    sca_status = _pillar_status(sca_scanned)
+    user_status = _pillar_status(user_scanned)
 
-    any_never = any(
-        s["status"] == "never_scanned"
-        for s in (cve_status, exposure_status, detection_status)
-    )
-    any_stale = any(s["stale"] for s in (cve_status, exposure_status, detection_status))
+    pillar_statuses = (cve_status, exposure_status, detection_status, sca_status, user_status)
+    any_never = any(s["status"] == "never_scanned" for s in pillar_statuses)
+    any_stale = any(s["stale"] for s in pillar_statuses)
 
     cve_counts = get_agent_cve_counts_db(agent_id, actionable_only=True)
     exposure_counts = get_agent_exposure_counts_db(agent_id)
     risky_exposure = sum(
         exposure_counts.get(level, 0) for level in ("critical", "high", "medium")
     )
+    sca_summary = get_agent_sca_summary_db(agent_id)
+    user_counts = get_agent_user_risk_counts_db(agent_id)
+    risky_users = sum(user_counts.get(k, 0) for k in ("critical", "high", "medium"))
 
     detection_summary: dict[str, Any] = {}
     if detection_row:
@@ -86,9 +98,14 @@ def get_posture_snapshot(agent_id: str) -> dict[str, Any]:
             "rules_firing": (detection_row.get("rules_firing") or [])[:5],
         }
 
+    users_detail = get_agent_users(agent_id, risk_level="critical", limit=5)
+    if not users_detail.get("findings"):
+        users_detail = get_agent_users(agent_id, risk_level="medium", limit=5)
+
     return {
         "agent_id": agent_id,
         "agent_ip": get_host_ip_db(agent_id),
+        "eol_os": get_host_eol_os_db(agent_id),
         "source": "postgres_cache",
         "cache_policy_hours": CACHE_STALE_HOURS,
         "overall_status": "never_scanned" if any_never else ("stale" if any_stale else "fresh"),
@@ -103,7 +120,7 @@ def get_posture_snapshot(agent_id: str) -> dict[str, Any]:
                 **cve_status,
                 "counts": cve_counts,
                 "total": sum(cve_counts.values()),
-                "note": "Counts are actionable CVEs only (patched/noise filtered)",
+                "note": "Counts are actionable CVEs only (patched/noise filtered; EPSS + EOL aware)",
             },
             "exposure": {
                 **exposure_status,
@@ -115,6 +132,19 @@ def get_posture_snapshot(agent_id: str) -> dict[str, Any]:
                 **detection_status,
                 **detection_summary,
             },
+            "sca_compliance": {
+                **sca_status,
+                "score_percent": sca_summary.get("score_percent"),
+                "failed_count": sca_summary.get("failed_count", 0),
+                "counts": sca_summary.get("counts", {}),
+                "top_failed": sca_summary.get("top_failed", [])[:5],
+            },
+            "user_inventory": {
+                **user_status,
+                "counts": user_counts,
+                "risky_users": risky_users,
+                "top_risky": users_detail.get("findings", [])[:5],
+            },
         },
         "top_actionable_cves": get_agent_vulnerabilities(
             agent_id, actionable_only=True, limit=10
@@ -124,6 +154,8 @@ def get_posture_snapshot(agent_id: str) -> dict[str, Any]:
         ).get("findings", [])
         or get_agent_exposure(agent_id, risk_level="high", limit=5).get("findings", []),
         "detection": get_agent_detection_coverage(agent_id),
+        "sca": get_agent_sca_summary(agent_id),
+        "users": get_agent_users(agent_id, limit=20),
     }
 
 
@@ -145,12 +177,16 @@ def get_fleet_posture_summary() -> dict[str, Any]:
                 "ip": host.get("ip"),
                 "overall_status": snap["overall_status"],
                 "needs_rescan": snap["needs_rescan"],
+                "eol_os": snap.get("eol_os"),
                 "cve_total": snap["pillars"]["vulnerabilities"]["total"],
                 "exposure_total": snap["pillars"]["exposure"]["total"],
+                "sca_score_percent": snap["pillars"]["sca_compliance"].get("score_percent"),
+                "risky_users": snap["pillars"]["user_inventory"].get("risky_users"),
                 "alerts_24h": snap["pillars"]["detection_coverage"].get("alerts_24h"),
             }
         )
     return {
         "fleet": snapshots,
         "agents_needing_rescan": sum(1 for s in snapshots if s["needs_rescan"]),
+        "agents_eol_os": sum(1 for s in snapshots if s.get("eol_os")),
     }

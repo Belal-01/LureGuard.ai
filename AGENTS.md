@@ -60,7 +60,7 @@ Load `skills/_shared.md` plus the mode file for every investigation workflow.
 
 Alerts: `get_recent_alerts`, `get_alerts_for_ip`, `get_event_timeline`, `search_events`  
 Fleet: `list_agents`, `get_agent_detail`, `get_rules_summary`, `get_manager_status`  
-Posture: `get_posture_snapshot`, `get_fleet_posture_summary`, `trigger_posture_scan`, `get_posture_scan_status`, `get_agent_vulnerabilities`, `get_fleet_vulnerability_summary`, `get_agent_exposure`, `get_fleet_exposure_summary`, `get_agent_detection_coverage`, `get_fleet_detection_coverage`, `get_soc_health`  
+Posture: `get_posture_snapshot`, `get_fleet_posture_summary`, `trigger_posture_scan`, `get_posture_scan_status`, `get_agent_vulnerabilities`, `get_fleet_vulnerability_summary`, `get_agent_exposure`, `get_fleet_exposure_summary`, `get_agent_detection_coverage`, `get_fleet_detection_coverage`, `get_agent_sca_summary`, `get_fleet_sca_summary`, `get_agent_users`, `get_soc_health`  
 Intel: `check_ip_reputation`, `check_ip_virustotal`, `check_hash`, `check_url_virustotal`, `check_domain_virustotal`, `check_url_urlhaus`, `analyze_web_attack`, `defang_ioc`  
 Lifecycle: `open_investigation`, `record_finding`, `add_timeline_event`, `get_investigation_artifacts`, `close_investigation`  
 Charts: `generate_report_chart`, `generate_report_chart_preset`  

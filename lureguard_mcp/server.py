@@ -55,6 +55,11 @@ from lureguard_mcp.posture_snapshot import (
     get_fleet_posture_summary as posture_fleet_summary,
     get_posture_snapshot as posture_get_snapshot,
 )
+from lureguard_mcp.sca_scanner import (
+    get_agent_sca_summary as sca_get_agent,
+    get_fleet_sca_summary as sca_fleet_summary,
+)
+from lureguard_mcp.user_scanner import get_agent_users as users_get_agent
 from lureguard_mcp.report_charts import (
     enrich_report_markdown,
     generate_chart_from_preset,
@@ -288,8 +293,32 @@ def get_fleet_detection_coverage() -> str:
 
 @mcp.tool()
 @audited
+def get_agent_sca_summary(agent_id: str) -> str:
+    """Cached SCA/CIS compliance summary for an agent (score, failed checks)."""
+    return compact_json(sca_get_agent(agent_id))
+
+
+@mcp.tool()
+@audited
+def get_fleet_sca_summary() -> str:
+    """Fleet-wide SCA/CIS compliance scores from Postgres cache."""
+    return compact_json(sca_fleet_summary())
+
+
+@mcp.tool()
+@audited
+def get_agent_users(agent_id: str, risk_level: str = "") -> str:
+    """Cached local user inventory with risk levels for an agent."""
+    level = risk_level.strip().lower() or None
+    if level and level not in {"critical", "high", "medium", "low", "info"}:
+        return json.dumps({"error": "risk_level must be critical, high, medium, low, or info"})
+    return compact_json(users_get_agent(agent_id, risk_level=level))
+
+
+@mcp.tool()
+@audited
 def get_posture_snapshot(agent_id: str) -> str:
-    """Instant posture read from Postgres — CVE, exposure, and detection coverage caches."""
+    """Instant posture read from Postgres — CVE, exposure, detection, SCA, and user inventory caches."""
     return compact_json(posture_get_snapshot(agent_id))
 
 
@@ -303,7 +332,7 @@ def get_fleet_posture_summary() -> str:
 @mcp.tool()
 @audited
 def trigger_posture_scan(agent_id: str = "", force: bool = False) -> str:
-    """Start background posture scan (CVE + exposure + detection). Returns immediately."""
+    """Start background posture scan (CVE + exposure + detection + SCA + users). force=true rescans even if cache is fresh."""
     return compact_json(scheduler_trigger_scan(agent_id=agent_id, force=force))
 
 

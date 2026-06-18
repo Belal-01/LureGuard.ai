@@ -24,11 +24,15 @@ Grafana is for **live drill-down**; the report carries the **executive snapshot 
 
 ## Container / web-app CVE scope (know the limits)
 
-LureGuard CVE scanning today uses **Wazuh syscollector packages on the enrolled host** (OS packages via OSV.dev) — e.g. `docker.io`, `containerd`, `nginx`, `openssl` on the **VM/node**.
+LureGuard posture today covers **five pillars** on enrolled hosts: OS package CVEs (OSV + EPSS + EOL boost), port exposure, detection coverage, **SCA/CIS compliance**, and **local user inventory**.
+
+LureGuard CVE scanning uses **Wazuh syscollector packages on the enrolled host** (OS packages via OSV.dev) — e.g. `docker.io`, `containerd`, `nginx`, `openssl` on the **VM/node**.
+
+**EOL OS:** `get_posture_snapshot` includes `eol_os: true` when the OS is past standard support — boost critical CVE priority and recommend upgrade.
 
 **Not scanned today (gaps):**
 - npm/Next.js dependencies **inside** a Docker image (`package.json`, `node_modules`)
-- Container image layers (would need Trivy/grype/image scan)
+- Container image layers (would need **Trivy/grype** image scan — v2 integration candidate)
 - `privileged: true`, `--cap-add`, or `/var/run/docker.sock` mounts (no dedicated check yet)
 - Container-escape blast radius scoring (app RCE → container root → host root)
 
@@ -215,6 +219,10 @@ Score each 0–2 (0=missing, 1=partial, 2=complete). Target **≥14/16** for inc
 | Hash check | `check_hash` |
 | Defang IOC | `defang_ioc` |
 | Host inventory | `get_agent_detail`, `list_agents` |
+| Posture snapshot | `get_posture_snapshot` (5 pillars: CVE, exposure, detection, SCA, users) |
+| SCA / CIS | `get_agent_sca_summary`, `get_fleet_sca_summary` |
+| User inventory | `get_agent_users` |
+| Rescan posture | `trigger_posture_scan` (`force=true` when user asks refresh) |
 | Structured artifacts | `get_investigation_artifacts` |
 | Timeline row | `add_timeline_event` |
 | Audit trail | `record_finding`, `close_investigation` |

@@ -25,7 +25,7 @@
       "tags": [],
       "targetBlank": false,
       "title": "Security Posture",
-      "tooltip": "CVE, exposure, detection",
+      "tooltip": "CVE, exposure, detection, SCA, users",
       "type": "link",
       "url": "/d/lureguard-cve-posture/lureguard-security-posture"
     },
@@ -509,6 +509,120 @@
       ],
       "title": "Open investigations (detail)",
       "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
+      "id": 21,
+      "panels": [],
+      "title": "Security posture (5 pillars)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 46 },
+      "id": 22,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS fleet_sca_pct FROM sca_findings s WHERE s.check_id != 'none'",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet SCA pass %",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 46 },
+      "id": 23,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS failed_checks FROM sca_findings WHERE result IN ('failed', 'fail')",
+          "refId": "A"
+        }
+      ],
+      "title": "SCA failed checks",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 46 },
+      "id": 24,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS high_epss FROM cve_findings WHERE epss_score > 0.5",
+          "refId": "A"
+        }
+      ],
+      "title": "High EPSS CVEs",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 46 },
+      "id": 25,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS risky_users FROM user_findings WHERE risk_level IN ('critical', 'high', 'medium')",
+          "refId": "A"
+        }
+      ],
+      "title": "Risky local users",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 46 },
+      "id": 26,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS eol_hosts FROM hosts WHERE eol_os = true AND agent_id != '000'",
+          "refId": "A"
+        }
+      ],
+      "title": "EOL OS hosts",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 46 },
+      "id": 27,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(DISTINCT agent_id) AS hosts_with_posture FROM hosts WHERE agent_id != '000' AND agent_id IN (SELECT DISTINCT agent_id FROM cve_findings UNION SELECT DISTINCT agent_id FROM sca_findings WHERE check_id != 'none' UNION SELECT DISTINCT agent_id FROM user_findings WHERE username != '_none_')",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts with posture data",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 50 },
+      "id": 28,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' GROUP BY h.name, h.agent_id, h.ip, h.eol_os ORDER BY h.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Posture summary by host",
+      "type": "table"
     }
   ],
   "refresh": "10s",
@@ -518,5 +632,5 @@
   "time": { "from": "now-6h", "to": "now" },
   "title": "LureGuard SOC Overview",
   "uid": "lureguard-soc-overview",
-  "version": 4
+  "version": 5
 }

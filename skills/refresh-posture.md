@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Run a **background posture indexer** only when the user **explicitly** wants fresh data — not during normal posture or web investigation.
+Run a **background posture indexer** (CVE + exposure + detection + SCA + users) only when the user **explicitly** wants fresh data — not during normal posture or web investigation.
 
 Normal posture (`security-posture.md`) reads **Postgres cache** instantly. The 6h scheduler refreshes cache in the background. This mode is for: "rescan", "refresh CVEs", "run a new scan", "update posture data".
 

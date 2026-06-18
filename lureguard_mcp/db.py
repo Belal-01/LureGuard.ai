@@ -540,8 +540,8 @@ def replace_agent_cve_findings_db(
                     INSERT INTO cve_findings (
                         id, agent_id, package_name, package_version, cve_id,
                         severity, cvss, fix_version, summary, source, scanned_at,
-                        actionable, service_running, on_kev, priority_score
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        actionable, service_running, on_kev, priority_score, epss_score
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         str(uuid.uuid4()),
@@ -559,6 +559,7 @@ def replace_agent_cve_findings_db(
                         bool(item.get("service_running", False)),
                         bool(item.get("on_kev", False)),
                         item.get("priority_score"),
+                        item.get("epss_score"),
                     ),
                 )
     return len(findings)
@@ -574,7 +575,7 @@ def get_agent_cve_findings_db(
     sql = """
         SELECT agent_id, package_name, package_version, cve_id, severity,
                cvss, fix_version, summary, source, scanned_at,
-               actionable, service_running, on_kev, priority_score
+               actionable, service_running, on_kev, priority_score, epss_score
         FROM cve_findings
         WHERE agent_id = %s
     """
@@ -1077,3 +1078,345 @@ def get_soc_health_db() -> dict[str, Any]:
             for r in by_agent
         ],
     }
+
+
+def set_host_eol_os_db(agent_id: str, eol_os: bool) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE hosts SET eol_os = %s WHERE agent_id = %s",
+                (eol_os, agent_id),
+            )
+
+
+def get_host_eol_os_db(agent_id: str) -> bool:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT eol_os FROM hosts WHERE agent_id = %s", (agent_id,))
+            row = cur.fetchone()
+            return bool(row[0]) if row else False
+
+
+def replace_agent_sca_findings_db(
+    *,
+    agent_id: str,
+    findings: list[dict[str, Any]],
+    scanned_at: datetime,
+) -> int:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM sca_findings WHERE agent_id = %s", (agent_id,))
+            rows = findings if findings else [
+                {
+                    "policy_id": "none",
+                    "policy_name": None,
+                    "check_id": "none",
+                    "title": None,
+                    "result": "notapplicable",
+                    "compliance": None,
+                    "remediation": None,
+                }
+            ]
+            for item in rows:
+                cur.execute(
+                    """
+                    INSERT INTO sca_findings (
+                        id, agent_id, policy_id, policy_name, check_id, title,
+                        result, compliance, remediation, scanned_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        agent_id,
+                        item["policy_id"],
+                        item.get("policy_name"),
+                        item["check_id"],
+                        item.get("title"),
+                        item.get("result", "unknown"),
+                        json.dumps(item.get("compliance")) if item.get("compliance") is not None else None,
+                        item.get("remediation"),
+                        scanned_at,
+                    ),
+                )
+    return len(findings)
+
+
+def get_agent_sca_last_scan_db(agent_id: str) -> str | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT max(scanned_at) FROM sca_findings WHERE agent_id = %s",
+                (agent_id,),
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                return row[0].isoformat()
+    return None
+
+
+def get_agent_sca_summary_db(agent_id: str) -> dict[str, Any]:
+    counts = {"passed": 0, "failed": 0, "notapplicable": 0, "other": 0}
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT result, count(*) AS cnt
+                FROM sca_findings
+                WHERE agent_id = %s AND check_id != 'none'
+                GROUP BY result
+                """,
+                (agent_id,),
+            )
+            for row in cur.fetchall():
+                result = str(row["result"] or "").lower()
+                cnt = int(row["cnt"] or 0)
+                if result in {"passed", "pass"}:
+                    counts["passed"] += cnt
+                elif result in {"failed", "fail"}:
+                    counts["failed"] += cnt
+                elif result in {"notapplicable", "not applicable", "n/a", "not_applicable"}:
+                    counts["notapplicable"] += cnt
+                else:
+                    counts["other"] += cnt
+
+            cur.execute(
+                """
+                SELECT policy_id, policy_name, check_id, title, result, remediation
+                FROM sca_findings
+                WHERE agent_id = %s AND result IN ('failed', 'fail')
+                ORDER BY policy_id, check_id
+                LIMIT 10
+                """,
+                (agent_id,),
+            )
+            top_failed = [_row_to_dict(dict(r)) for r in cur.fetchall()]
+
+    scored = counts["passed"] + counts["failed"]
+    score_percent = round((counts["passed"] / scored) * 100, 1) if scored else None
+    return {
+        "counts": counts,
+        "score_percent": score_percent,
+        "failed_count": counts["failed"],
+        "top_failed": top_failed,
+    }
+
+
+def get_fleet_sca_summary_db() -> dict[str, Any]:
+    fleet: list[dict[str, Any]] = []
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT h.agent_id, h.name, host(h.ip) AS ip,
+                       max(s.scanned_at) AS scanned_at,
+                       sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) AS passed,
+                       sum(CASE WHEN s.result IN ('failed', 'fail') THEN 1 ELSE 0 END) AS failed
+                FROM hosts h
+                LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none'
+                WHERE h.agent_id != '000'
+                GROUP BY h.agent_id, h.name, h.ip
+                ORDER BY h.name
+                """
+            )
+            for row in cur.fetchall():
+                passed = int(row["passed"] or 0)
+                failed = int(row["failed"] or 0)
+                scored = passed + failed
+                fleet.append(
+                    {
+                        "agent_id": str(row["agent_id"]),
+                        "name": row["name"],
+                        "ip": str(row["ip"]) if row["ip"] else "",
+                        "scanned_at": row["scanned_at"].isoformat() if row["scanned_at"] else None,
+                        "passed": passed,
+                        "failed": failed,
+                        "score_percent": round((passed / scored) * 100, 1) if scored else None,
+                    }
+                )
+    return {"source": "postgres+wazuh_sca", "fleet": fleet}
+
+
+def replace_agent_user_findings_db(
+    *,
+    agent_id: str,
+    findings: list[dict[str, Any]],
+    scanned_at: datetime,
+) -> int:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM user_findings WHERE agent_id = %s", (agent_id,))
+            rows = findings if findings else [
+                {
+                    "username": "_none_",
+                    "uid": None,
+                    "gid": None,
+                    "shell": None,
+                    "last_login": None,
+                    "risk_level": "info",
+                }
+            ]
+            for item in rows:
+                cur.execute(
+                    """
+                    INSERT INTO user_findings (
+                        id, agent_id, username, uid, gid, shell, last_login,
+                        risk_level, scanned_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        agent_id,
+                        item["username"],
+                        item.get("uid"),
+                        item.get("gid"),
+                        item.get("shell"),
+                        item.get("last_login"),
+                        item.get("risk_level", "info"),
+                        scanned_at,
+                    ),
+                )
+    return len(findings)
+
+
+def get_agent_user_findings_db(
+    agent_id: str,
+    *,
+    risk_level: str | None = None,
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    sql = """
+        SELECT agent_id, username, uid, gid, shell, last_login, risk_level, scanned_at
+        FROM user_findings
+        WHERE agent_id = %s AND username != '_none_'
+    """
+    params: list[Any] = [agent_id]
+    if risk_level:
+        sql += " AND risk_level = %s"
+        params.append(risk_level.lower())
+    sql += """
+        ORDER BY CASE risk_level
+        WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3
+        WHEN 'low' THEN 4 ELSE 5 END, username LIMIT %s"""
+    params.append(limit)
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(sql, params)
+            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+
+
+def get_agent_user_risk_counts_db(agent_id: str) -> dict[str, int]:
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT risk_level, count(*) FROM user_findings
+                WHERE agent_id = %s AND username != '_none_'
+                GROUP BY risk_level
+                """,
+                (agent_id,),
+            )
+            for level, cnt in cur.fetchall():
+                key = str(level).lower()
+                if key not in counts:
+                    key = "info"
+                counts[key] = int(cnt)
+    return counts
+
+
+def get_agent_user_last_scan_db(agent_id: str) -> str | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT max(scanned_at) FROM user_findings WHERE agent_id = %s",
+                (agent_id,),
+            )
+            row = cur.fetchone()
+            if row and row[0]:
+                return row[0].isoformat()
+    return None
+
+
+def create_posture_scan_job_db(
+    *,
+    job_id: str,
+    agent_ids: list[str],
+    trigger: str,
+    agent_id: str | None = None,
+) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO posture_scan_jobs (
+                    job_id, agent_id, agent_ids, status, trigger,
+                    agents_total, agents_completed, results, started_at
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    job_id,
+                    agent_id,
+                    json.dumps(agent_ids),
+                    "queued",
+                    trigger,
+                    len(agent_ids),
+                    0,
+                    json.dumps({}),
+                    datetime.utcnow(),
+                ),
+            )
+
+
+def update_posture_scan_job_db(
+    job_id: str,
+    *,
+    status: str | None = None,
+    agents_completed: int | None = None,
+    results: dict[str, Any] | None = None,
+    error: str | None = None,
+    completed: bool = False,
+) -> None:
+    fields: list[str] = []
+    params: list[Any] = []
+    if status is not None:
+        fields.append("status = %s")
+        params.append(status)
+    if agents_completed is not None:
+        fields.append("agents_completed = %s")
+        params.append(agents_completed)
+    if results is not None:
+        fields.append("results = %s")
+        params.append(json.dumps(results))
+    if error is not None:
+        fields.append("error = %s")
+        params.append(error)
+    if completed:
+        fields.append("completed_at = %s")
+        params.append(datetime.utcnow())
+    if not fields:
+        return
+    params.append(job_id)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE posture_scan_jobs SET {', '.join(fields)} WHERE job_id = %s",
+                params,
+            )
+
+
+def get_posture_scan_job_db(job_id: str) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT job_id, agent_id, agent_ids, status, trigger,
+                       agents_total, agents_completed, results, error,
+                       started_at, completed_at
+                FROM posture_scan_jobs WHERE job_id = %s
+                """,
+                (job_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return _row_to_dict(dict(row))

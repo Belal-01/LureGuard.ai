@@ -95,6 +95,23 @@ class WazuhClient:
     def get_agent_os(self, agent_id: str) -> dict:
         return self._request("GET", f"/syscollector/{agent_id}/os")
 
+    def get_sca_policies(self, agent_id: str) -> dict:
+        return self._request("GET", f"/sca/{agent_id}")
+
+    def get_sca_checks(self, agent_id: str, policy_id: str, limit: int = 500, offset: int = 0) -> dict:
+        return self._request(
+            "GET",
+            f"/sca/{agent_id}/checks/{policy_id}",
+            params={"limit": limit, "offset": offset},
+        )
+
+    def get_agent_users(self, agent_id: str, limit: int = 500, offset: int = 0) -> dict:
+        return self._request(
+            "GET",
+            f"/syscollector/{agent_id}/users",
+            params={"limit": limit, "offset": offset},
+        )
+
     def get_rules_summary(self, limit: int = 20) -> dict:
         return self._request("GET", "/rules", params={"limit": limit, "sort": "-level"})
 
