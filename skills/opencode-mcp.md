@@ -61,6 +61,6 @@ When user says onboard / protect / enroll: load `skills/onboard-host.md` and fol
 - **`save_report`** auto-adds a `## Visual summary` section with **PNG images** (matplotlib) when DB data exists — no user opt-in required.
 - Charts are **images only**: `![title](reports/assets/.../chart.png)` — never HTML/SVG chart widgets in markdown.
 - **Extra charts:** `generate_report_chart` (custom labels/values JSON) or `generate_report_chart_preset` (`events_by_channel`, `alert_level_distribution`, `cve_by_severity`, `investigation_timeline`) before save.
-- **PDF:** bundled via `make venv` (**WeasyPrint** + `markdown`) — no pandoc; embeds PNG charts inline.
+- **PDF:** bundled via `make venv` (**WeasyPrint** + `markdown`; **xhtml2pdf** fallback); embeds PNG charts inline.
 - **Telegram (always PDF):** `send_report_to_telegram(file_path="reports/....md")` or `save_report(..., send_telegram=true)` — always delivers PDF; pass the `.md` path.
 - **Local PDF file (user asks):** `convert_report_to_pdf` or `save_report(..., as_pdf=true)` when the user wants a PDF saved to disk.

@@ -246,7 +246,7 @@ What a developer asks for, and whether the product delivers today.
 | **Output** | | |
 | └ `save_report` | ✅ | Optional Telegram |
 | └ `send_report_to_telegram` | ✅ | `.md` default |
-| └ `convert_report_to_pdf` | 🟡 | Needs pandoc on host; opt-in only |
+| └ `convert_report_to_pdf` | ✅ | WeasyPrint/xhtml2pdf via `make venv` |
 | └ `notify_telegram` | ✅ | Text summary |
 | **Onboarding** | | |
 | └ `onboard_host_tool` | ✅ | SSH + Wazuh API |
@@ -349,7 +349,7 @@ What a developer asks for, and whether the product delivers today.
 | `reports/*.md` on disk | 🟡 | 2 samples — **pre-fix, invalid** |
 | Report quality (Tier III bar) | ⬜ | See §6 |
 | Telegram `.md` upload | ✅ | |
-| PDF via pandoc | 🟡 | Opt-in; not plug-and-play |
+| PDF via WeasyPrint | ✅ | `make venv`; Telegram sends PDF by default |
 | Notion / external PM sync | 🟡 | Product Backlog updated 2026-06-13 |
 
 ### 4.13 Tests & CI
@@ -438,7 +438,7 @@ Tracked in Notion: [Product Backlog → Tier I Gate cards](https://www.notion.so
 - [ ] **Human-confirmed** block via `recommend_block_ip` → `confirm_block_ip` (implemented, not E2E tested)
 - [x] Bundled LLM in Docker (BYO-LLM via opencode)
 - [x] Wazuh Indexer / OpenSearch stack (we use Postgres + OSV)
-- [x] PDF reports by default (opt-in pandoc)
+- [x] PDF reports via pip (WeasyPrint / xhtml2pdf fallback)
 - [x] PentAGI-style autonomous red team
 - [x] Multi-tenant / enterprise SSO
 - [x] Prometheus in compose (optional later)

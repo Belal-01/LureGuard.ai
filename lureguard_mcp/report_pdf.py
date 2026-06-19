@@ -86,11 +86,6 @@ def pdf_available() -> bool:
     return weasyprint_available() or xhtml2pdf_available()
 
 
-def pandoc_available() -> bool:
-    """Backward-compatible alias — PDF uses bundled pip deps, not pandoc."""
-    return pdf_available()
-
-
 def _resolve_image_path(raw: str, base_dir: Path) -> Path | None:
     text = unquote(raw.strip().strip('"').strip("'"))
     if text.startswith(("http://", "https://", "data:")):
