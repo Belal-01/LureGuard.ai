@@ -1,0 +1,207 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "icon": "external link",
+      "title": "Fleet & Hosts",
+      "type": "link",
+      "url": "/d/lureguard-fleet-hosts/lureguard-fleet-and-hosts"
+    },
+    {
+      "icon": "external link",
+      "title": "Security Posture",
+      "type": "link",
+      "url": "/d/lureguard-cve-posture/lureguard-security-posture"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT coalesce(sum(jsonb_array_length(cr.containers)), 0)::int AS running FROM container_runtime cr",
+          "refId": "A"
+        }
+      ],
+      "title": "Running containers",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS agents FROM container_runtime WHERE jsonb_array_length(containers) > 0",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts with containers",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS critical FROM container_cve_findings WHERE severity = 'critical'",
+          "refId": "A"
+        }
+      ],
+      "title": "Container CVE critical",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" } } },
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 0 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS high FROM container_cve_findings WHERE severity = 'high'",
+          "refId": "A"
+        }
+      ],
+      "title": "Container CVE high",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
+      "id": 5,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS total FROM container_cve_findings",
+          "refId": "A"
+        }
+      ],
+      "title": "Total image CVEs",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 6,
+      "panels": [],
+      "title": "Asset inventory",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 6 },
+      "id": 7,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.agent_id, h.name, host(h.ip) AS ip, h.criticality, h.wazuh_status, h.eol_os, coalesce(jsonb_array_length(cr.containers), 0) AS running_containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS container_cves, (SELECT count(*) FROM cve_findings cv WHERE cv.agent_id = h.agent_id AND cv.actionable = true) AS host_cves, cr.updated_at AS containers_seen_at FROM hosts h LEFT JOIN container_runtime cr ON cr.agent_id = h.agent_id WHERE h.agent_id != '000' ORDER BY CASE h.criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, h.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Hosts — criticality, containers, CVE counts",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+      "id": 8,
+      "panels": [],
+      "title": "Running containers",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 17 },
+      "id": 9,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.name AS host, h.agent_id, host(h.ip) AS ip, h.criticality, c.elem->>'name' AS container_name, c.elem->>'image' AS image, c.elem->>'status' AS status, cr.updated_at AS snapshot_at FROM container_runtime cr JOIN hosts h ON h.agent_id = cr.agent_id CROSS JOIN LATERAL jsonb_array_elements(cr.containers) AS c(elem) ORDER BY h.name, container_name",
+          "refId": "A"
+        }
+      ],
+      "title": "Container runtime inventory",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "id": 10,
+      "panels": [],
+      "title": "Container image CVEs (Trivy)",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 30 },
+      "id": 11,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.name AS host, cc.agent_id, host(h.ip) AS ip, h.criticality, cc.image_ref, cc.severity, count(*) AS cve_count, max(cc.scanned_at) AS last_scan FROM container_cve_findings cc JOIN hosts h ON h.agent_id = cc.agent_id GROUP BY h.name, cc.agent_id, h.ip, h.criticality, cc.image_ref, cc.severity ORDER BY CASE cc.severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, cve_count DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "CVE counts by image and severity",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 30 },
+      "id": 12,
+      "options": { "showHeader": true, "sortBy": [{ "desc": true, "displayName": "cvss" }] },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.name AS host, host(h.ip) AS ip, h.criticality, cc.image_ref, cc.cve_id, cc.package_name, cc.installed_version, cc.fixed_version, cc.severity, cc.cvss, cc.scanned_at FROM container_cve_findings cc JOIN hosts h ON h.agent_id = cc.agent_id WHERE cc.severity IN ('critical', 'high') ORDER BY cc.cvss DESC NULLS LAST, h.name, cc.image_ref LIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Top critical/high image CVEs",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 40 },
+      "id": 13,
+      "options": { "showHeader": true, "sortBy": [{ "desc": true, "displayName": "cvss" }] },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.name AS host, host(h.ip) AS ip, h.criticality, cc.image_ref, cc.cve_id, cc.package_name, cc.installed_version, cc.fixed_version, cc.severity, cc.cvss, cc.scanned_at FROM container_cve_findings cc JOIN hosts h ON h.agent_id = cc.agent_id ORDER BY cc.cvss DESC NULLS LAST, h.name, cc.image_ref, cc.cve_id",
+          "refId": "A"
+        }
+      ],
+      "title": "All container image CVE findings",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["lureguard", "containers", "assets", "posture"],
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": { "hidden": true },
+  "timezone": "browser",
+  "title": "LureGuard Containers and Assets",
+  "uid": "lureguard-containers-assets",
+  "version": 1
+}

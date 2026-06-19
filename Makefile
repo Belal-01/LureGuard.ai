@@ -40,7 +40,7 @@ db-revision: venv
 	$(PYTHON) -m alembic -c migrations/alembic.ini revision --autogenerate -m "$(m)"
 
 test: venv
-	$(PYTHON) -m pytest tests/ -v -m "not integration" --cov=core --cov=ml --cov-report=term-missing
+	$(PYTHON) -m pytest tests/ -v -m "not integration" --cov=core --cov=ml --cov=lureguard_mcp --cov-report=term-missing
 
 test-integration: venv
 	$(PYTHON) -m pytest tests/ -v -m integration

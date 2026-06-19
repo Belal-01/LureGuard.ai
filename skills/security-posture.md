@@ -9,6 +9,7 @@ Answer: *How exposed and monitored is the fleet?* using **five pillars** cached 
 3. **Detection coverage** — FIM, rootcheck, alerts/rules firing in last 24h (correlated by `agent_id`)
 4. **SCA / CIS compliance** — Wazuh Security Configuration Assessment (passed/failed checks, score %)
 5. **User inventory** — local accounts from syscollector with risk scoring (uid=0 non-root, interactive shells)
+6. **Containers** — running Docker inventory + Trivy image CVEs (npm/composer/OS packages inside images)
 
 **Do not block on live scans.** Default: read **Postgres cache only** (`get_posture_snapshot`) — fast answers for "what's my posture?"
 
@@ -46,6 +47,7 @@ Answer: *How exposed and monitored is the fleet?* using **five pillars** cached 
    - Coverage gaps → `get_agent_detection_coverage(agent_id)`
    - Failed CIS checks → `get_agent_sca_summary(agent_id)`
    - Risky users → `get_agent_users(agent_id, risk_level=critical)` or `medium`
+   - Container images → `get_agent_container_posture(agent_id)` (runtime + Trivy CVEs)
    - `record_finding` with tool JSON citations
 7. `save_report(title="Security Posture [date]", markdown="...", send_telegram=true)` — auto CVE/chart PNGs; Telegram gets PDF
 8. `close_investigation(verdict=undetermined, confidence=high, summary="...")`
@@ -121,9 +123,9 @@ Host-level CVE scan (`get_agent_vulnerabilities`) covers **OS packages on the VM
 
 When user asks about containerized apps (Next.js, Python API, etc.):
 
-1. Identify running image: `get_agent_detail` or ask user for `image_ref`
-2. `scan_container_image(agent_id, image_ref)` — Trivy scan via SSH (slow; one image at a time)
-3. `get_container_vulnerabilities(agent_id, image_ref)` — read cached results
+1. `get_posture_snapshot(agent_id)` — check `pillars.containers` (running images + cached Trivy CVEs)
+2. If empty/stale: user must ask to rescan → `trigger_posture_scan(agent_id, force=true)` (includes all running images via Trivy)
+3. Drill-down: `get_agent_container_posture(agent_id, image_ref=...)` 
 4. Report top critical/high image CVEs separately from host OS CVEs
 5. Call out blast radius if container runs privileged or mounts docker.sock
 
@@ -131,7 +133,7 @@ When user asks about containerized apps (Next.js, Python API, etc.):
 
 | Tool | Role |
 |------|------|
-| `get_posture_snapshot` | Primary — instant 5-pillar read |
+| `get_posture_snapshot` | Primary — instant 6-pillar read |
 | `get_fleet_posture_summary` | Fleet cache status |
 | `trigger_posture_scan` | **Only** via `refresh-posture.md` when user asks (`force=true` to bypass fresh cache) |
 | `get_posture_scan_status` | Job progress (persisted in Postgres) |
@@ -140,6 +142,6 @@ When user asks about containerized apps (Next.js, Python API, etc.):
 | `get_agent_detection_coverage` / `get_fleet_detection_coverage` | Detection detail |
 | `get_agent_sca_summary` / `get_fleet_sca_summary` | SCA/CIS compliance |
 | `get_agent_users` | Local user inventory with risk levels |
-| `scan_container_image` / `get_container_vulnerabilities` | Container image CVEs (Trivy) |
+| `get_agent_container_posture` | Docker runtime + Trivy image CVE cache |
 | `check_tls` | TLS cert/cipher check for exposed services |
 | `get_soc_health` | Ingestion proof for daily/posture context |

@@ -75,6 +75,7 @@ services:
       - wazuh_etc:/var/ossec/etc
       - wazuh_data:/var/ossec/data
       - wazuh_logs:/var/ossec/logs
+      - wazuh_queue:/var/ossec/queue
       - ./wazuh/ossec.conf:/var/ossec/etc/ossec.conf:ro
       - ./wazuh/local_rules.xml:/var/ossec/etc/rules/local_rules.xml:ro
       - ./wazuh/integrations/custom-lureguard:/var/ossec/integrations/custom-lureguard:ro
@@ -140,5 +141,6 @@ volumes:
   wazuh_etc:
   wazuh_data:
   wazuh_logs:
+  wazuh_queue:
   cowrie_dev_logs:
   cowrie_db_logs:

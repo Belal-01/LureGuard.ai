@@ -1,0 +1,259 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Log Explorer",
+      "type": "link",
+      "url": "/d/lureguard-log-explorer/lureguard-log-explorer",
+      "keepTime": true,
+      "includeVars": true
+    },
+    {
+      "title": "SOC Overview",
+      "type": "link",
+      "url": "/d/lureguard-overview/lureguard-soc-overview",
+      "keepTime": true
+    }
+  ],
+  "panels": [
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS cnt FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int)",
+          "refId": "A"
+        }
+      ],
+      "title": "Filtered events",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) FROM investigations i WHERE (NULLIF('${investigation_id}', '') IS NULL OR i.id::text = NULLIF('${investigation_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "Investigations (scope)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "bars", "fillOpacity": 70, "stacking": { "mode": "normal" } }
+        }
+      },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 4 },
+      "id": 11,
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(e.ts, $__interval), count(*) AS events FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Event timeline (brush time range with dashboard picker)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto", "filterable": true },
+          "links": [
+            {
+              "title": "Open Log Explorer",
+              "url": "/d/lureguard-log-explorer/lureguard-log-explorer?var-src_ip=${__data.fields.src_ip}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "id": 3,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT e.ts, host(e.src_ip) AS src_ip, e.channel, e.wazuh_rule_level, e.wazuh_rule_description, e.agent_name, left(e.raw_ref, 200) AS raw_ref_preview FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) ORDER BY e.ts DESC LIMIT 200",
+          "refId": "A"
+        }
+      ],
+      "title": "Alert / event detail",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "id": 4,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT t.ts_event, t.phase, t.description, t.source FROM timeline_events t WHERE (NULLIF('${investigation_id}', '') IS NULL OR t.investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY t.ts_event ASC LIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "title": "IR timeline (timeline_events)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "id": 5,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT f.evidence_id, f.severity, f.verdict, f.mitre_technique, f.finding, f.citation FROM findings f WHERE (NULLIF('${investigation_id}', '') IS NULL OR f.investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY f.ts ASC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Findings",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+      "id": 6,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT i.id, i.subject, i.status, i.verdict, i.confidence, i.kill_chain_summary, i.started_at, i.closed_at FROM investigations i WHERE (NULLIF('${investigation_id}', '') IS NULL OR i.id::text = NULLIF('${investigation_id}', '')) ORDER BY i.started_at DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Investigation summary",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 36 },
+      "id": 7,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT ioc.type, ioc.value, ioc.defanged, ioc.source, ioc.created_at FROM iocs ioc WHERE (NULLIF('${investigation_id}', '') IS NULL OR ioc.investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY ioc.created_at ASC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "IOCs",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 36 },
+      "id": 8,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT a.ts, a.tool_name, left(a.result_summary, 120) AS result_summary, a.duration_ms FROM agent_actions a WHERE (NULLIF('${investigation_id}', '') IS NULL OR a.investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY a.ts DESC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Agent actions (audit)",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 43 },
+      "id": 9,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT host(b.ip) AS ip, b.reason, b.executed, b.added_at, b.executed_at, b.notes FROM blocklist b ORDER BY b.added_at DESC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Blocklist",
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 43 },
+      "id": 10,
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT w.event_id, w.watched_at, w.investigation_id FROM watched_events w ORDER BY w.watched_at DESC LIMIT 50",
+          "refId": "A"
+        }
+      ],
+      "title": "Watched events (auto-triage)",
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["lureguard", "investigation"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Source IP",
+        "name": "src_ip",
+        "options": [{ "selected": true, "text": "", "value": "" }],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "All" },
+        "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+        "definition": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
+        "hide": 0,
+        "includeAll": true,
+        "allValue": "All",
+        "label": "Channel",
+        "name": "channel",
+        "query": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+        "definition": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "hide": 0,
+        "label": "Agent ID",
+        "name": "agent_id",
+        "query": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Min severity",
+        "name": "severity",
+        "options": [{ "selected": true, "text": "", "value": "" }],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Investigation ID",
+        "name": "investigation_id",
+        "options": [{ "selected": true, "text": "", "value": "" }],
+        "query": "",
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "LureGuard Investigation Console",
+  "uid": "lureguard-investigation",
+  "version": 2
+}

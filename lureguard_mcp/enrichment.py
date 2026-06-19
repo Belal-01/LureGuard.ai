@@ -11,6 +11,7 @@ from urllib.parse import quote
 import httpx
 
 from lureguard_mcp.config import abuseipdb_api_key, urlhaus_api_url, virustotal_api_key
+from lureguard_mcp.untrusted_text import sanitize_untrusted_text
 
 
 def _is_private_ip(ip: str) -> bool:
@@ -33,34 +34,17 @@ def _is_private_ip(ip: str) -> bool:
 
 
 def _lookup_geo_db(ip: str) -> dict[str, Any]:
-    from lureguard_mcp.db import get_conn
+    from lureguard_mcp.repos.geo import lookup_geo_db
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT country_code, country_name, lat, lon
-                FROM ip_geolocation WHERE ip = %s::inet
-                """,
-                (ip,),
-            )
-            row = cur.fetchone()
-    if not row:
-        return {}
-    return {
-        "country": row[0],
-        "city": row[1],
-        "lat": row[2],
-        "lon": row[3],
-    }
+    return lookup_geo_db(ip)
 
 
-def _abuseipdb_dict(ip: str) -> dict[str, Any]:
+def _fetch_abuseipdb(ip: str, *, timeout: float = 12.0) -> dict[str, Any]:
     key = abuseipdb_api_key()
     if not key:
         return {"configured": False}
     try:
-        with httpx.Client(timeout=12.0) as client:
+        with httpx.Client(timeout=timeout) as client:
             resp = client.get(
                 "https://api.abuseipdb.com/api/v2/check",
                 headers={"Key": key, "Accept": "application/json"},
@@ -81,12 +65,16 @@ def _abuseipdb_dict(ip: str) -> dict[str, Any]:
         return {"configured": True, "error": str(exc)}
 
 
-def _virustotal_ip_dict(ip: str) -> dict[str, Any]:
+def _abuseipdb_dict(ip: str) -> dict[str, Any]:
+    return _fetch_abuseipdb(ip)
+
+
+def _fetch_virustotal_ip(ip: str, *, timeout: float = 12.0) -> dict[str, Any]:
     key = virustotal_api_key()
     if not key:
         return {"configured": False}
     try:
-        with httpx.Client(timeout=12.0) as client:
+        with httpx.Client(timeout=timeout) as client:
             resp = client.get(
                 f"https://www.virustotal.com/api/v3/ip_addresses/{ip}",
                 headers={"x-apikey": key},
@@ -104,6 +92,10 @@ def _virustotal_ip_dict(ip: str) -> dict[str, Any]:
             }
     except Exception as exc:
         return {"configured": True, "error": str(exc)}
+
+
+def _virustotal_ip_dict(ip: str) -> dict[str, Any]:
+    return _fetch_virustotal_ip(ip)
 
 
 def _derive_verdict(abuse: dict[str, Any], vt: dict[str, Any]) -> tuple[str, str]:
@@ -155,20 +147,32 @@ def get_ip_context(ip: str) -> str:
 
 
 def check_tls(host: str, port: int = 443) -> str:
-    """Check TLS certificate and cipher for a host:port."""
+    """Check TLS certificate, cipher strength, and basic HTTP security headers."""
     import socket
     import ssl
     from datetime import datetime, timezone
+    from urllib.error import URLError
+    from urllib.request import Request, urlopen
 
     result: dict[str, Any] = {"host": host, "port": port}
+    weak_protocols = {"TLSv1", "TLSv1.1", "SSLv2", "SSLv3"}
+    weak_cipher_markers = ("RC4", "DES", "3DES", "NULL", "EXPORT", "MD5")
     try:
         ctx = ssl.create_default_context()
         with socket.create_connection((host, port), timeout=10) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
                 cipher = ssock.cipher()
-                result["cipher"] = cipher[0] if cipher else None
-                result["protocol"] = cipher[1] if cipher else None
+                protocol = cipher[1] if cipher else ssock.version()
+                cipher_name = cipher[0] if cipher else None
+                result["cipher"] = cipher_name
+                result["protocol"] = protocol
+                result["weak_protocol"] = protocol in weak_protocols if protocol else None
+                result["weak_cipher"] = (
+                    any(marker in (cipher_name or "").upper() for marker in weak_cipher_markers)
+                    if cipher_name
+                    else None
+                )
                 if cert:
                     result["subject"] = dict(x[0] for x in cert.get("subject", ()))
                     not_after = cert.get("notAfter")
@@ -178,6 +182,18 @@ def check_tls(host: str, port: int = 443) -> str:
                         days_left = (expiry.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).days
                         result["days_until_expiry"] = days_left
                         result["expired"] = days_left < 0
+        if port == 443:
+            try:
+                req = Request(f"https://{host}/", method="HEAD")
+                with urlopen(req, timeout=8) as resp:
+                    headers = {k.lower(): v for k, v in resp.headers.items()}
+                    hsts = headers.get("strict-transport-security")
+                    result["hsts"] = hsts
+                    result["missing_hsts"] = not bool(hsts)
+                    result["x_frame_options"] = headers.get("x-frame-options")
+                    result["x_content_type_options"] = headers.get("x-content-type-options")
+            except (URLError, OSError, ValueError) as exc:
+                result["http_headers_error"] = str(exc)
     except Exception as exc:
         result["error"] = str(exc)
     return json.dumps(result, indent=2)
@@ -209,54 +225,42 @@ def refang_indicator(value: str) -> str:
 
 
 def check_ip_reputation(ip: str) -> str:
-    key = abuseipdb_api_key()
-    if not key:
+    data = _fetch_abuseipdb(ip, timeout=15.0)
+    if not data.get("configured"):
         return json.dumps({"configured": False, "message": "ABUSEIPDB_API_KEY not set"})
-    with httpx.Client(timeout=15.0) as client:
-        resp = client.get(
-            "https://api.abuseipdb.com/api/v2/check",
-            headers={"Key": key, "Accept": "application/json"},
-            params={"ipAddress": ip, "maxAgeInDays": 90},
-        )
-        resp.raise_for_status()
-        data = resp.json().get("data", {})
-        return json.dumps(
-            {
-                "ip": ip,
-                "abuse_confidence_score": data.get("abuseConfidenceScore"),
-                "total_reports": data.get("totalReports"),
-                "country": data.get("countryCode"),
-                "isp": data.get("isp"),
-                "usage_type": data.get("usageType"),
-                "is_whitelisted": data.get("isWhitelisted"),
-            },
-            indent=2,
-        )
+    if data.get("error"):
+        return json.dumps({"ip": ip, "error": data["error"]}, indent=2)
+    return json.dumps(
+        {
+            "ip": ip,
+            "abuse_confidence_score": data.get("score"),
+            "total_reports": data.get("reports"),
+            "country": data.get("country"),
+            "isp": data.get("isp"),
+            "usage_type": data.get("usage_type"),
+            "is_whitelisted": data.get("is_whitelisted"),
+        },
+        indent=2,
+    )
 
 
 def check_ip_virustotal(ip: str) -> str:
-    key = virustotal_api_key()
-    if not key:
+    data = _fetch_virustotal_ip(ip, timeout=15.0)
+    if not data.get("configured"):
         return json.dumps({"configured": False, "message": "VIRUSTOTAL_API_KEY not set"})
-    with httpx.Client(timeout=15.0) as client:
-        resp = client.get(
-            f"https://www.virustotal.com/api/v3/ip_addresses/{ip}",
-            headers={"x-apikey": key},
-        )
-        resp.raise_for_status()
-        attrs = resp.json().get("data", {}).get("attributes", {})
-        stats = attrs.get("last_analysis_stats", {})
-        return json.dumps(
-            {
-                "ip": ip,
-                "malicious": stats.get("malicious", 0),
-                "suspicious": stats.get("suspicious", 0),
-                "harmless": stats.get("harmless", 0),
-                "country": attrs.get("country"),
-                "as_owner": attrs.get("as_owner"),
-            },
-            indent=2,
-        )
+    if data.get("error"):
+        return json.dumps({"ip": ip, "error": data["error"]}, indent=2)
+    return json.dumps(
+        {
+            "ip": ip,
+            "malicious": data.get("malicious", 0),
+            "suspicious": data.get("suspicious", 0),
+            "harmless": data.get("harmless", 0),
+            "country": data.get("country"),
+            "as_owner": data.get("as_owner"),
+        },
+        indent=2,
+    )
 
 
 def check_hash_virustotal(file_hash: str) -> str:
@@ -418,7 +422,7 @@ def analyze_web_attack(event_payload: str) -> str:
             {
                 "classified": False,
                 "message": "No known web attack signature matched",
-                "input_preview": text[:500],
+                "input_preview": sanitize_untrusted_text(text[:500]),
             },
             indent=2,
         )

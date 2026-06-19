@@ -29,10 +29,17 @@ def get_thresholds(_=Depends(_verify_token)):
 
 @router.put("/thresholds")
 def update_thresholds(t1: float, t2: float, _=Depends(_verify_token)):
+    """Update ML redirect thresholds in memory only (not persisted to core.yaml)."""
     assert 0 < t1 < t2 < 1, "Must satisfy: 0 < T1 < T2 < 1"
     settings.thresholds.t1 = t1
     settings.thresholds.t2 = t2
-    return {"status": "updated", "t1": t1, "t2": t2}
+    return {
+        "status": "updated",
+        "t1": t1,
+        "t2": t2,
+        "persisted": False,
+        "note": "Runtime-only until restart; edit config/core.yaml for durable values.",
+    }
 
 
 # ── Whitelist (Postgres) ─────────────────────────────────

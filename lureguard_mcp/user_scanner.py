@@ -11,7 +11,7 @@ from lureguard_mcp.db import (
     get_agent_user_risk_counts_db,
     replace_agent_user_findings_db,
 )
-from lureguard_mcp.wazuh_client import WazuhClient
+from lureguard_mcp.wazuh_client import WazuhClient, paginate_affected_items
 
 USER_PAGE = 500
 _NOLOGIN_SHELLS = frozenset({"/usr/sbin/nologin", "/sbin/nologin", "/bin/false", "/usr/bin/false"})
@@ -69,21 +69,10 @@ def _normalize_wazuh_user(item: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _fetch_all_users(wazuh: WazuhClient, agent_id: str) -> list[dict[str, Any]]:
-    users: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        resp = wazuh.get_agent_users(agent_id, limit=USER_PAGE, offset=offset)
-        items = resp.get("data", {}).get("affected_items") or []
-        users.extend(items)
-        total = resp.get("data", {}).get("total_affected_items")
-        if not items:
-            break
-        if total is not None and offset + len(items) >= int(total):
-            break
-        if len(items) < USER_PAGE:
-            break
-        offset += USER_PAGE
-    return users
+    return paginate_affected_items(
+        lambda limit, offset: wazuh.get_agent_users(agent_id, limit=limit, offset=offset),
+        page_size=USER_PAGE,
+    )
 
 
 def scan_agent_users(agent_id: str, *, wazuh: WazuhClient | None = None) -> dict[str, Any]:

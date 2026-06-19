@@ -22,7 +22,7 @@ from lureguard_mcp.db import (
     replace_agent_cve_findings_db,
     set_host_eol_os_db,
 )
-from lureguard_mcp.wazuh_client import WazuhClient
+from lureguard_mcp.wazuh_client import WazuhClient, paginate_affected_items
 
 OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
 OSV_VULN_URL = "https://api.osv.dev/v1/vulns/{vuln_id}"
@@ -109,39 +109,17 @@ def _osv_ecosystem(os_item: dict[str, Any]) -> str:
 
 
 def _fetch_all_processes(wazuh: WazuhClient, agent_id: str) -> list[dict[str, Any]]:
-    processes: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        resp = wazuh.get_agent_processes(agent_id, limit=PACKAGE_PAGE, offset=offset)
-        items = resp.get("data", {}).get("affected_items") or []
-        if not items:
-            break
-        processes.extend(items)
-        total = resp.get("data", {}).get("total_affected_items")
-        offset += len(items)
-        if total is not None and offset >= int(total):
-            break
-        if len(items) < PACKAGE_PAGE:
-            break
-    return processes
+    return paginate_affected_items(
+        lambda limit, offset: wazuh.get_agent_processes(agent_id, limit=limit, offset=offset),
+        page_size=PACKAGE_PAGE,
+    )
 
 
 def _fetch_all_packages(wazuh: WazuhClient, agent_id: str) -> list[dict[str, Any]]:
-    packages: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        resp = wazuh.get_agent_packages(agent_id, limit=PACKAGE_PAGE, offset=offset)
-        items = resp.get("data", {}).get("affected_items") or []
-        if not items:
-            break
-        packages.extend(items)
-        total = resp.get("data", {}).get("total_affected_items")
-        offset += len(items)
-        if total is not None and offset >= int(total):
-            break
-        if len(items) < PACKAGE_PAGE:
-            break
-    return packages
+    return paginate_affected_items(
+        lambda limit, offset: wazuh.get_agent_packages(agent_id, limit=limit, offset=offset),
+        page_size=PACKAGE_PAGE,
+    )
 
 
 def _query_osv_batch(

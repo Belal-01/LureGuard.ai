@@ -88,6 +88,26 @@ async def _vm_sftp_write(conn: asyncssh.SSHClientConnection, remote_path: str, c
             await remote.write(content)
 
 
+async def _deploy_docker_listener_deps(
+    conn: asyncssh.SSHClientConnection,
+    *,
+    sudo_password: str,
+) -> None:
+    """python3-docker + wazuh in docker group for native docker-listener wodle."""
+    await _vm_exec(
+        conn,
+        "apt-get install -y python3-docker 2>/dev/null || "
+        "python3 -m pip install --break-system-packages docker 2>/dev/null || "
+        "python3 -m pip install docker",
+        sudo_password=sudo_password,
+    )
+    await _vm_exec(
+        conn,
+        "getent group docker >/dev/null && usermod -aG docker wazuh || true",
+        sudo_password=sudo_password,
+    )
+
+
 async def onboard_host(
     ip: str,
     ssh_user: str = "ubuntu",
@@ -172,6 +192,7 @@ async def onboard_host(
                 "cat /tmp/lureguard-agent-import.in | /var/ossec/bin/manage_agents",
                 sudo_password=password,
             )
+            await _deploy_docker_listener_deps(conn, sudo_password=password)
             await _vm_exec(conn, "systemctl enable wazuh-agent", sudo_password=password)
             await _vm_exec(conn, "systemctl restart wazuh-agent", sudo_password=password)
 

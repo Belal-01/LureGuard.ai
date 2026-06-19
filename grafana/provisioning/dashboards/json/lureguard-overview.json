@@ -32,6 +32,42 @@
     {
       "asDropdown": false,
       "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Log Explorer",
+      "tooltip": "Kibana-style timeline + log search",
+      "type": "link",
+      "url": "/d/lureguard-log-explorer/lureguard-log-explorer"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Investigation Console",
+      "tooltip": "Drill-down by IP, agent, investigation",
+      "type": "link",
+      "url": "/d/lureguard-investigation/lureguard-investigation-console"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Containers & Assets",
+      "tooltip": "Docker inventory, image CVEs, host criticality",
+      "type": "link",
+      "url": "/d/lureguard-containers-assets/lureguard-containers-and-assets"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
       "includeVars": false,
       "keepTime": false,
       "tags": [],
@@ -429,7 +465,8 @@
           "refId": "A"
         }
       ],
-      "title": "Geolocated attack sources",
+      "title": "Geolocated attack sources (public IPs only)",
+      "description": "LAN/private IPs (127.x, 192.168.x) are listed in the panel to the right — they cannot be placed on a world map.",
       "type": "geomap"
     },
     {
@@ -602,11 +639,11 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(DISTINCT agent_id) AS hosts_with_posture FROM hosts WHERE agent_id != '000' AND agent_id IN (SELECT DISTINCT agent_id FROM cve_findings UNION SELECT DISTINCT agent_id FROM sca_findings WHERE check_id != 'none' UNION SELECT DISTINCT agent_id FROM user_findings WHERE username != '_none_')",
+          "rawSql": "SELECT count(*)::int AS image_cves FROM container_cve_findings",
           "refId": "A"
         }
       ],
-      "title": "Hosts with posture data",
+      "title": "Container image CVEs",
       "type": "stat"
     },
     {
@@ -617,7 +654,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' GROUP BY h.name, h.agent_id, h.ip, h.eol_os ORDER BY h.name",
+          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.criticality, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, coalesce((SELECT jsonb_array_length(cr.containers) FROM container_runtime cr WHERE cr.agent_id = h.agent_id), 0) AS containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS image_cves, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM container_cve_findings cc2 WHERE cc2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' GROUP BY h.name, h.agent_id, h.ip, h.criticality, h.eol_os ORDER BY CASE h.criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, h.name",
           "refId": "A"
         }
       ],

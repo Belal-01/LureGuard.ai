@@ -122,10 +122,15 @@ class Summary(Base):
 class Whitelist(Base):
     __tablename__ = "whitelist"
 
-    ip = Column(INET, primary_key=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ip = Column(INET, nullable=False, unique=True)
     reason = Column(Text)
     added_by = Column(String(64))
     added_at = Column(DateTime, default=datetime.utcnow)
+    executed = Column(Boolean, default=True, nullable=False)
+    executed_at = Column(DateTime)
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="SET NULL"))
+    notes = Column(Text)
 
 
 class AuditLog(Base):

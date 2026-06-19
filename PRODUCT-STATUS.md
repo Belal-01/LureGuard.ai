@@ -31,11 +31,11 @@
 | ML score in timeline | 🟡 | Only SSH `auth_failed`/`auth_success` rows; requires `decisions.event_id` populated on **new** events after deploy |
 | `recommend_block_ip` / `confirm_block_ip` | ⬜ | Not run on lab hosts together — needs explicit human test before trusting iptables |
 | `alert_watcher` auto-triage | ⬜ | Starts with MCP server; needs level ≥ 12 event + `opencode` in PATH + Telegram configured |
-| Web/docker log coverage | ⬜ | Code merged; agent on `.131` must receive updated `agent-ossec.conf` and be restarted |
-| `scan_container_image` (Trivy) | ⬜ | Needs Docker + outbound pull on target host; not run in lab yet |
+| Web/docker log coverage | 🟡 | `ossec.conf` groups aligned with `_FORWARD_GROUPS`; custom web rules `100010-100012`; investigate-web uses `channel=docker` — agent restart + lab E2E still pending |
+| `scan_container_image` (Trivy) | 🟡 | MCP tool implemented (`container_scanner.py`); needs Docker on target host for lab proof |
 | `check_tls` / firewall in exposure | ⬜ | Tool exists; not smoke-tested against a live HTTPS endpoint |
 | opencode triage → saved report | ⬜ | **Gate B1** — run together before calling Tier I done |
-| Grafana new panels | 🟡 | Attack timeline + SLA rows in dashboards; need reload + populated data |
+| Grafana new panels | 🟡 | Investigation Console dashboard (`investigation-console.json`) with vars + timeline_events; need reload + populated data |
 
 **What we have not done together yet:** a full investigate → `recommend_block_ip` → human `confirm_block_ip` run, a saved triage report citing `get_ip_context`, or an auto-triage fire from a real level-12 alert.
 

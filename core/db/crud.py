@@ -101,7 +101,9 @@ async def insert_decision(db: AsyncSession, dec: DecisionResult) -> None:
 
 
 async def get_whitelist(db: AsyncSession) -> list[str]:
-    result = await db.execute(select(Whitelist.ip))
+    result = await db.execute(
+        select(Whitelist.ip).where(Whitelist.executed.is_(True))
+    )
     return [str(row[0]) for row in result.all()]
 
 
@@ -118,18 +120,28 @@ async def add_whitelist_ip(
     added_by: str = "admin",
 ) -> Whitelist:
     ip = ip.strip()
-    existing = await db.get(Whitelist, ip)
+    result = await db.execute(select(Whitelist).where(Whitelist.ip == ip))
+    existing = result.scalar_one_or_none()
     if existing:
         if reason:
             existing.reason = reason
+        existing.executed = True
+        existing.executed_at = datetime.utcnow()
         return existing
-    row = Whitelist(ip=ip, reason=reason, added_by=added_by)
+    row = Whitelist(
+        ip=ip,
+        reason=reason,
+        added_by=added_by,
+        executed=True,
+        executed_at=datetime.utcnow(),
+    )
     db.add(row)
     return row
 
 
 async def remove_whitelist_ip(db: AsyncSession, ip: str) -> bool:
-    row = await db.get(Whitelist, ip.strip())
+    result = await db.execute(select(Whitelist).where(Whitelist.ip == ip.strip()))
+    row = result.scalar_one_or_none()
     if row is None:
         return False
     await db.delete(row)

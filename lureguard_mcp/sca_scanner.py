@@ -11,28 +11,17 @@ from lureguard_mcp.db import (
     get_fleet_sca_summary_db,
     replace_agent_sca_findings_db,
 )
-from lureguard_mcp.wazuh_client import WazuhClient
+from lureguard_mcp.wazuh_client import WazuhClient, paginate_affected_items
 
 CHECK_PAGE = 500
 _FAILED_RESULTS = frozenset({"failed", "fail"})
 
 
 def _fetch_all_checks(wazuh: WazuhClient, agent_id: str, policy_id: str) -> list[dict[str, Any]]:
-    checks: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        resp = wazuh.get_sca_checks(agent_id, policy_id, limit=CHECK_PAGE, offset=offset)
-        items = resp.get("data", {}).get("affected_items") or []
-        checks.extend(items)
-        total = resp.get("data", {}).get("total_affected_items")
-        if not items:
-            break
-        if total is not None and offset + len(items) >= int(total):
-            break
-        if len(items) < CHECK_PAGE:
-            break
-        offset += CHECK_PAGE
-    return checks
+    return paginate_affected_items(
+        lambda limit, offset: wazuh.get_sca_checks(agent_id, policy_id, limit=limit, offset=offset),
+        page_size=CHECK_PAGE,
+    )
 
 
 def scan_agent_sca(agent_id: str, *, wazuh: WazuhClient | None = None) -> dict[str, Any]:

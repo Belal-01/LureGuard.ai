@@ -30,16 +30,17 @@ LureGuard CVE scanning uses **Wazuh syscollector packages on the enrolled host**
 
 **EOL OS:** `get_posture_snapshot` includes `eol_os: true` when the OS is past standard support — boost critical CVE priority and recommend upgrade.
 
-**Not scanned today (gaps):**
-- npm/Next.js dependencies **inside** a Docker image (`package.json`, `node_modules`)
-- Container image layers (would need **Trivy/grype** image scan — v2 integration candidate)
+**Not scanned automatically today (gaps):**
+- npm/Next.js dependencies **inside** a Docker image — use `get_agent_container_posture` or `get_posture_snapshot` (containers pillar); queue `trigger_posture_scan` if cache is empty
 - `privileged: true`, `--cap-add`, or `/var/run/docker.sock` mounts (no dedicated check yet)
 - Container-escape blast radius scoring (app RCE → container root → host root)
+
+**ML scope honesty:** the shipped classifier scores **SSH auth events only** (honeypot redirect). LLM/MCP tools handle triage, investigation, and reporting for all other channels.
 
 **What you can still report for a Dockerized Next.js app (from cache, no auto-scan):**
 - Host/node CVEs: dockerd, kernel, exposed ports (`get_agent_exposure`)
 - Web attack events if ingested (`analyze_web_attack`, `investigate-web.md`)
-- **Call out the gap** in reports: "Container image dependencies not inventoried — recommend image scan (Trivy) for Next.js/npm CVEs; if container runs as root + privileged, host compromise risk is elevated."
+- **Call out the gap** in reports when image scan was not run: "Container image dependencies not inventoried — run `trigger_posture_scan` for Trivy/npm CVEs; if container runs as root + privileged, host compromise risk is elevated."
 
 **Fresh CVE index:** only when user explicitly asks → `skills/refresh-posture.md` (`trigger_posture_scan`). Routine posture uses cache.
 
@@ -83,8 +84,17 @@ Set via `set_host_criticality(agent_id, ...)` or `open_investigation(asset_criti
 After `close_investigation` with verdict `true_positive` and severity P1/P2:
 
 1. `recommend_block_ip(ip, reason, investigation_id)` — writes pending blocklist entry
-2. `notify_telegram` with summary + `confirm_block_ip(block_id='...')` command for human operator
-3. **Never** call `confirm_block_ip` autonomously — human must execute containment
+2. Human runs `confirm_block_ip(block_id)` — applies iptables DROP on enrolled hosts
+3. Optionally `notify_telegram` with summary + `confirm_block_ip(block_id='...')` for the operator
+
+**Whitelist (trusted SSH sources — ML skips alert/redirect):**
+
+1. `recommend_whitelist_ip(ip, reason, investigation_id)` — writes pending whitelist entry
+2. Human runs `confirm_whitelist_ip(whitelist_id)` — activates entry; Core picks up on next tick (~2s)
+3. `list_whitelist(pending_only=true)` / `remove_whitelist_ip(whitelist_id=…)` as needed
+
+For blocks, also `notify_telegram` with summary + `confirm_block_ip(block_id='...')` for the human operator.
+**Never** call `confirm_block_ip` or `confirm_whitelist_ip` autonomously — human must confirm.
 
 ## NIST IR lifecycle (advisory — human executes containment)
 
@@ -98,7 +108,7 @@ After `close_investigation` with verdict `true_positive` and severity P1/P2:
 
 ## MITRE ATT&CK
 
-Map only when evidence supports it. Use `record_finding(..., mitre_technique="T1110", mitre_tactic="Credential Access")`.
+Map only when evidence supports it. Use `record_finding(..., mitre_technique="T1110", mitre_tactic="Credential Access")`. For technique hints before mapping, call `rag_lookup("brute force ssh")` — keyword retrieval over local MITRE hints + skills (not a vector DB).
 
 Common mappings:
 - SSH brute force → T1110.001
@@ -243,6 +253,7 @@ Score each 0–2 (0=missing, 1=partial, 2=complete). Target **≥14/16** for inc
 | Local PDF file | `convert_report_to_pdf` or `save_report(..., as_pdf=true)` — when user asks for a PDF on disk |
 | Notify (text) | `notify_telegram` |
 | Block IP (advisory) | `recommend_block_ip`, `confirm_block_ip`, `list_blocklist` |
+| Whitelist IP (SSH ML) | `recommend_whitelist_ip`, `confirm_whitelist_ip`, `list_whitelist`, `remove_whitelist_ip` |
 | Asset criticality | `set_host_criticality` |
-| Container CVEs | `scan_container_image`, `get_container_vulnerabilities` |
+| Container CVEs | `get_agent_container_posture`, `get_posture_snapshot` (containers pillar) |
 | TLS check | `check_tls` |

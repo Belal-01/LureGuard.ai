@@ -6,6 +6,13 @@
     "skills/opencode-mcp.md"
   ],
   "model": "opencode/big-pickle",
+  "permission": {
+    "bash": "deny",
+    "edit": "deny",
+    "write": "deny",
+    "webfetch": "deny",
+    "lureguard_*": "allow"
+  },
   "experimental": {
     "mcp_timeout": 180000
   },

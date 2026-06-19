@@ -12,7 +12,7 @@ Investigate web-facing attacks on apache/nginx or containerized web servers: cla
 ## Workflow
 
 1. `open_investigation(subject="Web investigation: <host or IP>", trigger="human", detection_source="wazuh", asset_criticality="high")`
-2. `search_events(ip=..., channel=..., min_level=3)` — pull web-related events
+2. `search_events(ip=..., channel=..., min_level=3)` — pull web-related events. For Dockerized web stacks also run `search_events(ip=..., channel="docker", min_level=3)` — container HTTP attacks often land on the `docker` channel.
 3. For each suspicious event (or cluster):
    - `analyze_web_attack(event_payload)` — pass `raw_ref` JSON or event fields
    - Extract URLs/domains from payload; `check_url_virustotal`, `check_domain_virustotal`, `check_url_urlhaus`

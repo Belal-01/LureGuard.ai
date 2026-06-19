@@ -6,7 +6,7 @@ import json
 
 from core.modules.collector import normalize_event
 from core.schemas.wazuh_alert import WazuhAlert
-from lureguard_mcp.container_scanner import _parse_trivy_json
+from lureguard_mcp.container_posture import _parse_trivy_json
 from lureguard_mcp.db import _infer_attack_phases
 from lureguard_mcp.enrichment import _derive_verdict, get_ip_context
 

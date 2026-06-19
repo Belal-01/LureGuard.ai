@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import subprocess
 from datetime import datetime
 from typing import Any
 
 from lureguard_mcp.config import onboard_ssh_password
+from lureguard_mcp.ssh_remote import build_sudo_remote_command, run_remote_shell, validate_ip
 from lureguard_mcp.db import (
     get_agent_exposure_counts_db,
     get_agent_exposure_findings_db,
@@ -15,7 +15,7 @@ from lureguard_mcp.db import (
     get_host_ip_db,
     replace_agent_exposure_findings_db,
 )
-from lureguard_mcp.wazuh_client import WazuhClient
+from lureguard_mcp.wazuh_client import WazuhClient, paginate_affected_items
 
 PORT_PAGE = 500
 
@@ -84,21 +84,10 @@ def _score_port(port: int, local_address: str, protocol: str) -> str:
 
 
 def _fetch_all_ports(wazuh: WazuhClient, agent_id: str) -> list[dict[str, Any]]:
-    ports: list[dict[str, Any]] = []
-    offset = 0
-    while True:
-        resp = wazuh.get_agent_ports(agent_id, limit=PORT_PAGE, offset=offset)
-        items = resp.get("data", {}).get("affected_items") or []
-        if not items:
-            break
-        ports.extend(items)
-        total = resp.get("data", {}).get("total_affected_items")
-        offset += len(items)
-        if total is not None and offset >= int(total):
-            break
-        if len(items) < PORT_PAGE:
-            break
-    return ports
+    return paginate_affected_items(
+        lambda limit, offset: wazuh.get_agent_ports(agent_id, limit=limit, offset=offset),
+        page_size=PORT_PAGE,
+    )
 
 
 def scan_agent_exposure(
@@ -177,18 +166,18 @@ def _fetch_firewall_rules(agent_id: str) -> str | None:
     password = onboard_ssh_password()
     if not host_ip or not password:
         return None
-    cmd = (
-        f"sshpass -p {password!r} ssh -o StrictHostKeyChecking=no -T "
-        f"ubuntu@{host_ip} "
-        f"\"(echo {password!r} | sudo -S iptables -L INPUT -n --line-numbers 2>/dev/null | head -40) "
-        f"|| (echo {password!r} | sudo -S ufw status verbose 2>/dev/null | head -40)\""
-    )
     try:
-        proc = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=25)
-        output = (proc.stdout or proc.stderr or "").strip()
-        return output[:4000] if output else None
+        host = validate_ip(host_ip, field="host_ip")
     except Exception:
         return None
+    inner = (
+        "(iptables -L INPUT -n --line-numbers 2>/dev/null | head -40) "
+        "|| (ufw status verbose 2>/dev/null | head -40)"
+    )
+    remote = build_sudo_remote_command(password, inner)
+    result = run_remote_shell(host, remote, password=password, timeout=25)
+    output = (result.get("stdout") or result.get("stderr") or "").strip()
+    return output[:4000] if output else None
 
 
 def get_agent_exposure(

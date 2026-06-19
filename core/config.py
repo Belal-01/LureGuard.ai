@@ -8,8 +8,8 @@ from pydantic_settings import BaseSettings
 
 
 class ThresholdsConfig(BaseModel):
-    t1: float = 0.40
-    t2: float = 0.70
+    t1: float = 0.55
+    t2: float = 0.85
 
 
 class CowrieProfileConfig(BaseModel):

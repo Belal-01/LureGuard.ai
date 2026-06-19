@@ -2,38 +2,18 @@
 
 from __future__ import annotations
 
-import os
-
-import httpx
 from loguru import logger
 
+from connectors.wazuh_api import list_agents_sync
 from db.session import AsyncSessionLocal
 from db import crud
 
 
-def _wazuh_config() -> tuple[str, str, str, bool]:
-    base = os.getenv("WAZUH_API_URL", "https://localhost:55000").rstrip("/")
-    user = os.getenv("WAZUH_API_USER", "wazuh")
-    password = os.getenv("WAZUH_API_PASSWORD", "LureGuard-Wazuh-Dev-2026!")
-    verify = os.getenv("WAZUH_API_VERIFY_SSL", "false").lower() in ("1", "true", "yes")
-    return base, user, password, verify
-
-
 async def sync_hosts_from_wazuh() -> int:
     """Pull agent list from Wazuh API and upsert into hosts table."""
-    base, user, password, verify = _wazuh_config()
     updated = 0
     try:
-        with httpx.Client(verify=verify, timeout=20.0) as client:
-            auth = client.post(f"{base}/security/user/authenticate", auth=(user, password))
-            auth.raise_for_status()
-            token = auth.json().get("data", {}).get("token")
-            if not token:
-                return 0
-            headers = {"Authorization": f"Bearer {token}"}
-            resp = client.get(f"{base}/agents", headers=headers, params={"limit": 500})
-            resp.raise_for_status()
-            agents = resp.json().get("data", {}).get("affected_items", [])
+        agents = list_agents_sync()
     except Exception as exc:
         logger.debug("hosts sync skipped: {}", exc)
         return 0

@@ -15,6 +15,7 @@ from lureguard_mcp.db import (
     get_posture_scan_job_db,
     update_posture_scan_job_db,
 )
+from lureguard_mcp.container_posture import scan_agent_containers
 from lureguard_mcp.detection_scanner import scan_agent_detection_coverage
 from lureguard_mcp.exposure_scanner import scan_agent_exposure
 from lureguard_mcp.posture_snapshot import get_posture_snapshot
@@ -63,6 +64,7 @@ def _scan_one_agent(agent_id: str) -> dict[str, Any]:
         ("detection_coverage", scan_agent_detection_coverage),
         ("sca_compliance", scan_agent_sca),
         ("user_inventory", scan_agent_users),
+        ("containers", scan_agent_containers),
     )
     for key, fn in scanners:
         try:

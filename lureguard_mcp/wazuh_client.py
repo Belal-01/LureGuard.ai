@@ -191,3 +191,26 @@ def compact_json(data: Any, *, max_len: int = 12000) -> str:
     if len(text) > max_len:
         return text[: max_len - 80] + "\n... (truncated)"
     return text
+
+
+def paginate_affected_items(
+    fetch_page: Any,
+    *,
+    page_size: int = 500,
+) -> list[dict[str, Any]]:
+    """Fetch all pages from a Wazuh syscollector-style endpoint."""
+    items: list[dict[str, Any]] = []
+    offset = 0
+    while True:
+        resp = fetch_page(limit=page_size, offset=offset)
+        page = resp.get("data", {}).get("affected_items") or []
+        if not page:
+            break
+        items.extend(page)
+        total = resp.get("data", {}).get("total_affected_items")
+        offset += len(page)
+        if total is not None and offset >= int(total):
+            break
+        if len(page) < page_size:
+            break
+    return items

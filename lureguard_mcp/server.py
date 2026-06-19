@@ -51,10 +51,13 @@ from lureguard_mcp.blocklist import (
     list_blocklist as blocklist_list,
     recommend_block_ip as blocklist_recommend,
 )
-from lureguard_mcp.container_scanner import (
-    get_container_vulnerabilities as container_get_vulns,
-    scan_container_image as container_scan_image,
+from lureguard_mcp.whitelist import (
+    confirm_whitelist_ip as whitelist_confirm,
+    list_whitelist as whitelist_list,
+    recommend_whitelist_ip as whitelist_recommend,
+    remove_whitelist_ip as whitelist_remove,
 )
+from lureguard_mcp.container_posture import get_agent_container_posture
 from lureguard_mcp.onboarding import onboard_host
 from lureguard_mcp.detection_scanner import (
     get_agent_detection_coverage as detection_get_agent,
@@ -90,6 +93,10 @@ from lureguard_mcp.vuln_scanner import (
     get_fleet_vulnerability_summary as vuln_fleet_summary,
     scan_agent_vulnerabilities as vuln_scan_agent,
 )
+from lureguard_mcp.correlator import correlate_alerts as correlate_alerts_db
+from lureguard_mcp.mcp_json import mcp_json
+from lureguard_mcp.rag import rag_lookup_json
+from lureguard_mcp.secrets import redact_mapping
 from lureguard_mcp.wazuh_client import WazuhClient, compact_json
 
 mcp = FastMCP("LureGuard")
@@ -103,7 +110,7 @@ def _log_tool_call(name: str, args: tuple[Any, ...], kwargs: dict[str, Any], sum
     try:
         log_agent_action(
             tool_name=name,
-            args={"args": list(args), "kwargs": kwargs},
+            args={"args": list(args), "kwargs": redact_mapping(kwargs)},
             result_summary=summary,
             duration_ms=elapsed,
             investigation_id=inv_ctx.get_investigation_id(),
@@ -161,7 +168,7 @@ def get_recent_alerts(limit: int = 50, min_level: int = 3, channel: str = "") ->
         min_level=min_level if min_level > 0 else None,
         channel=channel or None,
     )
-    return json.dumps({"count": len(rows), "alerts": rows}, indent=2)
+    return mcp_json({"count": len(rows), "alerts": rows})
 
 
 @mcp.tool()
@@ -169,7 +176,7 @@ def get_recent_alerts(limit: int = 50, min_level: int = 3, channel: str = "") ->
 def get_alerts_for_ip(ip: str, limit: int = 100) -> str:
     """Return all events for a source IP address."""
     rows = db_get_alerts_for_ip(ip, limit=min(limit, 500))
-    return json.dumps({"ip": ip, "count": len(rows), "events": rows}, indent=2)
+    return mcp_json({"ip": ip, "count": len(rows), "events": rows})
 
 
 @mcp.tool()
@@ -177,7 +184,7 @@ def get_alerts_for_ip(ip: str, limit: int = 100) -> str:
 def get_event_timeline(ip: str, window_hours: int = 24) -> str:
     """Chronological attack timeline for an IP with geo, duration, ML scores, and phases."""
     timeline = db_get_event_timeline(ip, window_hours=min(window_hours, 168))
-    return json.dumps(timeline, indent=2)
+    return mcp_json(timeline)
 
 
 @mcp.tool()
@@ -185,7 +192,7 @@ def get_event_timeline(ip: str, window_hours: int = 24) -> str:
 def get_attack_summary(ip: str, window_hours: int = 48) -> str:
     """Aggregate attack summary for an IP — duration, channels, top rules, honeypot contact."""
     summary = db_get_attack_summary(ip, window_hours=min(window_hours, 168))
-    return json.dumps(summary, indent=2)
+    return mcp_json(summary)
 
 
 @mcp.tool()
@@ -207,15 +214,15 @@ def check_tls(host: str, port: int = 443) -> str:
 def recommend_block_ip(ip: str, reason: str, investigation_id: str = "") -> str:
     """Recommend blocking an IP after investigation. Requires human confirm_block_ip to execute."""
     result = blocklist_recommend(ip, reason, investigation_id)
-    return json.dumps(result, indent=2)
+    return mcp_json(result)
 
 
 @mcp.tool()
 @audited
 def confirm_block_ip(block_id: str, notes: str = "") -> str:
     """Human-confirmed: apply iptables DROP for a pending blocklist entry across active hosts."""
-    result = blocklist_confirm(block_id, notes=notes)
-    return json.dumps(result, indent=2)
+    result = blocklist_confirm(block_id, notes=notes, caller="agent")
+    return mcp_json(result)
 
 
 @mcp.tool()
@@ -227,25 +234,40 @@ def list_blocklist(pending_only: bool = False) -> str:
 
 @mcp.tool()
 @audited
+def recommend_whitelist_ip(ip: str, reason: str, investigation_id: str = "") -> str:
+    """Recommend whitelisting an IP for SSH ML (skips alert/redirect). Requires human confirm_whitelist_ip."""
+    result = whitelist_recommend(ip, reason, investigation_id)
+    return mcp_json(result)
+
+
+@mcp.tool()
+@audited
+def confirm_whitelist_ip(whitelist_id: str, notes: str = "") -> str:
+    """Human-confirmed: activate a pending whitelist entry for Core SSH ML."""
+    result = whitelist_confirm(whitelist_id, notes=notes, caller="agent")
+    return mcp_json(result)
+
+
+@mcp.tool()
+@audited
+def list_whitelist(pending_only: bool = False) -> str:
+    """List whitelist entries (pending and active)."""
+    return whitelist_list(pending_only=pending_only)
+
+
+@mcp.tool()
+@audited
+def remove_whitelist_ip(whitelist_id: str = "", ip: str = "") -> str:
+    """Remove an active or pending whitelist entry (provide whitelist_id or ip)."""
+    result = whitelist_remove(whitelist_id=whitelist_id, ip=ip)
+    return mcp_json(result)
+
+
+@mcp.tool()
+@audited
 def set_host_criticality(agent_id: str, criticality: str) -> str:
     """Set persistent asset criticality: critical | high | medium | low."""
-    return json.dumps(set_host_criticality_db(agent_id, criticality), indent=2)
-
-
-@mcp.tool()
-@audited
-def scan_container_image(agent_id: str, image_ref: str) -> str:
-    """Scan a Docker image on a host with Trivy and persist container CVE findings."""
-    result = container_scan_image(agent_id, image_ref)
-    return json.dumps(result, indent=2)
-
-
-@mcp.tool()
-@audited
-def get_container_vulnerabilities(agent_id: str, image_ref: str = "", limit: int = 200) -> str:
-    """Return cached container image CVE findings for an agent."""
-    result = container_get_vulns(agent_id, image_ref=image_ref, limit=limit)
-    return json.dumps(result, indent=2)
+    return mcp_json(set_host_criticality_db(agent_id, criticality))
 
 
 @mcp.tool()
@@ -265,7 +287,7 @@ def search_events(
         username=username or None,
         limit=min(limit, 500),
     )
-    return json.dumps({"count": len(rows), "events": rows}, indent=2)
+    return mcp_json({"count": len(rows), "events": rows})
 
 
 @mcp.tool()
@@ -321,7 +343,7 @@ def get_agent_vulnerabilities(agent_id: str, severity: str = "", include_noise: 
     """List cached CVE findings for an agent (actionable-only by default; set include_noise=true for all OSV matches)."""
     sev = severity.strip().lower() or None
     if sev and sev not in {"critical", "high", "medium", "low"}:
-        return json.dumps({"error": "severity must be critical, high, medium, or low"})
+        return mcp_json({"error": "severity must be critical, high, medium, or low"})
     return compact_json(
         vuln_get_agent(agent_id, severity=sev, actionable_only=not include_noise)
     )
@@ -347,7 +369,7 @@ def get_agent_exposure(agent_id: str, risk_level: str = "") -> str:
     """Cached open-port exposure for an agent from Postgres (run trigger_posture_scan first)."""
     level = risk_level.strip().lower() or None
     if level and level not in {"critical", "high", "medium", "low", "info"}:
-        return json.dumps({"error": "risk_level must be critical, high, medium, low, or info"})
+        return mcp_json({"error": "risk_level must be critical, high, medium, low, or info"})
     return compact_json(exposure_get_agent(agent_id, risk_level=level))
 
 
@@ -392,15 +414,24 @@ def get_agent_users(agent_id: str, risk_level: str = "") -> str:
     """Cached local user inventory with risk levels for an agent."""
     level = risk_level.strip().lower() or None
     if level and level not in {"critical", "high", "medium", "low", "info"}:
-        return json.dumps({"error": "risk_level must be critical, high, medium, low, or info"})
+        return mcp_json({"error": "risk_level must be critical, high, medium, low, or info"})
     return compact_json(users_get_agent(agent_id, risk_level=level))
 
 
 @mcp.tool()
 @audited
 def get_posture_snapshot(agent_id: str) -> str:
-    """Instant posture read from Postgres — CVE, exposure, detection, SCA, and user inventory caches."""
+    """Instant posture read from Postgres — host CVE, exposure, detection, SCA, users, and container image CVE caches."""
     return compact_json(posture_get_snapshot(agent_id))
+
+
+@mcp.tool()
+@audited
+def get_agent_container_posture(agent_id: str, image_ref: str = "", limit: int = 200) -> str:
+    """Cached Docker runtime inventory + Trivy image CVE findings for an agent (posture pillar)."""
+    return compact_json(
+        get_agent_container_posture(agent_id, image_ref=image_ref, limit=limit)
+    )
 
 
 @mcp.tool()
@@ -413,7 +444,7 @@ def get_fleet_posture_summary() -> str:
 @mcp.tool()
 @audited
 def trigger_posture_scan(agent_id: str = "", force: bool = False) -> str:
-    """Start background posture scan (CVE + exposure + detection + SCA + users). force=true rescans even if cache is fresh."""
+    """Start background posture scan (host CVE + exposure + detection + SCA + users + container Trivy). force=true rescans even if cache is fresh."""
     return compact_json(scheduler_trigger_scan(agent_id=agent_id, force=force))
 
 
@@ -477,9 +508,8 @@ def check_url_urlhaus(url: str) -> str:
 @audited
 def defang_ioc(value: str, ioc_type: str = "") -> str:
     """Defang an IOC (IP, URL, domain, email) for safe report sharing."""
-    return json.dumps(
+    return mcp_json(
         {"original": value, "defanged": defang_indicator(value, ioc_type or None)},
-        indent=2,
     )
 
 
@@ -508,7 +538,7 @@ def open_investigation(
         asset_criticality=asset_criticality or None,
     )
     inv_ctx.set_investigation_id(inv["id"])
-    return json.dumps(inv, indent=2)
+    return mcp_json(inv)
 
 
 @mcp.tool()
@@ -528,8 +558,8 @@ def record_finding(
     """Record a grounded finding with mandatory citation. Optional MITRE, severity, IOC fields."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
     if not inv_id:
-        return json.dumps({"error": "No investigation open. Call open_investigation first."})
-    return json.dumps(
+        return mcp_json({"error": "No investigation open. Call open_investigation first."})
+    return mcp_json(
         db_record_finding(
             inv_id,
             finding,
@@ -542,7 +572,6 @@ def record_finding(
             ioc_type=ioc_type or None,
             ioc_value=ioc_value or None,
         ),
-        indent=2,
     )
 
 
@@ -558,12 +587,12 @@ def add_timeline_event(
     """Add a cited timeline event (ISO8601 ts_event). Phase: identification|containment|eradication|recovery|lessons."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
     if not inv_id:
-        return json.dumps({"error": "No investigation open. Call open_investigation first."})
+        return mcp_json({"error": "No investigation open. Call open_investigation first."})
     try:
         event_ts = datetime.fromisoformat(ts_event.replace("Z", "+00:00")).replace(tzinfo=None)
     except ValueError:
-        return json.dumps({"error": "ts_event must be ISO8601 (e.g. 2026-06-16T12:00:00Z)"})
-    return json.dumps(
+        return mcp_json({"error": "ts_event must be ISO8601 (e.g. 2026-06-16T12:00:00Z)"})
+    return mcp_json(
         db_add_timeline_event(
             inv_id,
             ts_event=event_ts,
@@ -571,7 +600,6 @@ def add_timeline_event(
             phase=phase or None,
             source=source or None,
         ),
-        indent=2,
     )
 
 
@@ -581,15 +609,14 @@ def get_investigation_artifacts(investigation_id: str = "") -> str:
     """Return structured findings, timeline events, and IOCs for an investigation."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
     if not inv_id:
-        return json.dumps({"error": "No investigation id provided."})
-    return json.dumps(
+        return mcp_json({"error": "No investigation id provided."})
+    return mcp_json(
         {
             "investigation_id": inv_id,
             "findings": get_investigation_findings_db(inv_id),
             "timeline": get_investigation_timeline_db(inv_id),
             "iocs": get_investigation_iocs_db(inv_id),
         },
-        indent=2,
     )
 
 
@@ -608,7 +635,7 @@ def close_investigation(
     """Close investigation with verdict: true_positive | false_positive | undetermined."""
     inv_id = investigation_id or inv_ctx.get_investigation_id()
     if not inv_id:
-        return json.dumps({"error": "No investigation id provided."})
+        return mcp_json({"error": "No investigation id provided."})
     result = close_investigation_db(
         inv_id,
         verdict=verdict,
@@ -620,9 +647,9 @@ def close_investigation(
         kill_chain_summary=kill_chain_summary or None,
     )
     if not result:
-        return json.dumps({"error": f"Investigation {inv_id} not found."})
+        return mcp_json({"error": f"Investigation {inv_id} not found."})
     inv_ctx.set_investigation_id(None)
-    return json.dumps(result, indent=2)
+    return mcp_json(result)
 
 
 def _resolve_report_path(file_path: str) -> Path:
@@ -682,7 +709,7 @@ def generate_report_chart(
     labels = json.loads(labels_json)
     values = json.loads(values_json)
     if not isinstance(labels, list) or not isinstance(values, list):
-        return json.dumps({"error": "labels_json and values_json must be JSON arrays"}, indent=2)
+        return mcp_json({"error": "labels_json and values_json must be JSON arrays"})
     result = generate_chart_png(
         title,
         chart_type,
@@ -690,7 +717,7 @@ def generate_report_chart(
         [float(x) for x in values],
         report_stem=stem,
     )
-    return json.dumps(result, indent=2)
+    return mcp_json(result)
 
 
 @mcp.tool()
@@ -714,10 +741,10 @@ def generate_report_chart_preset(
             investigation_id=inv_id,
         )
     except ValueError as exc:
-        return json.dumps({"error": str(exc)}, indent=2)
+        return mcp_json({"error": str(exc)})
     if not result:
-        return json.dumps({"generated": False, "preset": preset, "message": "no data"}, indent=2)
-    return json.dumps({"generated": True, "preset": preset, **result}, indent=2)
+        return mcp_json({"generated": False, "preset": preset, "message": "no data"})
+    return mcp_json({"generated": True, "preset": preset, **result})
 
 
 @mcp.tool()
@@ -767,7 +794,7 @@ def save_report(
             )
         except ValueError as exc:
             result["telegram"] = {"sent": False, "reason": str(exc)}
-    return json.dumps(result, indent=2)
+    return mcp_json(result)
 
 
 @mcp.tool()
@@ -777,9 +804,9 @@ def convert_report_to_pdf(file_path: str) -> str:
     try:
         report_path = _resolve_report_path(file_path)
     except ValueError as exc:
-        return json.dumps({"ok": False, "error": str(exc)}, indent=2)
+        return mcp_json({"ok": False, "error": str(exc)})
     if report_path.suffix.lower() == ".pdf":
-        return json.dumps(
+        return mcp_json(
             {
                 "ok": True,
                 "source": str(report_path),
@@ -792,8 +819,8 @@ def convert_report_to_pdf(file_path: str) -> str:
     try:
         pdf_path, pdf_mode = resolve_report_pdf_path(report_path)
     except (RuntimeError, OSError, UnicodeDecodeError, ValueError, FileNotFoundError) as exc:
-        return json.dumps({"ok": False, "error": str(exc), "pdf_available": pdf_available()}, indent=2)
-    return json.dumps(
+        return mcp_json({"ok": False, "error": str(exc), "pdf_available": pdf_available()})
+    return mcp_json(
         {
             "ok": True,
             "source": str(report_path),
@@ -812,23 +839,23 @@ def send_report_to_telegram(file_path: str, caption: str = "") -> str:
     try:
         report_path = _resolve_report_path(file_path)
     except ValueError as exc:
-        return json.dumps({"sent": False, "reason": str(exc)}, indent=2)
+        return mcp_json({"sent": False, "reason": str(exc)})
 
     try:
         result = _send_report_document(report_path, caption=caption or report_path.stem, as_pdf=True)
     except Exception as exc:
-        return json.dumps(
+        return mcp_json(
             {"sent": False, "reason": str(exc), "pdf_available": pdf_available()},
             indent=2,
         )
-    return json.dumps(result, indent=2)
+    return mcp_json(result)
 
 
 @mcp.tool()
 @audited
 def notify_telegram(message: str) -> str:
     """Send a short text notification to the configured Telegram chat."""
-    return json.dumps(_telegram_notifier().send_message(message), indent=2)
+    return mcp_json(_telegram_notifier().send_message(message))
 
 
 @mcp.tool()
@@ -853,14 +880,28 @@ async def onboard_host_tool(
         agent_name=agent_name or None,
         criticality=criticality or "medium",
     )
-    return json.dumps(result, indent=2)
+    return mcp_json(result)
+
+
+@mcp.tool()
+@audited
+def correlate_alerts(window_hours: int = 24, min_level: int = 3) -> str:
+    """Group recent alerts by source IP with attack-phase inference (kill-chain lite)."""
+    return mcp_json(correlate_alerts_db(window_hours=window_hours, min_level=min_level))
+
+
+@mcp.tool()
+@audited
+def rag_lookup(query: str, limit: int = 5) -> str:
+    """Keyword retrieval over local MITRE technique hints and skills markdown."""
+    return rag_lookup_json(query, limit=min(limit, 10))
 
 
 @mcp.tool()
 @audited
 def list_enrolled_hosts() -> str:
     """List hosts enrolled in LureGuard (from Postgres hosts table)."""
-    return json.dumps({"hosts": list_hosts_db()}, indent=2)
+    return mcp_json({"hosts": list_hosts_db()})
 
 
 def main() -> None:

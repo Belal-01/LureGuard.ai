@@ -3,6 +3,20 @@
   "editable": true,
   "graphTooltip": 1,
   "id": null,
+  "links": [
+    {
+      "icon": "external link",
+      "title": "Containers & Assets",
+      "type": "link",
+      "url": "/d/lureguard-containers-assets/lureguard-containers-and-assets"
+    },
+    {
+      "icon": "external link",
+      "title": "Security Posture",
+      "type": "link",
+      "url": "/d/lureguard-cve-posture/lureguard-security-posture"
+    }
+  ],
   "panels": [
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
@@ -68,11 +82,11 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT agent_id, name, host(ip) AS ip, os, wazuh_status, enrolled_by, enrolled_at, last_seen FROM hosts ORDER BY name",
+          "rawSql": "SELECT agent_id, name, host(ip) AS ip, criticality, eol_os, os, wazuh_status, enrolled_by, enrolled_at, last_seen, coalesce((SELECT jsonb_array_length(cr.containers) FROM container_runtime cr WHERE cr.agent_id = hosts.agent_id), 0) AS containers FROM hosts WHERE agent_id != '000' ORDER BY CASE criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, name",
           "refId": "A"
         }
       ],
-      "title": "Fleet inventory",
+      "title": "Fleet inventory (assets)",
       "type": "table"
     },
     {
@@ -83,11 +97,11 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT agent_id, name, host(ip) AS ip, os, wazuh_status, enrolled_by, enrolled_at, last_seen FROM hosts ORDER BY last_seen DESC NULLS LAST",
+          "rawSql": "SELECT h.agent_id, h.name, host(h.ip) AS ip, h.criticality, coalesce(jsonb_array_length(cr.containers), 0) AS running_containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS image_cves, h.wazuh_status, h.eol_os, cr.updated_at AS containers_updated, h.last_seen FROM hosts h LEFT JOIN container_runtime cr ON cr.agent_id = h.agent_id WHERE h.agent_id != '000' ORDER BY h.last_seen DESC NULLS LAST",
           "refId": "A"
         }
       ],
-      "title": "Hosts detail",
+      "title": "Hosts — containers & posture snapshot",
       "type": "table"
     }
   ],

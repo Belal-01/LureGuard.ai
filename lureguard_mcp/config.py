@@ -108,3 +108,13 @@ def manager_container() -> str:
 
 def auto_triage_level() -> int:
     return int(os.getenv("AUTO_TRIAGE_LEVEL", "12"))
+
+
+def allow_agent_block() -> bool:
+    """When false (default), confirm_block_ip rejects non-human callers."""
+    return os.getenv("LUREGUARD_ALLOW_AGENT_BLOCK", "false").lower() in ("1", "true", "yes")
+
+
+def allow_agent_whitelist() -> bool:
+    """When false (default), confirm_whitelist_ip rejects non-human callers."""
+    return os.getenv("LUREGUARD_ALLOW_AGENT_WHITELIST", "false").lower() in ("1", "true", "yes")
