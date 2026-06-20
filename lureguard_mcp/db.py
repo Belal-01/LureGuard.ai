@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from lureguard_mcp.presentation import infer_attack_phases, row_to_dict, shape_event_row
 from lureguard_mcp.repos.connection import get_conn
 
 from lureguard_mcp.repos.actions import (
@@ -91,23 +90,13 @@ from lureguard_mcp.repos.whitelist import (
     remove_whitelist_db,
 )
 
-def _row_to_dict(row):
-    return shape_event_row(row_to_dict(row))
-
-
-def _infer_attack_phases(events):
-    return infer_attack_phases(events)
-
-
 # Re-export _agent_event_filter from events for tests/internal use
 from lureguard_mcp.repos.events import _agent_event_filter  # noqa: E402
 
 __all__ = [
 "_agent_event_filter",
     "_event_enriched_select",
-    "_infer_attack_phases",
     "_next_evidence_id",
-    "_row_to_dict",
     "add_blocklist_db",
     "add_whitelist_db",
     "add_timeline_event",

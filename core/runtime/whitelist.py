@@ -96,19 +96,3 @@ async def seed_whitelist_from_file_if_empty(db: AsyncSession) -> int:
     if added:
         logger.info(f"Seeded {added} whitelist IP(s) from {path}")
     return added
-
-
-# Backwards compatibility for tests that still call these names
-reset_whitelist_checker = reset_whitelist_cache
-
-
-def get_whitelist_checker():
-    """Deprecated: use is_whitelisted() directly."""
-    return _WhitelistCheckerShim()
-
-
-class _WhitelistCheckerShim:
-    def is_whitelisted(
-        self, src_ip: str | None, src_user: str | None, event_ts: datetime
-    ) -> bool:
-        return is_whitelisted(src_ip, src_user, event_ts)

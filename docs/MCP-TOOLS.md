@@ -156,7 +156,6 @@ Default: agent **cannot** call `confirm_*` unless env gates enabled.
 
 ## Tools that do **not** exist
 
-Do not reference or implement workarounds for removed/planned tools:
+Do not reference or implement workarounds for planned tools:
 
-- `scan_container_image` / `get_container_vulnerabilities` (removed — use `get_agent_container_posture` + `trigger_posture_scan`)
 - `check_decoy_contact` (not in MCP)

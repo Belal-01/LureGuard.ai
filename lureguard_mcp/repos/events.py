@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
-import json
-import uuid
 from datetime import datetime, timedelta
 from typing import Any
 
 import psycopg2
 import psycopg2.extras
 
-from lureguard_mcp.config import REPORTS_DIR
-from lureguard_mcp.presentation import infer_attack_phases, row_to_dict, shape_event_row
-from lureguard_mcp.report_storage import write_report_markdown
+from lureguard_mcp.presentation import infer_attack_phases, shape_event_row
 from lureguard_mcp.repos.connection import get_conn
-from lureguard_mcp.secrets import redact_mapping
 
-
-def _row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
-    return shape_event_row(row_to_dict(row))
-
-
-def _infer_attack_phases(events: list[dict]) -> list[str]:
-    return infer_attack_phases(events)
 
 def _agent_event_filter(agent_id: str, agent_ip: str | None) -> tuple[str, list[Any]]:
     """Match events by agent_id with IP fallbacks for legacy rows."""
@@ -69,7 +57,7 @@ def get_recent_alerts(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -80,7 +68,7 @@ def get_alerts_for_ip(ip: str, *, limit: int = 100) -> list[dict]:
                 _event_enriched_select("e.src_ip = %s::inet") + " ORDER BY e.ts DESC LIMIT %s",
                 (ip, limit),
             )
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -93,7 +81,7 @@ def get_event_timeline(ip: str, *, window_hours: int = 24) -> dict[str, Any]:
                 + " ORDER BY e.ts ASC",
                 (ip, since),
             )
-            events = [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            events = [shape_event_row(dict(r)) for r in cur.fetchall()]
             cur.execute(
                 """
                 SELECT min(ts) AS first_seen, max(ts) AS last_seen,
@@ -131,7 +119,7 @@ def get_event_timeline(ip: str, *, window_hours: int = 24) -> dict[str, Any]:
         "duration_minutes": round(duration_seconds / 60, 1) if duration_seconds else 0,
         "channels_seen": channels_seen,
         "peak_level": int(agg.get("peak_level") or 0),
-        "attack_phases": _infer_attack_phases(events),
+        "attack_phases": infer_attack_phases(events),
         "events": events,
     }
 
@@ -189,7 +177,7 @@ def search_events(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -304,4 +292,4 @@ def get_high_level_events_since_db(since: datetime, min_level: int) -> list[dict
                 """,
                 (since, min_level),
             )
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]

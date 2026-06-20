@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Answer: *How exposed and monitored is the fleet?* using **five pillars** cached in **Postgres**:
+Answer: *How exposed and monitored is the fleet?* using **six pillars** cached in **Postgres**:
 
 1. **Vulnerabilities** — Wazuh syscollector packages + OSV.dev, **triaged** (patched/noise filtered, service-aware, **EPSS**, **EOL OS** boost)
 2. **Exposure** — open/listening ports with bind scope (`all_interfaces` vs `localhost`) and K8s-aware scoring

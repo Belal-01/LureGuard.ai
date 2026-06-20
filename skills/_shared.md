@@ -24,7 +24,7 @@ Grafana is for **live drill-down**; the report carries the **executive snapshot 
 
 ## Container / web-app CVE scope (know the limits)
 
-LureGuard posture today covers **five pillars** on enrolled hosts: OS package CVEs (OSV + EPSS + EOL boost), port exposure, detection coverage, **SCA/CIS compliance**, and **local user inventory**.
+LureGuard posture today covers **six pillars** on enrolled hosts: OS package CVEs (OSV + EPSS + EOL boost), port exposure, detection coverage, **SCA/CIS compliance**, **local user inventory**, and **container runtime + image CVEs**.
 
 LureGuard CVE scanning uses **Wazuh syscollector packages on the enrolled host** (OS packages via OSV.dev) — e.g. `docker.io`, `containerd`, `nginx`, `openssl` on the **VM/node**.
 
@@ -240,7 +240,7 @@ Score each 0–2 (0=missing, 1=partial, 2=complete). Target **≥14/16** for inc
 | Hash check | `check_hash` |
 | Defang IOC | `defang_ioc` |
 | Host inventory | `get_agent_detail`, `list_agents` |
-| Posture snapshot | `get_posture_snapshot` (5 pillars: CVE, exposure, detection, SCA, users) |
+| Posture snapshot | `get_posture_snapshot` (6 pillars: CVE, exposure, detection, SCA, users, containers) |
 | SCA / CIS | `get_agent_sca_summary`, `get_fleet_sca_summary` |
 | User inventory | `get_agent_users` |
 | Rescan posture | `trigger_posture_scan` (`force=true` when user asks refresh) |

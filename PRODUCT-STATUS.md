@@ -32,7 +32,7 @@
 | `recommend_block_ip` / `confirm_block_ip` | ⬜ | Not run on lab hosts together — needs explicit human test before trusting iptables |
 | `alert_watcher` auto-triage | ⬜ | Starts with MCP server; needs level ≥ 12 event + `opencode` in PATH + Telegram configured |
 | Web/docker log coverage | 🟡 | `ossec.conf` groups aligned with `_FORWARD_GROUPS`; custom web rules `100010-100012`; investigate-web uses `channel=docker` — agent restart + lab E2E still pending |
-| `scan_container_image` (Trivy) | 🟡 | MCP tool implemented (`container_scanner.py`); needs Docker on target host for lab proof |
+| Container posture (Trivy) | 🟡 | `container_posture.py` + `get_agent_container_posture`; lab proof on agent 007 (3187 CVE rows) |
 | `check_tls` / firewall in exposure | ⬜ | Tool exists; not smoke-tested against a live HTTPS endpoint |
 | opencode triage → saved report | ⬜ | **Gate B1** — run together before calling Tier I done |
 | Grafana new panels | 🟡 | Investigation Console dashboard (`investigation-console.json`) with vars + timeline_events; need reload + populated data |
@@ -74,7 +74,7 @@ New capabilities added in the investigation quality roadmap. All are **implement
 | IP block path | `recommend_block_ip`, `confirm_block_ip`, `list_blocklist` | `skills/_shared.md` containment section |
 | Always-on triage | `lureguard_mcp/alert_watcher.py` | `AUTO_TRIAGE_LEVEL=12`, `.opencode/command/auto-triage.md` |
 | Generic log coverage | integratord + `collector.py` web/docker channels | `wazuh/agent-ossec.conf` docker stdout + nginx/apache |
-| Container CVEs | `scan_container_image`, `get_container_vulnerabilities` | `skills/security-posture.md` |
+| Container CVEs | `get_agent_container_posture`, `trigger_posture_scan` | `skills/security-posture.md` |
 | Asset criticality | `set_host_criticality`, `hosts.criticality` | `onboard_host_tool(..., criticality=)` |
 | SLA metrics | `get_soc_health` → `sla.avg_mttd_seconds`, MTTR, FPR | Grafana SOC Overview SLA row |
 | TLS + firewall | `check_tls`, `get_agent_exposure` → `firewall_rules` | — |
@@ -144,7 +144,7 @@ What a developer asks for, and whether the product delivers today.
 
 | Step | Status | Subtasks |
 |------|--------|----------|
-| Read cached posture (instant) | ✅ | `get_posture_snapshot` · 5 pillars from Postgres |
+| Read cached posture (instant) | ✅ | `get_posture_snapshot` · 6 pillars from Postgres |
 | Background refresh (6h) | ✅ | `scan_scheduler` · `trigger_posture_scan` |
 | CVE scan (OSV + syscollector) | ✅ | `vuln_scanner.py` · per-agent |
 | CVE triage (noise filter) | ✅ | `cve_triage.py` · KEV · patched-version · service-aware |
@@ -215,7 +215,7 @@ What a developer asks for, and whether the product delivers today.
 | └ `get_ip_context` | 🟡 | Mandatory in skills; external IP needs API keys |
 | └ `recommend_block_ip` / `confirm_block_ip` / `list_blocklist` | 🟡 | Not iptables-tested on lab |
 | └ `set_host_criticality` | 🟡 | DB + MCP; use during onboard |
-| └ `scan_container_image` / `get_container_vulnerabilities` | 🟡 | Trivy path not run on lab |
+| └ `get_agent_container_posture` | 🟡 | Trivy + runtime inventory; lab data on 007 |
 | └ `check_tls` | 🟡 | Not smoke-tested |
 | └ `search_events` | ✅ | |
 | └ `get_soc_health` | ✅ | Ingestion proof for daily summary |
@@ -231,7 +231,7 @@ What a developer asks for, and whether the product delivers today.
 | └ `get_fleet_vulnerability_summary` | ✅ | |
 | └ `get_agent_exposure` / fleet | 🟡 | Includes `firewall_rules` via SSH; not verified |
 | └ `get_agent_detection_coverage` / fleet | ✅ | |
-| └ `get_posture_snapshot` | ✅ | Instant 5-pillar read |
+| └ `get_posture_snapshot` | ✅ | Instant 6-pillar read |
 | └ `get_fleet_posture_summary` | ✅ | |
 | └ `trigger_posture_scan` | ✅ | Background job |
 | └ `get_posture_scan_status` | ✅ | |
@@ -305,8 +305,8 @@ What a developer asks for, and whether the product delivers today.
 | `detection_coverage` cache | ✅ | rules_firing_count, events_last_at |
 | APScheduler 6h background scan | ✅ | Starts with MCP `main()` |
 | Host sync from Wazuh → `hosts` | ✅ | Core tick every 60s |
-| SCA + user inventory (5 pillars) | ✅ | `sca_scanner.py`, `user_scanner.py`, EPSS in CVE triage |
-| Container image CVE (Trivy) | 🟡 | `container_scanner.py` — not run on lab |
+| SCA + user inventory | ✅ | `sca_scanner.py`, `user_scanner.py`, EPSS in CVE triage |
+| Container image CVE (Trivy) | 🟡 | `container_posture.py` — inventory + CVE cache on lab agent 007 |
 | Wazuh native vuln-detection + indexer | 🚫 | Indexer not in compose; we use OSV |
 
 ### 4.9 Threat intel (Epic E9)
@@ -426,7 +426,7 @@ Tracked in Notion: [Product Backlog → Tier I Gate cards](https://www.notion.so
 2. **Test block path** — `recommend_block_ip` → human `confirm_block_ip` on lab host
 3. **Push agent config** — docker stdout + web logs on `.131`
 4. **Auto-triage smoke** — level ≥ 12 event → watcher → opencode
-5. **Container scan** — `scan_container_image` on one running image
+5. **Container posture E2E** — `trigger_posture_scan` on agent with Docker; confirm Grafana Containers panel
 6. **Tier III review** (Gate D)
 7. **Flagship demo script** (E11)
 
@@ -451,7 +451,7 @@ Tracked in Notion: [Product Backlog → Tier I Gate cards](https://www.notion.so
 |----------|-------|
 | Active agents | 007 (cp-131), 008 (vm3-134), 011 (k8s-133) |
 | Agent IPs | 192.168.28.131, .134, .133 |
-| Posture cache | Fresh for 007/008/011 (5 pillars: CVE, exposure, detection, SCA, users) |
+| Posture cache | Fresh for 007/008/011 (6 pillars: CVE, exposure, detection, SCA, users, containers) |
 | Events in Postgres | **8+** in 24h window (ingestion proven) |
 | Closed investigations (24h) | 6 (SLA metrics populated — review FPR sanity) |
 | New MCP tools (uncommitted) | See § Tier 1 investigation quality |

@@ -10,19 +10,9 @@ from typing import Any
 import psycopg2
 import psycopg2.extras
 
-from lureguard_mcp.config import REPORTS_DIR
-from lureguard_mcp.presentation import infer_attack_phases, row_to_dict, shape_event_row
-from lureguard_mcp.report_storage import write_report_markdown
+from lureguard_mcp.presentation import shape_event_row
 from lureguard_mcp.repos.connection import get_conn
-from lureguard_mcp.secrets import redact_mapping
 
-
-def _row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
-    return shape_event_row(row_to_dict(row))
-
-
-def _infer_attack_phases(events: list[dict]) -> list[str]:
-    return infer_attack_phases(events)
 
 def replace_agent_cve_findings_db(
     *,
@@ -90,7 +80,7 @@ def get_agent_cve_findings_db(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -260,7 +250,7 @@ def get_agent_exposure_findings_db(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -422,7 +412,7 @@ def get_agent_detection_coverage_db(agent_id: str) -> dict[str, Any] | None:
             row = cur.fetchone()
             if not row:
                 return None
-            return _row_to_dict(dict(row))
+            return shape_event_row(dict(row))
 
 
 
@@ -675,7 +665,7 @@ def get_agent_sca_summary_db(agent_id: str) -> dict[str, Any]:
                 """,
                 (agent_id,),
             )
-            top_failed = [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            top_failed = [shape_event_row(dict(r)) for r in cur.fetchall()]
 
     scored = counts["passed"] + counts["failed"]
     score_percent = round((counts["passed"] / scored) * 100, 1) if scored else None
@@ -790,7 +780,7 @@ def get_agent_user_findings_db(
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -913,7 +903,7 @@ def get_posture_scan_job_db(job_id: str) -> dict[str, Any] | None:
             row = cur.fetchone()
             if not row:
                 return None
-            return _row_to_dict(dict(row))
+            return shape_event_row(dict(row))
 
 
 # ── Blocklist ────────────────────────────────────────────────────────────────
@@ -983,7 +973,7 @@ def get_container_cve_findings_db(
                 """,
                 params,
             )
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 def get_container_cve_last_scan_db(agent_id: str) -> str | None:
@@ -1046,4 +1036,4 @@ def get_container_runtime_db(agent_id: str) -> dict[str, Any]:
             data = dict(row)
             if isinstance(data.get("containers"), str):
                 data["containers"] = json.loads(data["containers"])
-            return _row_to_dict(data)
+            return shape_event_row(data)

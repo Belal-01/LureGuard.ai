@@ -7,7 +7,7 @@ import json
 from core.modules.collector import normalize_event
 from core.schemas.wazuh_alert import WazuhAlert
 from lureguard_mcp.container_posture import _parse_trivy_json
-from lureguard_mcp.db import _infer_attack_phases
+from lureguard_mcp.presentation import infer_attack_phases
 from lureguard_mcp.enrichment import _derive_verdict, get_ip_context
 
 
@@ -16,7 +16,7 @@ def test_infer_attack_phases_brute_force_and_honeypot():
         {"channel": "sshd", "event_type": "auth_failed"},
         {"channel": "cowrie", "event_type": "cowrie_session"},
     ]
-    phases = _infer_attack_phases(events)
+    phases = infer_attack_phases(events)
     assert "brute_force" in phases
     assert "honeypot_contact" in phases
 

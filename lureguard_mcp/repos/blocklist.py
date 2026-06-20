@@ -2,27 +2,15 @@
 
 from __future__ import annotations
 
-import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
-import psycopg2
 import psycopg2.extras
 
-from lureguard_mcp.config import REPORTS_DIR
-from lureguard_mcp.presentation import infer_attack_phases, row_to_dict, shape_event_row
-from lureguard_mcp.report_storage import write_report_markdown
+from lureguard_mcp.presentation import shape_event_row
 from lureguard_mcp.repos.connection import get_conn
-from lureguard_mcp.secrets import redact_mapping
 
-
-def _row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
-    return shape_event_row(row_to_dict(row))
-
-
-def _infer_attack_phases(events: list[dict]) -> list[str]:
-    return infer_attack_phases(events)
 
 def add_blocklist_db(
     *,
@@ -76,7 +64,7 @@ def confirm_blocklist_db(block_id: str, *, notes: str | None = None) -> dict[str
             row = cur.fetchone()
             if not row:
                 return None
-            return _row_to_dict(dict(row))
+            return shape_event_row(dict(row))
 
 
 
@@ -92,7 +80,7 @@ def list_blocklist_db(*, pending_only: bool = False) -> list[dict]:
                 ORDER BY added_at DESC
                 """
             )
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 
@@ -107,6 +95,6 @@ def get_blocklist_entry_db(block_id: str) -> dict[str, Any] | None:
                 (block_id,),
             )
             row = cur.fetchone()
-            return _row_to_dict(dict(row)) if row else None
+            return shape_event_row(dict(row)) if row else None
 
 

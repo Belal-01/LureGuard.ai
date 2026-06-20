@@ -8,12 +8,8 @@ from typing import Any
 
 import psycopg2.extras
 
-from lureguard_mcp.presentation import row_to_dict, shape_event_row
+from lureguard_mcp.presentation import shape_event_row
 from lureguard_mcp.repos.connection import get_conn
-
-
-def _row_to_dict(row: dict[str, Any]) -> dict[str, Any]:
-    return shape_event_row(row_to_dict(row))
 
 
 def add_whitelist_db(
@@ -80,7 +76,7 @@ def confirm_whitelist_db(whitelist_id: str, *, notes: str | None = None) -> dict
             row = cur.fetchone()
             if not row:
                 return None
-            return _row_to_dict(dict(row))
+            return shape_event_row(dict(row))
 
 
 def list_whitelist_db(*, pending_only: bool = False) -> list[dict]:
@@ -95,7 +91,7 @@ def list_whitelist_db(*, pending_only: bool = False) -> list[dict]:
                 ORDER BY added_at DESC
                 """
             )
-            return [_row_to_dict(dict(r)) for r in cur.fetchall()]
+            return [shape_event_row(dict(r)) for r in cur.fetchall()]
 
 
 def get_whitelist_entry_db(whitelist_id: str) -> dict[str, Any] | None:
@@ -109,7 +105,7 @@ def get_whitelist_entry_db(whitelist_id: str) -> dict[str, Any] | None:
                 (whitelist_id,),
             )
             row = cur.fetchone()
-            return _row_to_dict(dict(row)) if row else None
+            return shape_event_row(dict(row)) if row else None
 
 
 def remove_whitelist_db(*, whitelist_id: str = "", ip: str = "") -> bool:
