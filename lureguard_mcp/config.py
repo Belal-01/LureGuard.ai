@@ -129,8 +129,17 @@ def allow_agent_system_update() -> bool:
     )
 
 
+def allow_agent_restart() -> bool:
+    """When false (default), confirm_restart_agent rejects non-human callers."""
+    return os.getenv("LUREGUARD_ALLOW_AGENT_RESTART", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
 def ssh_strict_host_keys() -> bool:
-    """When true, SSH uses StrictHostKeyChecking=accept-new instead of no."""
+    """When true, SSH uses StrictHostKeyChecking=yes (full strict). Default is accept-new."""
     return os.getenv("LUREGUARD_SSH_STRICT_HOST_KEYS", "false").lower() in (
         "1",
         "true",

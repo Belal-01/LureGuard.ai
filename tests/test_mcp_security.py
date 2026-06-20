@@ -149,3 +149,80 @@ def test_redact_tool_args_redacts_ssh_password():
 
     redacted = redact_tool_args(sample_tool, ("10.0.0.1", "secret123"), {})
     assert redacted["ssh_password"] == "***REDACTED***"
+
+
+def test_confirm_block_failed_leaves_pending(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ONBOARD_SSH_PASSWORD", "test-pass")
+    monkeypatch.setattr(
+        "lureguard_mcp.blocklist.get_blocklist_entry_db",
+        lambda block_id: {
+            "block_id": block_id,
+            "ip": "203.0.113.50",
+            "executed": False,
+        },
+    )
+    monkeypatch.setattr(
+        "lureguard_mcp.blocklist.get_agent_ids_for_src_ip_db",
+        lambda *a, **k: ["007"],
+    )
+    monkeypatch.setattr(
+        "lureguard_mcp.blocklist.list_hosts_db",
+        lambda: [{"agent_id": "007", "ip": "192.168.28.131", "wazuh_status": "active"}],
+    )
+    monkeypatch.setattr(
+        "lureguard_mcp.blocklist._ssh_iptables_drop",
+        lambda host_ip, block_ip, password: {"host": host_ip, "ok": False},
+    )
+    confirm_calls: list[str] = []
+    monkeypatch.setattr(
+        "lureguard_mcp.blocklist.confirm_blocklist_db",
+        lambda block_id, notes=None: confirm_calls.append(block_id) or {"block_id": block_id},
+    )
+
+    result = confirm_block_ip("b1", notes="should fail")
+    assert result["status"] == "failed"
+    assert result["hosts_ok"] == 0
+    assert confirm_calls == []
+
+
+def test_confirm_restart_denied_for_agent_caller(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("LUREGUARD_ALLOW_AGENT_RESTART", "false")
+    from lureguard_mcp.agent_restart import confirm_restart_agent
+
+    result = confirm_restart_agent("007", caller="agent")
+    assert result["status"] == "denied"
+
+
+def test_geo_lookup_uses_country_name_key():
+    from unittest.mock import patch
+
+    from lureguard_mcp.repos.geo import lookup_geo_db
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, *args, **kwargs):
+            return None
+
+        def fetchone(self):
+            return ("US", "United States", 37.0, -122.0)
+
+    class FakeConn:
+        def cursor(self):
+            return FakeCursor()
+
+    class ConnCtx:
+        def __enter__(self):
+            return FakeConn()
+
+        def __exit__(self, *args):
+            return False
+
+    with patch("lureguard_mcp.repos.geo.get_conn", return_value=ConnCtx()):
+        geo = lookup_geo_db("203.0.113.1")
+    assert geo["country_name"] == "United States"
+    assert "city" not in geo

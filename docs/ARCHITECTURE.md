@@ -35,7 +35,7 @@ How the pieces connect. MCP runs on your machine, not inside compose. ML runs in
 ## Alert ingestion flow
 
 1. Wazuh agent on enrolled host collects logs (SSH, FIM, Docker, web, etc.).
-2. Wazuh manager matches rules; **integratord** forwards matching alerts (level ≥ 3, configured groups) to `http://lureguard-core:8080/wazuh/event`.
+2. Wazuh manager matches rules; **integratord** forwards matching alerts (level ≥ 3, configured groups) to `http://lureguard-core:8080/wazuh/event` with header `X-LureGuard-Token` (must match `INGEST_TOKEN` / `<api_key>` in `wazuh/ossec.conf`).
 3. **Core** `collector.normalize_event()` → `decision_policy.process_event()`:
    - All events → Postgres `events`
    - **ML inference only** when `channel == "sshd"` and `event_type` in (`auth_failed`, `auth_success`)

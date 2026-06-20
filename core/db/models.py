@@ -47,26 +47,10 @@ class Event(Base):
     )
 
 
-class Session(Base):
-    __tablename__ = "sessions"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    src_ip = Column(INET)
-    profile_id = Column(String(32))
-    opened_at = Column(DateTime, default=datetime.utcnow)
-    closed_at = Column(DateTime)
-    event_count = Column(Integer, default=0)
-    p = Column(Float)
-
-    decisions = relationship("Decision", back_populates="session")
-    summary = relationship("Summary", back_populates="session", uselist=False)
-
-
 class Decision(Base):
     __tablename__ = "decisions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"))
     ts = Column(DateTime, default=datetime.utcnow, nullable=False)
     decision = Column(String(16), nullable=False)     # allow|alert|redirect
     p = Column(Float, nullable=False)
@@ -79,44 +63,9 @@ class Decision(Base):
     reason = Column(Text)
     event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"))
 
-    session = relationship("Session", back_populates="decisions")
-    alerts = relationship("Alert", back_populates="decision")
-
     __table_args__ = (
         Index("ix_decisions_ts", "ts"),
     )
-
-
-class Alert(Base):
-    __tablename__ = "alerts"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    decision_id = Column(UUID(as_uuid=True), ForeignKey("decisions.id"))
-    ts = Column(DateTime, default=datetime.utcnow)
-    category = Column(String(16))                     # SSH|FIM|ROOTKIT
-    payload = Column(JSONB)
-    sent = Column(Boolean, default=False)
-
-    decision = relationship("Decision", back_populates="alerts")
-
-
-class Summary(Base):
-    __tablename__ = "summaries"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("sessions.id"))
-    provider = Column(String(32))
-    model = Column(String(64))
-    prompt_hash = Column(String(64))
-    summary_text = Column(Text)
-    tokens_in = Column(Integer, default=0)
-    tokens_out = Column(Integer, default=0)
-    latency_ms = Column(Integer, default=0)
-    status = Column(String(16))                       # OK|DISABLED|FAILED
-    error = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    session = relationship("Session", back_populates="summary")
 
 
 class Whitelist(Base):

@@ -19,6 +19,15 @@ from schemas.normalized_event import NormalizedEvent
 from schemas.decision_result import DecisionResult
 
 
+def _record_decision_metric(decision: str) -> None:
+    try:
+        from api.metrics_endpoint import decisions_total
+
+        decisions_total.labels(decision=decision).inc()
+    except Exception:
+        pass
+
+
 def decide(p: float, t1: float, t2: float) -> str:
     if p <= t1:
         return "allow"
@@ -73,6 +82,7 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
             reason=reason,
         )
         await crud.insert_decision(db, dec)
+        _record_decision_metric(decision)
         return
 
     from ml.alert_features import featurize_normalized_event
@@ -116,6 +126,7 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
         reason=reason,
     )
     await crud.insert_decision(db, dec)
+    _record_decision_metric(decision)
 
     logger.info(f"[{event.src_ip}] {reason}")
 
@@ -129,7 +140,10 @@ def _handle_non_ssh(event: NormalizedEvent) -> None:
     from modules.alerting import send_non_ssh_alert
     import asyncio
 
-    if (event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7) or event.channel == "cowrie":
-        asyncio.create_task(send_non_ssh_alert(event))
-    elif event.channel in ("cowrie", "cowrie_session", "web", "windows") or event.event_type == "cowrie_session":
+    should_alert = (
+        (event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7)
+        or event.channel in ("cowrie", "cowrie_session", "web", "windows")
+        or event.event_type == "cowrie_session"
+    )
+    if should_alert:
         asyncio.create_task(send_non_ssh_alert(event))

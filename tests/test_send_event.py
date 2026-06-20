@@ -129,12 +129,18 @@ async def test_bruteforce_pipeline_runs_with_mocked_db(bruteforce_alert: dict) -
 @pytest.mark.integration
 def test_post_wazuh_event_to_running_core(bruteforce_alert: dict) -> None:
     """POST /wazuh/event when Core container is up. Skips if unreachable."""
+    import os
+
     body = json.dumps(bruteforce_alert).encode("utf-8")
+    token = os.getenv("INGEST_TOKEN", "lureguard-dev-ingest-token")
     req = urllib.request.Request(
         "http://127.0.0.1:8080/wazuh/event",
         data=body,
         method="POST",
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "X-LureGuard-Token": token,
+        },
     )
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:

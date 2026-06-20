@@ -10,7 +10,6 @@ from sqlalchemy import select, desc, func
 from db.models import (
     Event,
     Decision,
-    Alert,
     Whitelist,
     AuditLog,
     Investigation,
@@ -85,7 +84,6 @@ async def insert_event(db: AsyncSession, event: NormalizedEvent) -> None:
 async def insert_decision(db: AsyncSession, dec: DecisionResult) -> None:
     db.add(Decision(
         id=dec.id,
-        session_id=dec.session_id,
         event_id=dec.event_id,
         ts=dec.ts,
         decision=dec.decision,

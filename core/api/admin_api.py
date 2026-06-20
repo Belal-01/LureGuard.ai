@@ -14,9 +14,14 @@ security = HTTPBearer()
 
 # ── Auth helper ──────────────────────────────────────────
 def _verify_token(creds: HTTPAuthorizationCredentials = Security(security)):
-    from pathlib import Path
-    token_file = Path("/run/secrets/admin_token")
-    expected = token_file.read_text().strip() if token_file.exists() else "dev-token"
+    from config import admin_token
+
+    expected = admin_token()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin API not configured (set ADMIN_TOKEN or mount admin_token secret)",
+        )
     if creds.credentials != expected:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -30,7 +35,8 @@ def get_thresholds(_=Depends(_verify_token)):
 @router.put("/thresholds")
 def update_thresholds(t1: float, t2: float, _=Depends(_verify_token)):
     """Update ML redirect thresholds in memory only (not persisted to core.yaml)."""
-    assert 0 < t1 < t2 < 1, "Must satisfy: 0 < T1 < T2 < 1"
+    if not (0 < t1 < t2 < 1):
+        raise HTTPException(status_code=422, detail="Must satisfy: 0 < T1 < T2 < 1")
     settings.thresholds.t1 = t1
     settings.thresholds.t2 = t2
     return {
@@ -125,6 +131,6 @@ def reset_feature_window(_=Depends(_verify_token)):
 
 # ── Health ───────────────────────────────────────────────
 @router.get("/health", include_in_schema=False)
-async def health(db: AsyncSession = Depends(get_db)):
+async def health(db: AsyncSession = Depends(get_db), _=Depends(_verify_token)):
     # TODO: ping each subsystem
     return {"db": "ok", "ml": "ok"}

@@ -47,7 +47,9 @@ Requires `.env` keys for external intel where noted.
 | `get_agent_detail` | `agent_id` | Agent metadata + syscollector summary |
 | `get_rules_summary` | `limit` | Top firing rules (from recent events) |
 | `get_manager_status` | — | Manager health |
-| `restart_agent` | `agent_id` | Wazuh API agent restart (**advisory — confirm with human**) |
+| `recommend_restart_agent` | `agent_id`, `reason`, `investigation_id` | Advisory restart recommendation (no side effect) |
+| `confirm_restart_agent` | `agent_id`, `notes` | Human-gated Wazuh agent restart (`LUREGUARD_ALLOW_AGENT_RESTART` gate) |
+| `restart_agent` | `agent_id` | **Disabled** — use recommend + confirm flow |
 | `list_enrolled_hosts` | — | Postgres `hosts` table |
 
 ---

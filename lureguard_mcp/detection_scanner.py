@@ -71,6 +71,11 @@ def scan_agent_detection_coverage(
         rootcheck_enabled = True
 
     firing_count = len(rules_firing)
+    silent_rules_count = 0
+    if fim_enabled and channels_active.get("syscheck", 0) == 0:
+        silent_rules_count += 1
+    if rootcheck_enabled and channels_active.get("rootcheck", 0) == 0:
+        silent_rules_count += 1
 
     upsert_detection_coverage_db(
         agent_id=agent_id,
@@ -79,6 +84,7 @@ def scan_agent_detection_coverage(
         alerts_24h=alerts_24h,
         rules_firing=rules_firing,
         rules_firing_count=firing_count,
+        silent_rules_count=silent_rules_count,
         events_last_at=events_last_at,
         channels_active=channels_active,
         scanned_at=scanned_at,

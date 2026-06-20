@@ -22,7 +22,7 @@ def lookup_geo_db(ip: str) -> dict[str, Any]:
         return {}
     return {
         "country": row[0],
-        "city": row[1],
+        "country_name": row[1],
         "lat": row[2],
         "lon": row[3],
     }

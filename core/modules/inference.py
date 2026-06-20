@@ -62,6 +62,18 @@ def load_model() -> None:
     _scaler = joblib.load(scaler_path)
     _model = joblib.load(model_path)
 
+    try:
+        from api.metrics_endpoint import model_info
+
+        model_info.info(
+            {
+                "version": _model_version,
+                "feature_count": str(len(_feature_columns)),
+            }
+        )
+    except Exception:
+        pass
+
 
 def get_model_version() -> str:
     return _model_version
@@ -73,6 +85,10 @@ def get_feature_columns() -> list[str]:
 
 def infer(x_raw: np.ndarray | None = None, *, feature_row: dict[str, float] | None = None) -> dict:
     """Run inference on feature_row (production) or legacy 8-vector x_raw."""
+    import time
+
+    from api.metrics_endpoint import infer_latency
+
     if _model is None or _scaler is None:
         return {"p": 0.0, "model_version": _model_version}
 
@@ -90,7 +106,9 @@ def infer(x_raw: np.ndarray | None = None, *, feature_row: dict[str, float] | No
         return {"p": 0.0, "model_version": _model_version}
 
     scaled = _scaler.transform(frame)
+    t0 = time.perf_counter()
     p = float(_model.predict_proba(scaled)[0, 1])
+    infer_latency.observe(time.perf_counter() - t0)
     return {"p": p, "model_version": _model_version}
 
 

@@ -43,6 +43,8 @@ services:
     environment:
       MODELS_DIR: /app/models
       CONFIG_PATH: /app/config/core.yaml
+      INGEST_TOKEN: ${INGEST_TOKEN:-lureguard-dev-ingest-token}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-lureguard-dev-admin-token}
       WAZUH_API_URL: https://wazuh-manager:55000
       WAZUH_API_USER: ${WAZUH_API_USER:-wazuh}
       WAZUH_API_PASSWORD: ${WAZUH_API_PASSWORD:-LureGuard-Wazuh-Dev-2026!}
@@ -71,6 +73,8 @@ services:
       # Wazuh 4.14+ rejects short passwords like "wazuh" (Error 5009). Use a strong dev password.
       API_USERNAME: ${WAZUH_API_USER:-wazuh}
       API_PASSWORD: ${WAZUH_API_PASSWORD:-LureGuard-Wazuh-Dev-2026!}
+      # Ingest auth token — single source of truth in .env, read by custom-lureguard.py
+      INGEST_TOKEN: ${INGEST_TOKEN:-lureguard-dev-ingest-token}
     volumes:
       - wazuh_etc:/var/ossec/etc
       - wazuh_data:/var/ossec/data

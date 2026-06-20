@@ -14,6 +14,15 @@ from config import settings
 _active_rules: dict[str, dict] = {}
 
 
+def _sync_dnat_gauge() -> None:
+    try:
+        from api.metrics_endpoint import dnat_active
+
+        dnat_active.set(len(_active_rules))
+    except Exception:
+        pass
+
+
 def apply_dnat(src_ip: str, profile_id: str) -> None:
     """
     Install a PREROUTING DNAT rule: attacker → Cowrie profile.
@@ -45,6 +54,7 @@ def apply_dnat(src_ip: str, profile_id: str) -> None:
         subprocess.run(cmd, check=True, capture_output=True)
         expires_at = datetime.utcnow() + timedelta(minutes=settings.dnat_ttl_minutes)
         _active_rules[src_ip] = {"profile": profile_id, "expires_at": expires_at}
+        _sync_dnat_gauge()
         logger.success(f"✅ DNAT: {src_ip}:22 → {target} (TTL={settings.dnat_ttl_minutes}min)")
     except subprocess.CalledProcessError as e:
         logger.error(f"iptables DNAT failed for {src_ip}: {e.stderr.decode()}")
@@ -71,6 +81,7 @@ def remove_dnat(src_ip: str) -> None:
     try:
         subprocess.run(cmd, check=True, capture_output=True)
         del _active_rules[src_ip]
+        _sync_dnat_gauge()
         logger.info(f"🗑️  DNAT removed for {src_ip}")
     except subprocess.CalledProcessError:
         pass

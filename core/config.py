@@ -1,10 +1,37 @@
 """Settings loaded from config/core.yaml (Core ML + DNAT only; agent uses opencode + .env)."""
 
+import os
 from pathlib import Path
 
 import yaml
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+
+
+def _read_secret_file(name: str) -> str:
+    path = Path(f"/run/secrets/{name}")
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def ingest_token() -> str:
+    return os.getenv("INGEST_TOKEN", "").strip() or _read_secret_file("ingest_token")
+
+
+def ingest_allow_unauthenticated() -> bool:
+    """When true, missing INGEST_TOKEN allows unauthenticated ingest (dev only)."""
+    raw = os.getenv("INGEST_ALLOW_UNAUTHENTICATED", "").strip().lower()
+    if raw in ("0", "false", "no"):
+        return False
+    if raw in ("1", "true", "yes"):
+        return True
+    # Default: allow only when no token is configured
+    return not ingest_token()
+
+
+def admin_token() -> str:
+    return os.getenv("ADMIN_TOKEN", "").strip() or _read_secret_file("admin_token")
 
 
 class ThresholdsConfig(BaseModel):

@@ -47,6 +47,10 @@ from lureguard_mcp.enrichment import (
     defang_indicator,
     get_ip_context as enrich_get_ip_context,
 )
+from lureguard_mcp.agent_restart import (
+    confirm_restart_agent as restart_confirm,
+    recommend_restart_agent as restart_recommend,
+)
 from lureguard_mcp.blocklist import (
     confirm_block_ip as blocklist_confirm,
     list_blocklist as blocklist_list,
@@ -238,7 +242,11 @@ def confirm_block_ip(
     agent_id: str = "",
     fleet_wide: bool = False,
 ) -> str:
-    """Human-confirmed: apply iptables DROP on hosts with evidence for this IP (or agent_id / fleet_wide override)."""
+    """Apply iptables DROP after human approval in chat.
+
+    Trust model: MCP has no identity check — caller defaults to human when you confirm
+    in chat. Hard stop for automated callers: set LUREGUARD_ALLOW_AGENT_BLOCK=false (default).
+    """
     result = blocklist_confirm(
         block_id,
         notes=notes,
@@ -266,7 +274,10 @@ def recommend_whitelist_ip(ip: str, reason: str, investigation_id: str = "") -> 
 @mcp.tool()
 @audited
 def confirm_whitelist_ip(whitelist_id: str, notes: str = "") -> str:
-    """Human-confirmed: activate a pending whitelist entry for Core SSH ML."""
+    """Activate a pending whitelist entry after human approval in chat.
+
+    Trust model: same as confirm_block_ip — chat approval + LUREGUARD_ALLOW_AGENT_WHITELIST gate.
+    """
     result = whitelist_confirm(whitelist_id, notes=notes)
     return mcp_json(result)
 
@@ -480,9 +491,39 @@ def get_posture_scan_status(job_id: str) -> str:
 
 @mcp.tool()
 @audited
+def recommend_restart_agent(
+    agent_id: str,
+    reason: str,
+    investigation_id: str = "",
+) -> str:
+    """Recommend restarting a Wazuh agent. Requires confirm_restart_agent after human approval."""
+    return mcp_json(restart_recommend(agent_id, reason, investigation_id))
+
+
+@mcp.tool()
+@audited
+def confirm_restart_agent(agent_id: str, notes: str = "") -> str:
+    """Restart a Wazuh agent after human approval in chat.
+
+    Trust model: chat approval + LUREGUARD_ALLOW_AGENT_RESTART gate (default false).
+    """
+    return compact_json(restart_confirm(agent_id, notes=notes))
+
+
+@mcp.tool()
+@audited
 def restart_agent(agent_id: str) -> str:
-    """Request restart of a Wazuh agent (advisory — confirm with human first)."""
-    return compact_json(_wazuh.restart_agent(agent_id))
+    """Deprecated alias — use recommend_restart_agent then confirm_restart_agent."""
+    return compact_json(
+        {
+            "status": "error",
+            "error": (
+                "restart_agent is disabled — call recommend_restart_agent, "
+                "then confirm_restart_agent after human approval"
+            ),
+            "agent_id": agent_id,
+        }
+    )
 
 
 @mcp.tool()
@@ -916,7 +957,7 @@ def correlate_alerts(window_hours: int = 24, min_level: int = 3) -> str:
 @mcp.tool()
 @audited
 def rag_lookup(query: str, limit: int = 5) -> str:
-    """Keyword retrieval over local MITRE technique hints and skills markdown."""
+    """Keyword retrieval over local MITRE hints and skills files — not vector/semantic RAG."""
     return rag_lookup_json(query, limit=min(limit, 10))
 
 

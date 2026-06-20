@@ -33,9 +33,9 @@ def run_remote_shell(
     host = validate_ip(host_ip, field="host_ip")
     ssh_target = f"{user}@{host}"
     host_key_opt = (
-        "StrictHostKeyChecking=accept-new"
+        "StrictHostKeyChecking=yes"
         if ssh_strict_host_keys()
-        else "StrictHostKeyChecking=no"
+        else "StrictHostKeyChecking=accept-new"
     )
     full_cmd = [
         "sshpass",

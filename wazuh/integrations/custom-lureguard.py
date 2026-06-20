@@ -30,6 +30,7 @@ pwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 LOG_FILE = f"{pwd}/logs/integrations.log"
 
 ALERT_INDEX = 1
+API_KEY_INDEX = 2
 WEBHOOK_INDEX = 3
 
 # Must match <group> in wazuh/ossec.conf integration block
@@ -103,8 +104,10 @@ def _normalize_alert(alert: dict) -> dict:
     return normalized
 
 
-def _post_alert(alert: dict, webhook: str) -> None:
+def _post_alert(alert: dict, webhook: str, api_key: str = "") -> None:
     headers = {"Content-Type": "application/json", "Accept-Charset": "UTF-8"}
+    if api_key:
+        headers["X-LureGuard-Token"] = api_key
     payload = _normalize_alert(alert)
     response = requests.post(webhook, json=payload, headers=headers, timeout=10)
     _debug(f"# POST {webhook} -> {response.status_code}")
@@ -116,13 +119,18 @@ def main(args: list[str]) -> None:
         sys.exit(ERR_BAD_ARGUMENTS)
 
     alert_path = args[ALERT_INDEX]
+    # Single source of truth: INGEST_TOKEN env (from .env via docker-compose).
+    # Falls back to the ossec.conf <api_key> arg for non-Docker setups.
+    api_key = os.getenv("INGEST_TOKEN", "").strip()
+    if not api_key and len(args) > API_KEY_INDEX:
+        api_key = args[API_KEY_INDEX]
     webhook = args[WEBHOOK_INDEX]
 
     alert = _load_alert(alert_path)
     if not _should_forward(alert):
         return
 
-    _post_alert(alert, webhook)
+    _post_alert(alert, webhook, api_key=api_key)
 
 
 if __name__ == "__main__":

@@ -180,19 +180,35 @@ def confirm_block_ip(
         host_ip = str(host["ip"])
         results.append(_ssh_iptables_drop(host_ip, block_ip, password))
 
+    hosts_ok = sum(1 for r in results if r.get("ok"))
     scope_note = "fleet-wide" if fleet_wide else f"evidence-scoped ({len(hosts)} host(s))"
+
+    if hosts_ok == 0:
+        return {
+            "status": "failed",
+            "block_id": block_id,
+            "ip": block_ip,
+            "scope": scope_note,
+            "agent_ids": sorted({str(h.get("agent_id")) for h in hosts if h.get("agent_id")}),
+            "hosts_attempted": len(results),
+            "hosts_ok": 0,
+            "host_results": results,
+            "error": "iptables DROP failed on all hosts — block remains pending for retry",
+        }
+
     confirmed = confirm_blocklist_db(
         block_id,
-        notes=notes or f"iptables {scope_note} on {len(results)} host(s)",
+        notes=notes or f"iptables {scope_note} on {hosts_ok}/{len(results)} host(s)",
     )
+    status = "executed" if hosts_ok == len(results) else "partial"
     return {
-        "status": "executed",
+        "status": status,
         "block_id": block_id,
         "ip": block_ip,
         "scope": scope_note,
         "agent_ids": sorted({str(h.get("agent_id")) for h in hosts if h.get("agent_id")}),
         "hosts_attempted": len(results),
-        "hosts_ok": sum(1 for r in results if r.get("ok")),
+        "hosts_ok": hosts_ok,
         "host_results": results,
         "blocklist": confirmed,
     }
