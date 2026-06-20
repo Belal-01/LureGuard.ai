@@ -276,6 +276,25 @@ def is_event_watched_db(event_id: str) -> bool:
 
 
 
+def get_agent_ids_for_src_ip_db(ip: str, *, window_hours: int = 48) -> list[str]:
+    since = datetime.utcnow() - timedelta(hours=window_hours)
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT agent_id
+                FROM events
+                WHERE src_ip = %s::inet
+                  AND ts >= %s
+                  AND agent_id IS NOT NULL
+                  AND agent_id <> ''
+                """,
+                (ip, since),
+            )
+            return [str(row[0]) for row in cur.fetchall() if row[0]]
+
+
+
 def get_high_level_events_since_db(since: datetime, min_level: int) -> list[dict]:
     with get_conn() as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:

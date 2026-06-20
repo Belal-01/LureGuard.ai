@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import inspect
 import json
+import logging
 import sys
 import time
 from datetime import datetime
@@ -57,7 +58,7 @@ from lureguard_mcp.whitelist import (
     recommend_whitelist_ip as whitelist_recommend,
     remove_whitelist_ip as whitelist_remove,
 )
-from lureguard_mcp.container_posture import get_agent_container_posture
+from lureguard_mcp.container_posture import get_agent_container_posture as _container_posture_impl
 from lureguard_mcp.onboarding import onboard_host
 from lureguard_mcp.detection_scanner import (
     get_agent_detection_coverage as detection_get_agent,
@@ -96,7 +97,7 @@ from lureguard_mcp.vuln_scanner import (
 from lureguard_mcp.correlator import correlate_alerts as correlate_alerts_db
 from lureguard_mcp.mcp_json import mcp_json
 from lureguard_mcp.rag import rag_lookup_json
-from lureguard_mcp.secrets import redact_mapping
+from lureguard_mcp.secrets import redact_tool_args
 from lureguard_mcp.system_update import (
     apply_system_update as _apply_system_update,
     check_system_update as _check_system_update,
@@ -107,22 +108,29 @@ from lureguard_mcp.wazuh_client import WazuhClient, compact_json
 
 mcp = FastMCP("LureGuard")
 _wazuh = WazuhClient()
+logger = logging.getLogger(__name__)
 
 F = TypeVar("F", bound=Callable[..., Any])
 
 
-def _log_tool_call(name: str, args: tuple[Any, ...], kwargs: dict[str, Any], summary: str, start: float) -> None:
+def _log_tool_call(
+    tool_fn: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    summary: str,
+    start: float,
+) -> None:
     elapsed = int((time.perf_counter() - start) * 1000)
     try:
         log_agent_action(
-            tool_name=name,
-            args={"args": list(args), "kwargs": redact_mapping(kwargs)},
+            tool_name=tool_fn.__name__,
+            args=redact_tool_args(tool_fn, args, kwargs),
             result_summary=summary,
             duration_ms=elapsed,
             investigation_id=inv_ctx.get_investigation_id(),
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("Failed to log agent action for %s: %s", tool_fn.__name__, exc)
 
 
 def audited(tool_fn: F) -> F:
@@ -143,14 +151,13 @@ def audited(tool_fn: F) -> F:
                 summary = f"ERROR: {exc}"
                 raise
             finally:
-                _log_tool_call(name, args, kwargs, summary, start)
+                _log_tool_call(tool_fn, args, kwargs, summary, start)
 
         return async_wrapper  # type: ignore[return-value]
 
     @functools.wraps(tool_fn)
     def sync_wrapper(*args: Any, **kwargs: Any) -> str:
         start = time.perf_counter()
-        name = tool_fn.__name__
         summary = "ok"
         try:
             result = tool_fn(*args, **kwargs)
@@ -160,7 +167,7 @@ def audited(tool_fn: F) -> F:
             summary = f"ERROR: {exc}"
             raise
         finally:
-            _log_tool_call(name, args, kwargs, summary, start)
+            _log_tool_call(tool_fn, args, kwargs, summary, start)
 
     return sync_wrapper  # type: ignore[return-value]
 
@@ -225,9 +232,19 @@ def recommend_block_ip(ip: str, reason: str, investigation_id: str = "") -> str:
 
 @mcp.tool()
 @audited
-def confirm_block_ip(block_id: str, notes: str = "") -> str:
-    """Human-confirmed: apply iptables DROP for a pending blocklist entry across active hosts."""
-    result = blocklist_confirm(block_id, notes=notes, caller="agent")
+def confirm_block_ip(
+    block_id: str,
+    notes: str = "",
+    agent_id: str = "",
+    fleet_wide: bool = False,
+) -> str:
+    """Human-confirmed: apply iptables DROP on hosts with evidence for this IP (or agent_id / fleet_wide override)."""
+    result = blocklist_confirm(
+        block_id,
+        notes=notes,
+        agent_id=agent_id,
+        fleet_wide=fleet_wide,
+    )
     return mcp_json(result)
 
 
@@ -250,7 +267,7 @@ def recommend_whitelist_ip(ip: str, reason: str, investigation_id: str = "") -> 
 @audited
 def confirm_whitelist_ip(whitelist_id: str, notes: str = "") -> str:
     """Human-confirmed: activate a pending whitelist entry for Core SSH ML."""
-    result = whitelist_confirm(whitelist_id, notes=notes, caller="agent")
+    result = whitelist_confirm(whitelist_id, notes=notes)
     return mcp_json(result)
 
 
@@ -436,7 +453,7 @@ def get_posture_snapshot(agent_id: str) -> str:
 def get_agent_container_posture(agent_id: str, image_ref: str = "", limit: int = 200) -> str:
     """Cached Docker runtime inventory + Trivy image CVE findings for an agent (posture pillar)."""
     return compact_json(
-        get_agent_container_posture(agent_id, image_ref=image_ref, limit=limit)
+        _container_posture_impl(agent_id, image_ref=image_ref, limit=limit)
     )
 
 

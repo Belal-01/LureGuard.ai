@@ -84,17 +84,18 @@ Set via `set_host_criticality(agent_id, ...)` or `open_investigation(asset_criti
 After `close_investigation` with verdict `true_positive` and severity P1/P2:
 
 1. `recommend_block_ip(ip, reason, investigation_id)` — writes pending blocklist entry
-2. Human runs `confirm_block_ip(block_id)` — applies iptables DROP on enrolled hosts
-3. Optionally `notify_telegram` with summary + `confirm_block_ip(block_id='...')` for the operator
+2. Human runs `confirm_block_ip(block_id)` — applies iptables DROP on **hosts with evidence** for that IP (last 48h)
+3. If scope is unclear, `confirm_block_ip` returns `needs_scope` — pass `agent_id='007'` or `fleet_wide=true` with notes explaining why
+4. Optionally `notify_telegram` with summary + `confirm_block_ip(block_id='...')` for the operator
 
 **Whitelist (trusted SSH sources — ML skips alert/redirect):**
 
 1. `recommend_whitelist_ip(ip, reason, investigation_id)` — writes pending whitelist entry
 2. Human runs `confirm_whitelist_ip(whitelist_id)` — activates entry; Core picks up on next tick (~2s)
-3. `list_whitelist(pending_only=true)` / `remove_whitelist_ip(whitelist_id=…)` as needed
+3. `list_whitelist(pending_only=true)` / `remove_whitelist_ip(whitelist_id=…)` as needed (remove is human-gated like confirm)
 
 For blocks, also `notify_telegram` with summary + `confirm_block_ip(block_id='...')` for the human operator.
-**Never** call `confirm_block_ip` or `confirm_whitelist_ip` autonomously — human must confirm.
+**Never** call `confirm_block_ip`, `confirm_whitelist_ip`, or `remove_whitelist_ip` autonomously — human must confirm in chat first.
 
 ## NIST IR lifecycle (advisory — human executes containment)
 

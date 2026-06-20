@@ -85,7 +85,21 @@ def list_whitelist(pending_only: bool = False) -> str:
     return json.dumps({"count": len(rows), "entries": rows}, indent=2)
 
 
-def remove_whitelist_ip(whitelist_id: str = "", ip: str = "") -> dict[str, Any]:
+def remove_whitelist_ip(
+    whitelist_id: str = "",
+    ip: str = "",
+    *,
+    caller: str = "human",
+) -> dict[str, Any]:
+    if caller != "human" and not allow_agent_whitelist():
+        return {
+            "status": "denied",
+            "error": (
+                "remove_whitelist_ip requires human approval. "
+                "Set LUREGUARD_ALLOW_AGENT_WHITELIST=true only for testing."
+            ),
+        }
+
     if not whitelist_id and not ip:
         return {"status": "error", "error": "provide whitelist_id or ip"}
     if ip:

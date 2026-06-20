@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import inspect
 import re
+from collections.abc import Callable
 from typing import Any
 
 _SECRET_KEY_RE = re.compile(
@@ -44,6 +46,20 @@ def redact_mapping(data: dict[str, Any] | None) -> dict[str, Any]:
         else:
             out[key] = value
     return out
+
+
+def redact_tool_args(
+    func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind positional + keyword args to parameter names and redact secrets."""
+    try:
+        bound = inspect.signature(func).bind_partial(*args, **kwargs)
+        bound.apply_defaults()
+        return redact_mapping(dict(bound.arguments))
+    except (TypeError, ValueError):
+        return {"args": list(args), "kwargs": redact_mapping(kwargs)}
 
 
 def redact_ssh_output(text: str, *, max_len: int = 500) -> str:

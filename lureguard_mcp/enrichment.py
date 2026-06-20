@@ -15,21 +15,28 @@ from lureguard_mcp.untrusted_text import sanitize_untrusted_text
 
 
 def _is_private_ip(ip: str) -> bool:
-    parts = ip.split(".")
-    if len(parts) != 4:
-        return True
+    import ipaddress
+
     try:
-        octets = [int(p) for p in parts]
+        addr = ipaddress.ip_address(ip.strip())
     except ValueError:
         return True
-    if octets[0] == 10:
+
+    if addr.is_loopback or addr.is_link_local:
         return True
-    if octets[0] == 172 and 16 <= octets[1] <= 31:
-        return True
-    if octets[0] == 192 and octets[1] == 168:
-        return True
-    if octets[0] == 127:
-        return True
+
+    # RFC 5737 / RFC 3849 documentation ranges — treat as external for enrichment.
+    if addr.version == 4:
+        for net in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24"):
+            if addr in ipaddress.ip_network(net):
+                return False
+        return addr.is_private
+
+    if addr.version == 6:
+        if addr in ipaddress.ip_network("2001:db8::/32"):
+            return False
+        return addr.is_private
+
     return False
 
 

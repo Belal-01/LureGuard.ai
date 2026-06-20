@@ -10,6 +10,7 @@ from lureguard_mcp.config import allow_agent_block, onboard_ssh_password
 from lureguard_mcp.db import (
     add_blocklist_db,
     confirm_blocklist_db,
+    get_agent_ids_for_src_ip_db,
     get_blocklist_entry_db,
     list_blocklist_db,
     list_hosts_db,
@@ -30,6 +31,11 @@ def recommend_block_ip(
     reason: str,
     investigation_id: str = "",
 ) -> dict[str, Any]:
+    try:
+        validate_ip(ip, field="ip")
+    except SSHValidationError as exc:
+        return {"status": "error", "error": str(exc)}
+
     entry = add_blocklist_db(
         ip=ip,
         reason=reason,
@@ -62,7 +68,71 @@ def _ssh_iptables_drop(host_ip: str, block_ip: str, password: str) -> dict[str, 
     }
 
 
-def confirm_block_ip(block_id: str, notes: str = "", *, caller: str = "human") -> dict[str, Any]:
+def _active_hosts() -> list[dict[str, Any]]:
+    return [h for h in list_hosts_db() if h.get("wazuh_status") == "active" and h.get("ip")]
+
+
+def _resolve_block_hosts(
+    block_ip: str,
+    *,
+    agent_id: str = "",
+    fleet_wide: bool = False,
+    window_hours: int = 48,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    if fleet_wide:
+        return _active_hosts(), None
+
+    if agent_id:
+        hosts = [
+            h
+            for h in _active_hosts()
+            if str(h.get("agent_id")) == agent_id.strip()
+        ]
+        if not hosts:
+            return [], {
+                "status": "error",
+                "error": f"agent_id {agent_id} not found among active enrolled hosts",
+            }
+        return hosts, None
+
+    agent_ids = set(get_agent_ids_for_src_ip_db(block_ip, window_hours=window_hours))
+    if not agent_ids:
+        return [], {
+            "status": "needs_scope",
+            "error": (
+                f"No enrolled agent saw {block_ip} in the last {window_hours}h. "
+                "Investigate the IP, pass agent_id for a specific host, or set "
+                "fleet_wide=true with notes explaining why."
+            ),
+            "suggested_actions": [
+                f"get_alerts_for_ip('{block_ip}')",
+                "confirm_block_ip(..., agent_id='007')",
+                "confirm_block_ip(..., fleet_wide=true, notes='...')",
+            ],
+        }
+
+    hosts = [h for h in _active_hosts() if str(h.get("agent_id")) in agent_ids]
+    if not hosts:
+        return [], {
+            "status": "needs_scope",
+            "error": (
+                f"Events reference agent_id(s) {sorted(agent_ids)} but no matching "
+                "active host rows exist in hosts table."
+            ),
+            "agent_ids_from_events": sorted(agent_ids),
+        }
+    return hosts, None
+
+
+def confirm_block_ip(
+    block_id: str,
+    notes: str = "",
+    *,
+    caller: str = "human",
+    agent_id: str = "",
+    fleet_wide: bool = False,
+    window_hours: int = 48,
+) -> dict[str, Any]:
     if caller != "human" and not allow_agent_block():
         return {
             "status": "denied",
@@ -70,6 +140,12 @@ def confirm_block_ip(block_id: str, notes: str = "", *, caller: str = "human") -
                 "confirm_block_ip requires human approval. "
                 "Set LUREGUARD_ALLOW_AGENT_BLOCK=true only for testing."
             ),
+        }
+
+    if fleet_wide and not (notes or "").strip():
+        return {
+            "status": "error",
+            "error": "fleet_wide=true requires non-empty notes explaining why all hosts are blocked",
         }
 
     entry = get_blocklist_entry_db(block_id)
@@ -90,17 +166,31 @@ def confirm_block_ip(block_id: str, notes: str = "", *, caller: str = "human") -
     except SSHValidationError as exc:
         return {"status": "error", "error": str(exc)}
 
-    hosts = [h for h in list_hosts_db() if h.get("wazuh_status") == "active" and h.get("ip")]
+    hosts, scope_error = _resolve_block_hosts(
+        block_ip,
+        agent_id=agent_id,
+        fleet_wide=fleet_wide,
+        window_hours=window_hours,
+    )
+    if scope_error:
+        return scope_error
+
     results = []
     for host in hosts:
         host_ip = str(host["ip"])
         results.append(_ssh_iptables_drop(host_ip, block_ip, password))
 
-    confirmed = confirm_blocklist_db(block_id, notes=notes or f"iptables on {len(results)} host(s)")
+    scope_note = "fleet-wide" if fleet_wide else f"evidence-scoped ({len(hosts)} host(s))"
+    confirmed = confirm_blocklist_db(
+        block_id,
+        notes=notes or f"iptables {scope_note} on {len(results)} host(s)",
+    )
     return {
         "status": "executed",
         "block_id": block_id,
         "ip": block_ip,
+        "scope": scope_note,
+        "agent_ids": sorted({str(h.get("agent_id")) for h in hosts if h.get("agent_id")}),
         "hosts_attempted": len(results),
         "hosts_ok": sum(1 for r in results if r.get("ok")),
         "host_results": results,

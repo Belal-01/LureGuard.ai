@@ -21,6 +21,10 @@ def shape_event_row(row: dict[str, Any]) -> dict[str, Any]:
     return _shape_event_row(row_to_dict(row))
 
 
+# Alias for non-event DB rows that still carry untrusted text fields.
+present_row = shape_event_row
+
+
 def infer_attack_phases(events: list[dict]) -> list[str]:
     phases: list[str] = []
     channels = {e.get("channel") for e in events}

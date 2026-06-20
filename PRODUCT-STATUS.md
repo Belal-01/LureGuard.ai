@@ -29,10 +29,10 @@
 | Rich timeline / attack summary | 🟡 | `.venv/bin/python -c "from lureguard_mcp.db import get_event_timeline; ..."` returns geo, duration, phases |
 | `get_ip_context` compound enrichment | 🟡 | Returns `internal` for RFC1918; needs VT/AbuseIPDB keys for external IPs |
 | ML score in timeline | 🟡 | Only SSH `auth_failed`/`auth_success` rows; requires `decisions.event_id` populated on **new** events after deploy |
-| `recommend_block_ip` / `confirm_block_ip` | ⬜ | Not run on lab hosts together — needs explicit human test before trusting iptables |
+| `recommend_block_ip` / `confirm_block_ip` | 🟡 | Code fixed (evidence-scoped block, human caller); lab iptables E2E still pending |
 | `alert_watcher` auto-triage | ⬜ | Starts with MCP server; needs level ≥ 12 event + `opencode` in PATH + Telegram configured |
 | Web/docker log coverage | 🟡 | `ossec.conf` groups aligned with `_FORWARD_GROUPS`; custom web rules `100010-100012`; investigate-web uses `channel=docker` — agent restart + lab E2E still pending |
-| Container posture (Trivy) | 🟡 | `container_posture.py` + `get_agent_container_posture`; lab proof on agent 007 (3187 CVE rows) |
+| Container posture (Trivy) | 🟡 | `get_agent_container_posture` recursion bug fixed; lab data on agent 007 |
 | `check_tls` / firewall in exposure | ⬜ | Tool exists; not smoke-tested against a live HTTPS endpoint |
 | opencode triage → saved report | ⬜ | **Gate B1** — run together before calling Tier I done |
 | Grafana new panels | 🟡 | Investigation Console dashboard (`investigation-console.json`) with vars + timeline_events; need reload + populated data |

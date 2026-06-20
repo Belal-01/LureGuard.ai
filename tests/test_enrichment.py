@@ -59,3 +59,18 @@ def test_vt_domain_degrades_without_key(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("VIRUSTOTAL_API_KEY", raising=False)
     data = json.loads(check_domain_virustotal("example.com"))
     assert data["configured"] is False
+
+
+def test_is_private_ip_ipv4_rfc1918():
+    from lureguard_mcp.enrichment import _is_private_ip
+
+    assert _is_private_ip("192.168.1.50") is True
+    assert _is_private_ip("10.0.0.1") is True
+    assert _is_private_ip("203.0.113.1") is False
+
+
+def test_is_private_ip_ipv6_ula():
+    from lureguard_mcp.enrichment import _is_private_ip
+
+    assert _is_private_ip("fd12:3456:789a:1::1") is True
+    assert _is_private_ip("2001:db8::1") is False

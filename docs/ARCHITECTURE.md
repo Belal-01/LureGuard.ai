@@ -122,12 +122,14 @@ Artifacts in Postgres: `investigations`, `findings`, `timeline_events`, `iocs`, 
 | Step | Tool | Effect |
 |------|------|--------|
 | Recommend | `recommend_block_ip` | Row in `blocklist`, `executed=false` |
-| Confirm | `confirm_block_ip` | iptables DROP on enrolled hosts via SSH (requires human by default) |
+| Confirm | `confirm_block_ip` | iptables DROP on evidence-scoped hosts (48h events); optional `agent_id` or `fleet_wide=true` + notes |
 | List | `list_blocklist` | Pending and executed blocks |
 
-Whitelist mirrors the same pattern: `recommend_whitelist_ip` → `confirm_whitelist_ip` → Core ML cache loads **executed** whitelist rows only.
+Whitelist mirrors the same pattern: `recommend_whitelist_ip` → `confirm_whitelist_ip` → Core ML cache loads **executed** whitelist rows only. `remove_whitelist_ip` is human-gated like confirm.
 
-Gates: `LUREGUARD_ALLOW_AGENT_BLOCK` / `LUREGUARD_ALLOW_AGENT_WHITELIST` (default `false`).
+Gates: `LUREGUARD_ALLOW_AGENT_BLOCK` / `LUREGUARD_ALLOW_AGENT_WHITELIST` / `LUREGUARD_ALLOW_AGENT_SYSTEM_UPDATE` (default `false` — for automation tests only; MCP chat approval uses default human caller).
+
+SSH: set `LUREGUARD_SSH_STRICT_HOST_KEYS=true` for `StrictHostKeyChecking=accept-new` (lab default remains `no`).
 
 ---
 

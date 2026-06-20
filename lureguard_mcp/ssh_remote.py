@@ -7,6 +7,8 @@ import shlex
 import subprocess
 from typing import Any
 
+from lureguard_mcp.config import ssh_strict_host_keys
+
 
 class SSHValidationError(ValueError):
     pass
@@ -30,13 +32,18 @@ def run_remote_shell(
     """Run a remote command via sshpass+ssh without interpolating host into shell."""
     host = validate_ip(host_ip, field="host_ip")
     ssh_target = f"{user}@{host}"
+    host_key_opt = (
+        "StrictHostKeyChecking=accept-new"
+        if ssh_strict_host_keys()
+        else "StrictHostKeyChecking=no"
+    )
     full_cmd = [
         "sshpass",
         "-p",
         password,
         "ssh",
         "-o",
-        "StrictHostKeyChecking=no",
+        host_key_opt,
         "-T",
         ssh_target,
         remote_command,

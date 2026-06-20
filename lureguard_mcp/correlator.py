@@ -3,11 +3,27 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from lureguard_mcp.db import search_events
 from lureguard_mcp.presentation import infer_attack_phases
+
+
+def _parse_event_ts(raw: Any) -> datetime | None:
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        ts = raw
+    else:
+        text = str(raw).replace("Z", "+00:00")
+        try:
+            ts = datetime.fromisoformat(text)
+        except ValueError:
+            return None
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts
 
 
 def correlate_alerts(
@@ -16,9 +32,13 @@ def correlate_alerts(
     min_level: int = 3,
     limit_per_ip: int = 200,
 ) -> dict[str, Any]:
-    since = datetime.utcnow() - timedelta(hours=window_hours)
+    since = datetime.now(timezone.utc) - timedelta(hours=window_hours)
     events = search_events(min_level=min_level, limit=1000)
-    filtered = [e for e in events if e.get("ts") and str(e["ts"]) >= since.isoformat()]
+    filtered = []
+    for event in events:
+        ts = _parse_event_ts(event.get("ts"))
+        if ts is not None and ts >= since:
+            filtered.append(event)
 
     by_ip: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for event in filtered:

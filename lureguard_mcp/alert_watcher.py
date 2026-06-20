@@ -38,7 +38,7 @@ def _safe_src_ip(raw: str | None) -> str:
         return "invalid"
 
 
-def _run_auto_triage(event: dict) -> None:
+def _run_auto_triage(event: dict) -> bool:
     src_ip = _safe_src_ip(event.get("src_ip"))
     level = event.get("wazuh_rule_level")
     desc = sanitize_untrusted_text(
@@ -63,8 +63,10 @@ def _run_auto_triage(event: dict) -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        return True
     except FileNotFoundError:
         logger.warning("opencode not found — skipping auto-triage subprocess")
+        return False
 
 
 def _poll_once() -> None:
@@ -76,13 +78,17 @@ def _poll_once() -> None:
         event_id = str(event.get("id", ""))
         if not event_id:
             continue
+        if not _run_auto_triage(event):
+            continue
         mark_event_watched_db(event_id)
+        desc = sanitize_untrusted_text(
+            str(event.get("wazuh_rule_description") or event.get("channel") or "alert")
+        )
         summary = (
             f"LureGuard auto-triage: level {event.get('wazuh_rule_level')} "
-            f"from {event.get('src_ip')} — {event.get('wazuh_rule_description') or event.get('channel')}"
+            f"from {event.get('src_ip')} — {desc}"
         )
         _notify_telegram(summary)
-        _run_auto_triage(event)
         logger.info("Auto-triage triggered for event %s", event_id)
     _last_checked = datetime.utcnow()
 

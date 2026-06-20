@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lureguard_mcp.config import REPO_ROOT
+from lureguard_mcp.config import REPO_ROOT, allow_agent_system_update
 
 _SCRIPT = REPO_ROOT / "update-system.py"
 
@@ -23,6 +23,19 @@ def _run(cmd: str) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
 
 
+def _deny_agent_caller(caller: str, action: str) -> dict | None:
+    if caller != "human" and not allow_agent_system_update():
+        return {
+            "ok": False,
+            "status": "denied",
+            "error": (
+                f"{action} requires human approval. "
+                "Set LUREGUARD_ALLOW_AGENT_SYSTEM_UPDATE=true only for testing."
+            ),
+        }
+    return None
+
+
 def check_system_update() -> dict:
     code, out, err = _run("check")
     if code != 0:
@@ -35,7 +48,10 @@ def check_system_update() -> dict:
         return {"ok": False, "error": out or err or "invalid check output"}
 
 
-def apply_system_update() -> dict:
+def apply_system_update(*, caller: str = "human") -> dict:
+    denied = _deny_agent_caller(caller, "apply_system_update")
+    if denied:
+        return denied
     code, out, err = _run("apply")
     return {
         "ok": code == 0,
@@ -50,6 +66,9 @@ def dismiss_system_update() -> dict:
     return {"ok": code == 0, "message": out or err}
 
 
-def rollback_system_update() -> dict:
+def rollback_system_update(*, caller: str = "human") -> dict:
+    denied = _deny_agent_caller(caller, "rollback_system_update")
+    if denied:
+        return denied
     code, out, err = _run("rollback")
     return {"ok": code == 0, "stdout": out, "stderr": err}

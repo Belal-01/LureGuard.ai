@@ -118,3 +118,21 @@ def allow_agent_block() -> bool:
 def allow_agent_whitelist() -> bool:
     """When false (default), confirm_whitelist_ip rejects non-human callers."""
     return os.getenv("LUREGUARD_ALLOW_AGENT_WHITELIST", "false").lower() in ("1", "true", "yes")
+
+
+def allow_agent_system_update() -> bool:
+    """When false (default), apply/rollback system update rejects non-human callers."""
+    return os.getenv("LUREGUARD_ALLOW_AGENT_SYSTEM_UPDATE", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
+
+def ssh_strict_host_keys() -> bool:
+    """When true, SSH uses StrictHostKeyChecking=accept-new instead of no."""
+    return os.getenv("LUREGUARD_SSH_STRICT_HOST_KEYS", "false").lower() in (
+        "1",
+        "true",
+        "yes",
+    )

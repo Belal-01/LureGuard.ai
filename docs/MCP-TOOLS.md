@@ -87,8 +87,8 @@ Routine posture reads use cache; user-triggered refresh → `skills/refresh-post
 
 | Tool | Parameters | Purpose |
 |------|------------|---------|
-| `recommend_block_ip` | `ip`, `reason`, `investigation_id` | Insert pending blocklist row |
-| `confirm_block_ip` | `block_id`, `notes` | Human-gated iptables DROP on fleet |
+| `recommend_block_ip` | `ip`, `reason`, `investigation_id` | Insert pending blocklist row (validates IP) |
+| `confirm_block_ip` | `block_id`, `notes`, `agent_id`, `fleet_wide` | Human-gated iptables DROP on evidence-scoped hosts; `needs_scope` if no events; `fleet_wide=true` requires notes |
 | `list_blocklist` | `pending_only` | List blocklist entries |
 | `recommend_whitelist_ip` | `ip`, `reason`, `investigation_id` | Insert pending whitelist row |
 | `confirm_whitelist_ip` | `whitelist_id`, `notes` | Human-gated whitelist (Core ML cache) |

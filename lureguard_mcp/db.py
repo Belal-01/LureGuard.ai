@@ -13,6 +13,7 @@ from lureguard_mcp.repos.events import (
     count_agent_alerts_24h_db,
     get_agent_channels_active_24h_db,
     get_agent_events_last_at_db,
+    get_agent_ids_for_src_ip_db,
     get_agent_rules_firing_24h_db,
     get_alerts_for_ip,
     get_attack_summary,
@@ -91,10 +92,9 @@ from lureguard_mcp.repos.whitelist import (
 )
 
 # Re-export _agent_event_filter from events for tests/internal use
-from lureguard_mcp.repos.events import _agent_event_filter  # noqa: E402
 
 __all__ = [
-"_agent_event_filter",
+    "_agent_event_filter",
     "_event_enriched_select",
     "_next_evidence_id",
     "add_blocklist_db",
@@ -111,6 +111,7 @@ __all__ = [
     "get_agent_cve_last_scan_db",
     "get_agent_detection_coverage_db",
     "get_agent_events_last_at_db",
+    "get_agent_ids_for_src_ip_db",
     "get_agent_exposure_counts_db",
     "get_agent_exposure_findings_db",
     "get_agent_exposure_last_scan_db",
