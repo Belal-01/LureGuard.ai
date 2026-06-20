@@ -72,11 +72,36 @@ docker compose up -d
 make venv && make migrate && make doctor
 ```
 
-When everything is healthy, `make doctor` ends with `All required checks passed. Run: opencode`.
+When everything is healthy, `make doctor` ends like this:
 
-<p align="center">
-  <img src="docs/screenshots/doctor.png" alt="make doctor output" width="700">
-</p>
+```
+$ make doctor
+────────────────────────────────────────────
+Required
+  ✓  Docker
+  ✓  Core stack containers
+  ✓  Postgres :5433
+  ✓  Agent DB schema
+  ✓  Core API :8080
+  ✓  Wazuh API auth
+  ✓  Wazuh integratord
+  ✓  .env file
+  ✓  MCP Python package
+  ✓  opencode CLI
+  ✓  opencode.json schema
+  ✓  opencode MCP lureguard
+  ✓  opencode LLM ready
+      → Using saved provider credentials
+
+Optional
+  ✓  Grafana :3000
+  ✓  Threat intel keys
+      → Optional unset: ABUSEIPDB_API_KEY
+  ✓  Report charts + PDF (pip)
+      → weasyprint
+────────────────────────────────────────────
+All required checks passed. Run: opencode
+```
 
 Step-by-step details: [`docs/SETUP.md`](docs/SETUP.md)
 
