@@ -66,7 +66,8 @@ Containment: `recommend_block_ip`, `confirm_block_ip`, `list_blocklist`, `recomm
 Lifecycle: `open_investigation`, `record_finding`, `add_timeline_event`, `get_investigation_artifacts`, `close_investigation`  
 Charts: `generate_report_chart`, `generate_report_chart_preset`  
 Output: `save_report` (auto PNG charts; Telegram→PDF), `convert_report_to_pdf`, `send_report_to_telegram`, `notify_telegram`  
-Onboarding: `onboard_host_tool`, `list_enrolled_hosts`
+Onboarding: `onboard_host_tool`, `list_enrolled_hosts`  
+Updates: `check_system_update`, `apply_system_update`, `dismiss_system_update`, `rollback_system_update`
 
 ## Headless / batch
 
@@ -83,3 +84,21 @@ make venv && pip install -e ".[mcp]"
 make doctor
 opencode
 ```
+
+## Update check
+
+On the **first message of each session**, call **`check_system_update`** silently (MCP tool — opencode has bash disabled).
+
+Parse the JSON output:
+
+- `{"status": "update-available", "local": "0.2.0", "remote": "0.3.0", "changelog": "..."}` → tell the user:
+  > "LureGuard update available (v{local} → v{remote}). Your data (.env, secrets, reports) will NOT be touched. Want me to update?"
+  If yes → **`apply_system_update`**, then ask them to run `make migrate && docker compose up -d` and restart opencode. If no → **`dismiss_system_update`**.
+- `{"status": "up-to-date"}` → say nothing
+- `{"status": "dismissed"}` → say nothing
+- `{"status": "offline"}` → say nothing
+- `{"status": "no-remote-version"}` → say nothing
+
+The user can also say **"check for updates"** or **"update LureGuard"** at any time. Rollback: **`rollback_system_update`** (or `make rollback-update` from a terminal).
+
+CLI equivalent: `python update-system.py check|apply|dismiss|rollback` · `make update-check` · `make update`

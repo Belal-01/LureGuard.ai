@@ -39,6 +39,10 @@ reports/assets/
 .DS_Store
 Thumbs.db
 
+# Updater state (local only)
+.update-dismissed
+.update-lock
+
 # IDE
 .vscode/settings.json
 .idea/

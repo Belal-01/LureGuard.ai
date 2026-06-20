@@ -1,5 +1,5 @@
 .PHONY: up down build test test-integration venv ensure-venv migrate doctor db-revision \
-	fetch-dataset train train-quick lint format clean
+	fetch-dataset train train-quick lint format clean update-check update rollback-update
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -34,6 +34,15 @@ doctor: ensure-venv
 	fi
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	$(PYTHON) -m lureguard_mcp.doctor
+
+update-check:
+	python3 update-system.py check
+
+update:
+	python3 update-system.py apply
+
+rollback-update:
+	python3 update-system.py rollback
 
 db-revision: venv
 	@if [ -z "$(m)" ]; then echo "Usage: make db-revision m=\"message\""; exit 1; fi

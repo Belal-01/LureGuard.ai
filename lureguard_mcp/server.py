@@ -97,6 +97,12 @@ from lureguard_mcp.correlator import correlate_alerts as correlate_alerts_db
 from lureguard_mcp.mcp_json import mcp_json
 from lureguard_mcp.rag import rag_lookup_json
 from lureguard_mcp.secrets import redact_mapping
+from lureguard_mcp.system_update import (
+    apply_system_update as _apply_system_update,
+    check_system_update as _check_system_update,
+    dismiss_system_update as _dismiss_system_update,
+    rollback_system_update as _rollback_system_update,
+)
 from lureguard_mcp.wazuh_client import WazuhClient, compact_json
 
 mcp = FastMCP("LureGuard")
@@ -902,6 +908,34 @@ def rag_lookup(query: str, limit: int = 5) -> str:
 def list_enrolled_hosts() -> str:
     """List hosts enrolled in LureGuard (from Postgres hosts table)."""
     return mcp_json({"hosts": list_hosts_db()})
+
+
+@mcp.tool()
+@audited
+def check_system_update() -> str:
+    """Check for upstream LureGuard updates. Never touches .env, secrets/, or reports/."""
+    return mcp_json(_check_system_update())
+
+
+@mcp.tool()
+@audited
+def apply_system_update() -> str:
+    """Apply upstream system-layer update after human confirms. User data is never modified."""
+    return mcp_json(_apply_system_update())
+
+
+@mcp.tool()
+@audited
+def dismiss_system_update() -> str:
+    """Dismiss update prompt until user asks to check again."""
+    return mcp_json(_dismiss_system_update())
+
+
+@mcp.tool()
+@audited
+def rollback_system_update() -> str:
+    """Rollback the last system update from backup branch."""
+    return mcp_json(_rollback_system_update())
 
 
 def main() -> None:

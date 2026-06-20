@@ -1,221 +1,227 @@
 # LureGuard.ai
 
-**Plug-and-play AI security analyst for developers.** One `docker compose up -d`. Wazuh is the embedded SIEM engine. Talk to it in plain language via [opencode](https://opencode.ai); it triages alerts, investigates hosts, writes reports, and enrolls agents — with every action logged to Postgres and shown in Grafana.
+AI security analyst for developers who run servers but don't have a SOC. `docker compose up -d`, then talk to it in plain language through [opencode](https://opencode.ai).
 
-> *An AI-augmented SOC for people who don't have a SOC.*
+Wazuh collects the logs. Postgres stores the alerts. The MCP server gives the agent tools to triage, investigate, write reports, and enroll hosts. Grafana is where you drill down when you want tables, not when management reads a PDF.
 
-**Stack:** Wazuh 4.14 · FastAPI Core · PostgreSQL · Grafana · MCP · opencode (BYO-LLM)
+<p align="center">
+  <img src="https://img.shields.io/badge/Tier_I-~55%25-yellow?style=for-the-badge" alt="Tier I progress">
+  <img src="https://img.shields.io/badge/Wazuh-4.14-blue?style=flat" alt="Wazuh">
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
+</p>
 
-> **Product status checklist:** see [`PRODUCT-STATUS.md`](PRODUCT-STATUS.md) for use cases, verification status (what is proven vs code-only), and Tier I gate.
-
----
-
-## What's new (Tier 1 investigation quality — June 2026)
-
-| Area | Tools / files |
-|------|----------------|
-| **Richer events** | `wazuh_rule_description`, geo on events; `decisions.event_id` → ML score in timeline (SSH auth only) |
-| **Mandatory enrichment** | `get_ip_context` — geo + AbuseIPDB + VirusTotal + verdict in one call |
-| **Attack narrative** | `get_event_timeline`, `get_attack_summary` — duration, phases, top rules, honeypot contact |
-| **IP blocking** | `recommend_block_ip`, `confirm_block_ip`, `list_blocklist` — human-confirmed iptables |
-| **Always-on triage** | `alert_watcher.py` + `AUTO_TRIAGE_LEVEL=12` |
-| **Log coverage** | Web/docker/apache/nginx groups + generic Docker stdout in `wazuh/agent-ossec.conf` |
-| **Container CVEs** | `scan_container_image`, `get_container_vulnerabilities` (Trivy via SSH) |
-| **Asset criticality** | `set_host_criticality`, `onboard_host_tool(..., criticality=)` |
-| **SLA metrics** | `get_soc_health` → MTTD, MTTR, FPR; Grafana SLA panels |
-| **TLS + firewall** | `check_tls`, `get_agent_exposure` → `firewall_rules` |
-
-Run `make migrate` after pull (migration `h8i9j0k1l2m3_investigation_quality`).
-
-**Proof status:** code + **101 unit tests** pass locally; full opencode triage/investigate/block E2E is documented in [`PRODUCT-STATUS.md` §0](PRODUCT-STATUS.md) — run together before trusting in production.
+<p align="center">
+  <img src="docs/screenshots/opencode-2h-triage.png" alt="Triage session in opencode" width="820">
+</p>
 
 ---
 
 ## What it does
 
-1. **Wazuh** collects logs from Linux agents (SSH, FIM, syslog, **Docker container stdout**, web server logs) and forwards alerts to Core.
-2. **Core** stores events in Postgres, runs the SSH ML classifier, and links decisions to events via `event_id`.
-3. **You** run `opencode` and ask in plain language: *"triage the last hour"*, *"investigate 203.0.113.5"*, *"protect my VM at 192.168.1.50"*.
-4. **LureGuard MCP server** gives the AI tools: enriched timelines, compound IP context (AbuseIPDB + VT + geo), attack summaries, block recommendations, container CVE scans, posture, reports, onboarding.
-5. **Grafana** shows SIEM events, attack timeline with ML scores, SLA metrics, investigations, and fleet status.
-6. **`alert_watcher`** (optional, starts with MCP server) polls for high-severity events (default level ≥ 12) and can trigger headless auto-triage.
+You ask things like *"triage the last two hours"* or *"investigate this IP"*. The agent calls MCP tools (not shell commands), records what it found, and closes the investigation with a verdict. Reports land in `reports/` as markdown and PDF. Telegram gets the PDF if you wire it up.
 
-**Trust posture:** Tier-2 brains, Tier-1 hands — advisory only. The agent recommends blocks via `recommend_block_ip`; **you** must call `confirm_block_ip` to apply iptables. The agent never blocks autonomously.
+It recommends blocking an IP. **You** confirm before anything hits iptables. Default config keeps the agent advisory-only.
+
+The bundled ML model only scores **SSH auth events** (failed/successful logins). Web attacks, Docker noise, FIM, Cowrie honeypot hits: those go through the LLM + MCP path, not the classifier.
 
 ---
 
-## Architecture
+## Features
 
-```mermaid
-flowchart TD
-  Human[Developer via opencode] --> AG[Agent + skills/*.md]
-  AG --> MCP[LureGuard MCP server]
-  MCP --> PG[(PostgreSQL)]
-  MCP --> WAPI[Wazuh Manager API]
-  WZ[Wazuh alerts] --> CORE[Core /wazuh/event] --> PG
-  MCP --> PG
-  PG --> GRAF[Grafana dashboards]
-  MCP --> REP[reports/*.md]
-```
+- Triage alert clusters with enrichment (geo, VT, AbuseIPDB via `get_ip_context`)
+- Investigate hosts/IPs with timelines and attack summaries
+- Write incident reports with auto-generated PNG charts
+- Enroll Linux VMs over SSH (`onboard_host_tool`)
+- Scan posture: host CVEs, open ports, SCA, users, container image CVEs (Trivy)
+- Block/whitelist IPs with human confirmation
+- Grafana dashboards over Postgres (events, investigations, fleet, containers)
+- Safe system updates without touching your `.env` or reports
 
-| Service | Port | Role |
-|---------|------|------|
-| `lureguard-core` | 8080 | Wazuh webhook ingest, scheduler |
-| `postgres` | 5433 | Events, investigations, agent audit log |
-| `wazuh-manager` | 1514/1515/55000 | SIEM + Manager API |
-| `grafana` | 3000 | SOC + Agent Activity + Fleet dashboards |
-| MCP (host) | stdio | opencode tool bridge |
+Full tool list: [`docs/MCP-TOOLS.md`](docs/MCP-TOOLS.md)
 
 ---
 
-## Quick start
+## Tech stack
+
+| Layer | What |
+|-------|------|
+| SIEM | Wazuh 4.14 (manager + agents) |
+| Ingest + ML | FastAPI (`core/`) → Postgres |
+| Analyst | opencode + MCP (`lureguard_mcp/` in host `.venv`) |
+| Dashboards | Grafana 11 → Postgres |
+| PDF reports | WeasyPrint + `markdown` (via `make venv`) |
+| LLM | BYO through opencode (default: `opencode/big-pickle`) |
+
+---
+
+## Getting started
+
+### Prerequisites
+
+Docker, Python 3.11+, [opencode](https://opencode.ai), Git.
+
+Optional: Telegram bot, VT/AbuseIPDB keys, SSH password for onboarding (`ONBOARD_SSH_PASSWORD` in `.env`).
+
+### Install
 
 ```bash
-git clone <repo-url> && cd LureGuard.ai
-
+git clone https://github.com/Belal-01/LureGuard.ai.git
+cd LureGuard.ai
 cp .env.example .env
-# Edit: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID (optional)
-# Optional: VIRUSTOTAL_API_KEY, ABUSEIPDB_API_KEY, ONBOARD_SSH_PASSWORD
-
 docker compose up -d
-make venv          # installs .[mcp] for MCP + doctor
-make doctor        # verify stack + opencode config/MCP
-opencode           # uses free opencode/big-pickle by default (no API key)
+make venv && make migrate && make doctor
 ```
 
-**First prompts to try:**
+When everything is healthy, `make doctor` ends with `All required checks passed. Run: opencode`.
+
+<p align="center">
+  <img src="docs/screenshots/doctor.png" alt="make doctor output" width="700">
+</p>
+
+Step-by-step details: [`docs/SETUP.md`](docs/SETUP.md)
+
+### Run the analyst
+
+```bash
+opencode
+```
+
+Try:
 
 ```
 Read skills/triage.md and triage alerts from the last 2 hours
 ```
 
 ```
-Read skills/investigate-host.md and investigate 10.0.0.5
-```
-
-```
-Read skills/onboard-host.md and protect 192.168.1.100 (ubuntu user)
+Read skills/onboard-host.md and protect 192.168.1.50
 ```
 
 Headless:
 
 ```bash
-opencode run "Read AGENTS.md and skills/triage.md — triage last hour"
+opencode run "Read skills/triage.md — triage last hour"
+```
+
+Slash commands: `/triage`, `/investigate`, `/onboard`, `/posture`, `/report`, `/update`
+
+---
+
+## How it works
+
+```
+You (opencode)
+    → skills/*.md + AGENTS.md
+    → lureguard_mcp (stdio, host .venv)
+        → Postgres :5433
+        → Wazuh API :55000
+        → SSH to enrolled hosts (onboard, Trivy, iptables)
+
+Wazuh manager → integratord → lureguard-core POST /wazuh/event → Postgres
+Grafana → Postgres
+```
+
+**Startup:** `docker compose up -d` brings up Postgres, Core, Wazuh, Grafana, and two Cowrie honeypots for lab noise. Separately, `make venv` installs the MCP server on your machine. opencode spawns `.venv/bin/python -m lureguard_mcp` when you open a session.
+
+**Alert path:** Wazuh fires → `wazuh/integrations/custom-lureguard.py` posts to Core → event lands in `events`. SSH auth rows also get an ML score in `decisions`.
+
+**Posture path:** `scan_scheduler` runs every 6 hours (or you call `trigger_posture_scan`). Six scanners write to Postgres: OS CVEs (OSV), ports, detection coverage, SCA, local users, container CVEs (Trivy over SSH). `get_posture_snapshot` reads the cache.
+
+**MCP is not in Docker.** It connects to `localhost:5433` and `localhost:55000`. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+### Project layout
+
+```
+AGENTS.md                 # Agent rules + update check
+skills/                   # Triage, investigate, report, onboard, …
+lureguard_mcp/server.py   # MCP tool definitions
+core/                     # FastAPI ingest + ML decision policy
+wazuh/                    # Manager config, agent template, integratord
+grafana/provisioning/     # Dashboard JSON
+reports/                  # Your reports (never auto-updated)
+update-system.py          # Pull system files from upstream
 ```
 
 ---
 
-## Doctor
+## See it in action
 
-Like career-ops `npm run doctor`:
+**Grafana — SOC overview**
 
-```bash
-make doctor
-```
+<p align="center">
+  <img src="docs/screenshots/grafana-soc-overview.png" alt="Grafana SOC Overview" width="820">
+</p>
 
-Checks Docker services, Postgres schema, Core health, Wazuh API, integratord hook, Grafana, `.env`, opencode + MCP imports.
+**Grafana — containers and assets**
 
-### Verify investigation features (local smoke)
+<p align="center">
+  <img src="docs/screenshots/grafana-assets-containers.png" alt="Containers and assets dashboard" width="820">
+</p>
 
-```bash
-make migrate && make test          # 101 tests; applies h8i9j0k1l2m3 migration
+**Sample PDF report** — triage run on documentation/test IPs only (no lab host details):  
+[`docs/screenshots/report-triage-sample.pdf`](docs/screenshots/report-triage-sample.pdf)
 
-# Ingestion + SLA
-.venv/bin/python -c "from lureguard_mcp.db import get_soc_health_db; import json; print(json.dumps(get_soc_health_db(), indent=2))"
-
-# Rich timeline (replace IP with src_ip from alerts)
-.venv/bin/python -c "
-from lureguard_mcp.db import get_attack_summary, get_event_timeline
-import json
-ip = '127.0.0.1'
-print(json.dumps(get_attack_summary(ip), indent=2))
-"
-
-# External IP enrichment (needs VIRUSTOTAL_API_KEY / ABUSEIPDB_API_KEY in .env)
-.venv/bin/python -c "from lureguard_mcp.enrichment import get_ip_context; print(get_ip_context('8.8.8.8'))"
-```
-
-Full E2E (you + opencode): triage → investigate → optional `recommend_block_ip` — see [`PRODUCT-STATUS.md` §0](PRODUCT-STATUS.md).
+Grafana: http://localhost:3000 (admin / `GRAFANA_ADMIN_PASSWORD`). Dashboard reference: [`docs/GRAFANA.md`](docs/GRAFANA.md)
 
 ---
 
-## Grafana
+## Project status
 
-Open http://localhost:3000 (admin / password from `.env`).
+Working toward Tier I analyst replacement (~55% by code; E2E proof still pending on some flows).
 
-| Dashboard | Shows |
-|-----------|--------|
-| **LureGuard SOC Overview** | Events, alert levels, top IPs, posture stats, **SLA (MTTD/MTTR/FPR/pending blocks)** |
-| **LureGuard Agent Activity** | Investigations, verdicts, tool calls, **attack timeline + ML scores** |
-| **LureGuard Fleet and Hosts** | Enrolled agents, Wazuh status, criticality |
-| **LureGuard Security Posture** | CVE, exposure, detection, SCA, users, EPSS |
-
----
-
-## Flagship demo (for evaluators)
-
-```bash
-# 1. Stack up
-docker compose up -d && make doctor
-
-# 2. Onboard a lab VM (set ONBOARD_SSH_PASSWORD in .env)
-opencode
-> Read skills/onboard-host.md and onboard 192.168.1.50
-
-# 3. Generate noise (from another machine)
-ssh baduser@192.168.1.50   # failed logins → Wazuh alerts
-
-# 4. Triage + report
-> Read skills/triage.md and triage the last 30 minutes
-> Read skills/incident-report.md and write a report for the top alert
-
-# 5. Show Grafana Agent Activity + Fleet dashboards
+```mermaid
+pie showData title Tier I progress
+    "Verified in lab" : 28
+    "Built, E2E pending" : 27
+    "Remaining" : 45
 ```
 
----
+| Area | Status |
+|------|--------|
+| Compose stack + ingest | Done |
+| MCP tools + investigations | Done |
+| Posture (6 pillars) + Grafana | Built, lab E2E partial |
+| Auto-triage (`alert_watcher`) | Built, needs level ≥12 event + opencode in PATH |
+| Tier III sign-off | Not yet |
 
-## Project layout
-
-```
-AGENTS.md              # Agent constitution + MCP tool summary
-skills/                # Mode playbooks (triage, investigate, report, …)
-lureguard_mcp/         # MCP server, alert_watcher, blocklist, container_scanner
-.opencode/command/     # triage, investigate, onboard, posture, report, auto-triage
-opencode.json          # MCP wiring for opencode
-core/                  # FastAPI ingest + ML decision pipeline
-wazuh/                 # Manager config, integratord, agent template (docker logs)
-grafana/provisioning/  # Dashboards (Postgres datasource)
-reports/               # Generated incident reports (+ assets/*.png charts)
-migrations/            # Alembic — run `make migrate` after pull
-```
-
-**Reports:** `save_report` auto-embeds PNG charts in a `## Visual summary` section. PDF uses **WeasyPrint** (via `make venv`) for proper tables and chart images; xhtml2pdf is a fallback. Telegram delivery sends PDF by default.
+Checklist: [`PRODUCT-STATUS.md`](PRODUCT-STATUS.md) · Docs: [`docs/README.md`](docs/README.md)
 
 ---
 
 ## Configuration
 
-| Variable | Purpose |
-|----------|---------|
-| `TELEGRAM_*` | Alert notifications + auto-triage pings |
-| `WAZUH_API_*` | Manager API for MCP (default dev credentials in `.env.example`) |
-| `VIRUSTOTAL_API_KEY` | `get_ip_context`, hash/URL/domain checks |
-| `ABUSEIPDB_API_KEY` | `get_ip_context`, IP reputation |
-| `ONBOARD_SSH_PASSWORD` | VM enrollment + iptables block execution |
-| `AUTO_TRIAGE_LEVEL` | Min Wazuh rule level for `alert_watcher` (default `12`) |
-| `WAZUH_AGENT_MANAGER_IP` | Override manager IP pushed to agents during onboard |
+| Variable | What it's for |
+|----------|----------------|
+| `TELEGRAM_*` | Notifications and report delivery |
+| `WAZUH_API_*` | Manager API (MCP + doctor) |
+| `VIRUSTOTAL_API_KEY` / `ABUSEIPDB_API_KEY` | External IP enrichment |
+| `ONBOARD_SSH_PASSWORD` | VM enrollment and blocklist SSH |
+| `AUTO_TRIAGE_LEVEL` | Min rule level for auto-triage (default `12`) |
+| `WAZUH_AGENT_MANAGER_IP` | IP pushed to agents during onboard |
+
+Copy from [`.env.example`](.env.example).
+
+---
+
+## Updates
+
+First message each opencode session: agent calls `check_system_update`. If upstream has a newer version, it asks before `apply_system_update`. Your `.env`, `secrets/`, and `reports/` stay untouched.
+
+```bash
+make update-check
+make update          # or confirm in opencode
+make rollback-update
+```
+
+See [`DATA_CONTRACT.md`](DATA_CONTRACT.md).
 
 ---
 
 ## Development
 
 ```bash
-make venv
-make test              # 101 unit tests (investigation quality, collector, ML, posture)
+make test
 make lint
-make migrate          # required after pull — includes h8i9j0k1l2m3
-make db-revision m="description"
-make train            # optional — retrain SSH classifier (models ship in repo)
+make train           # optional — retrain SSH classifier (models ship in repo)
 ```
 
 ---
@@ -224,6 +230,4 @@ make train            # optional — retrain SSH classifier (models ship in repo
 
 MIT — see [LICENSE](LICENSE).
 
-## Third-party
-
-Wazuh (GPLv2), Cowrie (BSD), Grafana (AGPL), scikit-learn (BSD).
+Third-party: Wazuh (GPLv2), Cowrie (BSD), Grafana (AGPL), scikit-learn (BSD).

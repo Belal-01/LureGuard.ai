@@ -26,12 +26,14 @@ Replace Tier-1 SOC analyst: pull recent alerts, dedupe, enrich, assign verdict a
 ## Triage Summary
 
 | IP / Subject | Events | Level | Asset crit. | Verdict | Priority | MITRE | Action |
-|--------------|--------|-------|-------------|---------|----------|-------|--------|
+| ------------ | ------ | ----- | ----------- | ------- | -------- | ----- | ------ |
 
 ## Kill-chain notes (top clusters)
+
 [1–2 sentences per P1/P2 cluster — causality, not raw counts]
 
 ## Detection gaps
+
 [Anything notable from get_soc_health]
 ```
 

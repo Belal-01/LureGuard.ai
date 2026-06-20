@@ -56,6 +56,15 @@ There is **one** path: call the MCP tool. If it fails, diagnose using the table 
 
 When user says onboard / protect / enroll: load `skills/onboard-host.md` and follow it exactly.
 
+## Update check (first message each session)
+
+On the first message of each session, call **`check_system_update`** silently.
+
+- `update-available` → ask user before **`apply_system_update`** (never touches `.env`, `secrets/`, `reports/`)
+- `up-to-date` / `dismissed` / `offline` / `no-remote-version` → say nothing
+
+User can say "check for updates" or "update LureGuard" anytime. Rollback: **`rollback_system_update`**.
+
 ## Reports, charts, and PDF
 
 - **`save_report`** auto-adds a `## Visual summary` section with **PNG images** (matplotlib) when DB data exists — no user opt-in required.
