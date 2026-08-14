@@ -4,7 +4,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 **68 items — 6 critical · 17 high · 18 medium · 27 fixed**
 
-Ten items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+20 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,20 +14,15 @@ Ten items have executable acceptance checks in `tests/acceptance/test_register.p
 
 ## Board
 
-Lanes describe how work actually moves here. Generated from the tables below, so it cannot drift from them.
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 20 items carry an executable acceptance check (`make check`).
 
-### Sprint 2 · 6
+### Sprint 3 · 1
 
-_Measurement. The demo dataset and lab SSH access make assurance rungs 4–6 possible for the first time — these turn "unmeasured" into numbers._
+_One item. It blocks two others and is the only failing acceptance check — a second session is on it._
 
-- 🔴 **ING-8** Every Telegram alert blocks the whole event loop — _found by ARC-1's harness; blocks ING-3_
-- 🔴 **ING-3** A slow consumer makes Wazuh drop alerts
-- 🔴 **VER-1** All eight quality axes unmeasured
-- 🟠 **ING-5** Dedup is in-memory and O(n) per event
-- 🟠 **ING-6** Endpoint claims async, isn't
-- 🟡 **ARC-1** Footprint — measured, and the original estimate was wrong
+- 🔴 **ING-8** Every Telegram alert blocks the whole event loop ·  ✓check
 
-### Ready · 28
+### Ready · 29
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
@@ -40,6 +35,7 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟠 **ML-1** Reported accuracy is target leakage
 - 🟠 **ML-2** The informative features are computed and discarded
 - 🟠 **ML-4** Three custom rules, no framework mapping
+- 🟠 **OPS-1** The running container does not contain the repo's code
 - 🟠 **POS-3** Positioned against the wrong category
 - 🟠 **POS-4** Users are an operator and a validator, not two audiences
 - 🟠 **SEC-3** Plaintext SSH password for fleet access
@@ -60,47 +56,53 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟡 **STO-6** Log text uncompressed — TOAST only engages above ~2 KB. Log data compresses 10
 - 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job
 
-### Blocked · 9
+### Blocked · 11
 
 _Waiting on another item, not on a decision._
 
 - 🔴 **GFA-1** 82% stat+table cannot show deviation — _waits on GFA-5 rollout_
+- 🔴 **ING-3** A slow consumer makes Wazuh drop alerts — _waits on ING-8 fix_
 - 🔴 **POS-1** No atomic unit of value — _waits on INS-2 rollout_
 - 🟠 **SEC-4** No credential model for remote Postgres — _waits on ARC-6 rollout_
 - 🟠 **STO-3** The SIEM's storage is duplicated for no gain — _waits on STO-7 rollout_
+- 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 fix_
 - 🟡 **GFA-6** Sections group by category, not by question — _waits on GFA-5 rollout_
 - 🟡 **GFA-7** No coverage or blind-spot view — _waits on ML-4 (ATT&CK mapping)_
 - 🟡 **GFA-8** Competing with Kibana Discover instead of delegating to it. Own the decision l — _waits on GFA-5 rollout_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _waits on INS-2 rollout_
 - 🟡 **SKL-3** Invocation is a prompt convention, not a product surface — _waits on SKL-1 contract_
 
-### Verified · 23
+### Verified · 27
 
 _Check passes and the diff was reviewed._
 
 - ✅ **FLT-1** Detector failed open and reported success
-- ✅ **GFA-2** Zero template variables on five of seven dashboards
+- ✅ **GFA-2** Zero template variables on five of seven dashboards ·  ✓check
 - ✅ **GFA-3** Units on 3 of 106, thresholds on 6 of 106, data links on 3 of 106
 - ✅ **GFA-4** ~85 of 106 panels re-implement Wazuh modules
-- ✅ **GFA-5** The panel that proves the product works
-- ✅ **ING-1** No retry, no error handling
-- ✅ **ING-2** Status code never checked
-- ✅ **ING-4** Telegram on the ingest path, inside an open transaction
-- ✅ **INS-2** No demo mode
-- ✅ **INS-3** Honeypots shipped in the default stack
-- ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0
-- ✅ **POS-2** The differentiator existed as an unenforced convention
+- ✅ **GFA-5** The panel that proves the product works ·  ✓check
+- ✅ **ING-1** No retry, no error handling ·  ✓check
+- ✅ **ING-2** Status code never checked ·  ✓check
+- ✅ **ING-4** Telegram on the ingest path, inside an open transaction ·  ✓check
+- ✅ **ING-5** Dedup was in-memory and O(n) per event ·  ✓check
+- ✅ **ING-6** Endpoint claimed to queue and queued nothing ·  ✓check
+- ✅ **INS-2** No demo mode ·  ✓check
+- ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
+- ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0 ·  ✓check
+- ✅ **ML-7** A model feature was randomised per process ·  ✓check
+- ✅ **POS-2** The differentiator existed as an unenforced convention ·  ✓check
 - ✅ **POS-5** "~55% Tier I" vanity metric
 - ✅ **POS-6** Misleading documentation
-- ✅ **SCH-1** events had no investigation_id
+- ✅ **SCH-1** events had no investigation_id ·  ✓check
 - ✅ **SCH-2** Verdict was unconstrained free text
-- ✅ **SCH-3** No token or cost accounting
+- ✅ **SCH-3** No token or cost accounting ·  ✓check
 - ✅ **SEC-1** Containment reported success while doing nothing
 - ✅ **SEC-2** Unnecessary NET_ADMIN
-- ✅ **STO-1** No retention anywhere
-- ✅ **STO-2** No time partitioning
+- ✅ **STO-1** No retention anywhere ·  ✓check
+- ✅ **STO-2** No time partitioning ·  ✓check
+- ✅ **VER-1** Every quality axis unmeasured ·  ✓check
 - ✅ **VER-2** Tests encoded the defect as the requirement
-- ✅ **VER-4** Suite was non-hermetic
+- ✅ **VER-4** Suite was non-hermetic ·  ✓check
 
 ---
 
@@ -178,7 +180,6 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 
 | OPS-1 | 🟠 High | **The running container does not contain the repo's code.** `lureguard-core` returns `202` from the ingest endpoint while the source declares `200` — the image predates the ING-6 fix. Every measurement taken against the live stack therefore tested an unknown older build. There is no rebuild step in the test or check path, so this can silently invalidate any future load or E2E result. |
 
-| OPS-2 | 🔴 Critical | **A blocking HTTP call stalls the whole asyncio event loop.** `core/modules/alerting.py:41` is inside `async def` but calls the *synchronous* `telegram_notifier.send_message()`, which does `urllib.request.urlopen(..., timeout=3.0)` — no `await`, no `to_thread`. Because asyncio is single-threaded this stalls **every concurrent request**, not just its own task, for up to 3s per alert-eligible event. ING-4 moved alerting off the transaction and the request path but did not address this; the two are orthogonal. Measured: at 5 req/s of realistic mixed traffic p50 latency pins at the client timeout, well past the ~9.75s budget `custom-lureguard.py` allows for a delivery attempt series — so Wazuh's integratord would time out and lose alerts, confirming ING-3's outcome via a different mechanism than assumed. `connectors/telegram.py:66` |
 
 ## F · Product security
 
