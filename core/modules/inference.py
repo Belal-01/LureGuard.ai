@@ -35,11 +35,13 @@ def load_model() -> None:
     scaler_path = base / "scaler.joblib"
 
     if not model_path.exists() or not scaler_path.exists():
-        warnings.warn(
-            f"ML artifacts missing under {base} — running in stub mode (p=0.0)",
-            stacklevel=2,
+        # Fail closed. A missing detector used to warn and return, leaving _model=None
+        # so every event scored p=0.0 -> "allow": the system silently permitted all
+        # traffic while logging success. Refuse to run instead.
+        raise RuntimeError(
+            f"ML artifacts missing under {base} (need model.joblib + scaler.joblib). "
+            "Core will not start without a detector — check the ./ml/models volume mount."
         )
-        return
 
     import joblib
 

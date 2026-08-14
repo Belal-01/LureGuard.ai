@@ -30,6 +30,7 @@ from lureguard_mcp.wazuh_client import WazuhClient
 logger = logging.getLogger(__name__)
 
 _IMAGE_REF_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/@:+-]{0,200}$")
+_EXCLUDED_IMAGE_PREFIXES = ("aquasec/trivy",)
 
 
 def _validate_image_ref(image_ref: str) -> str:
@@ -129,7 +130,7 @@ def _scan_one_image(agent_id: str, host: str, password: str, image_ref: str) -> 
 def _list_running_containers(host: str, password: str) -> tuple[list[dict[str, str]], list[str]]:
     remote = build_sudo_remote_command(
         password,
-        "docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}' 2>/dev/null || true",
+        "docker ps --format '{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}' 2>/dev/null || true",
     )
     result = run_remote_shell(host, remote, password=password, timeout=60)
     containers: list[dict[str, str]] = []
@@ -137,12 +138,17 @@ def _list_running_containers(host: str, password: str) -> tuple[list[dict[str, s
     if not result.get("ok"):
         return containers, []
     for line in (result.get("stdout") or "").splitlines():
-        parts = line.strip().split("|", 2)
+        parts = line.strip().split("|", 3)
         if len(parts) < 2:
             continue
         name, image = parts[0], parts[1]
         status = parts[2] if len(parts) > 2 else ""
-        containers.append({"name": name, "image": image, "status": status})
+        ports = parts[3] if len(parts) > 3 else ""
+        image_l = image.lower()
+        if any(image_l.startswith(prefix) for prefix in _EXCLUDED_IMAGE_PREFIXES):
+            # Skip transient helper scanners (e.g., Trivy itself) to avoid self-recursive scans.
+            continue
+        containers.append({"name": name, "image": image, "status": status, "ports": ports})
         if image:
             images.add(image)
     return containers, sorted(images)

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/wazuh", tags=["wazuh"])
 
 
-@router.post("/event", status_code=202)
+@router.post("/event", status_code=200)
 async def receive_wazuh_event(
     alert: WazuhAlert,
     db: AsyncSession = Depends(get_db),
@@ -29,6 +29,11 @@ async def receive_wazuh_event(
     """
     Main ingestion endpoint.
     Wazuh integratord calls this for every matching alert.
+
+    Normalize, inference and the DB write all run inline (ING-4 already moved
+    alerting off this path, so what's left is fast) — there is no queue, so
+    the response reports that the event was processed, not that it was
+    queued. Do not reintroduce that claim without an actual queue behind it.
     """
     try:
         if is_duplicate_wazuh_event(
@@ -41,7 +46,7 @@ async def receive_wazuh_event(
         event = normalize_event(alert)
         await process_event(event, db)
         events_total.labels(source=event.channel or "unknown").inc()
-        return {"status": "queued", "event_id": str(event.id)}
+        return {"status": "processed", "event_id": str(event.id)}
     except HTTPException:
         raise
     except Exception:

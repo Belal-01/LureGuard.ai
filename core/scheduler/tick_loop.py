@@ -1,15 +1,12 @@
 """
 APScheduler tick loop — runs every 2 seconds.
 Responsibilities:
-  1. Clean up expired DNAT rules (TTL)
-  2. Refresh whitelist from DB
-  3. Emit Prometheus gauge for active DNAT rules
+  1. Refresh whitelist from DB
 """
+from datetime import datetime
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
-
-from modules.enforcer import cleanup_expired, get_active_count
-from api.metrics_endpoint import dnat_active
 
 scheduler = AsyncIOScheduler()
 
@@ -35,16 +32,21 @@ async def _backfill_ip_geo() -> None:
     await backfill_missing_ip_geolocations(limit=20)
 
 
+async def _run_retention() -> None:
+    from retention import run_retention
+
+    await run_retention()
+
+
 async def _tick() -> None:
     """Main tick — called every 2 seconds."""
-    cleanup_expired()
     await _refresh_whitelist_cache()
-    dnat_active.set(get_active_count())
 
 
 def start_scheduler() -> None:
     scheduler.add_job(_tick, "interval", seconds=2, id="main_tick")
     scheduler.add_job(_sync_hosts, "interval", seconds=60, id="hosts_sync")
     scheduler.add_job(_backfill_ip_geo, "interval", seconds=60, id="ip_geo_backfill")
+    scheduler.add_job(_run_retention, "interval", days=1, id="retention", next_run_time=datetime.now())
     scheduler.start()
     logger.info("✅ APScheduler started")

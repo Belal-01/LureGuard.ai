@@ -14,11 +14,18 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 
 ERR_NO_REQUEST_MODULE = 1
 ERR_BAD_ARGUMENTS = 2
 ERR_FILE_NOT_FOUND = 6
 ERR_INVALID_JSON = 7
+ERR_DELIVERY_FAILED = 8
+
+# Non-retryable: the request reached the server and it told us this is
+# permanently wrong (bad token, bad payload). Retrying just wastes the
+# integratord queue's time budget.
+_PERMANENT_STATUS = {400, 401, 403, 404, 422}
 
 try:
     import requests
@@ -104,13 +111,61 @@ def _normalize_alert(alert: dict) -> dict:
     return normalized
 
 
-def _post_alert(alert: dict, webhook: str, api_key: str = "") -> None:
+class AlertDeliveryError(Exception):
+    """Raised when an alert could not be delivered to LureGuard core.
+
+    Caught by main() so the process exits with a distinct code instead of
+    a bare traceback; catchable by any other caller that wants to
+    dead-letter the alert instead of losing it.
+    """
+
+
+def _post_alert(
+    alert: dict,
+    webhook: str,
+    api_key: str = "",
+    max_attempts: int = 3,
+    backoff_seconds: float = 0.25,
+    timeout_seconds: float = 3.0,
+) -> None:
+    # Total worst-case budget must stay near the original single 10s call:
+    # integratord runs this once per alert with a finite queue, so a longer
+    # budget makes a slow core cause Wazuh itself to drop alerts (ING-3).
+    #   3 attempts x 3s timeout + (0.25 + 0.5) backoff = ~9.75s.
+    # Raising max_attempts or timeout_seconds trades ING-3 for ING-1 — don't,
+    # without measuring integratord queue depth first.
     headers = {"Content-Type": "application/json", "Accept-Charset": "UTF-8"}
     if api_key:
         headers["X-LureGuard-Token"] = api_key
     payload = _normalize_alert(alert)
-    response = requests.post(webhook, json=payload, headers=headers, timeout=10)
-    _debug(f"# POST {webhook} -> {response.status_code}")
+
+    last_error: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            response = requests.post(
+                webhook, json=payload, headers=headers, timeout=timeout_seconds
+            )
+        except requests.exceptions.RequestException as exc:
+            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} raised: {exc}")
+            last_error = exc
+        else:
+            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} -> {response.status_code}")
+            if 200 <= response.status_code < 300:
+                return
+            if response.status_code in _PERMANENT_STATUS:
+                # Wrong token / bad request — retrying is pointless, fail loud now.
+                raise AlertDeliveryError(
+                    f"POST {webhook} rejected with {response.status_code} "
+                    f"(non-retryable): {response.text[:200]}"
+                )
+            last_error = AlertDeliveryError(f"POST {webhook} -> {response.status_code}")
+
+        if attempt < max_attempts:
+            time.sleep(backoff_seconds * attempt)
+
+    raise AlertDeliveryError(
+        f"POST {webhook} failed after {max_attempts} attempts: {last_error}"
+    ) from last_error
 
 
 def main(args: list[str]) -> None:
@@ -130,7 +185,11 @@ def main(args: list[str]) -> None:
     if not _should_forward(alert):
         return
 
-    _post_alert(alert, webhook, api_key=api_key)
+    try:
+        _post_alert(alert, webhook, api_key=api_key)
+    except AlertDeliveryError as exc:
+        _debug(f"# ALERT LOST: {exc}")
+        sys.exit(ERR_DELIVERY_FAILED)
 
 
 if __name__ == "__main__":

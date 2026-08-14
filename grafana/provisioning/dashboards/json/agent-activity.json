@@ -3,16 +3,46 @@
   "editable": true,
   "graphTooltip": 1,
   "id": null,
+  "links": [
+    {
+      "title": "SOC Overview",
+      "type": "link",
+      "url": "/d/lureguard-overview/lureguard-soc-overview",
+      "keepTime": true
+    },
+    {
+      "title": "Investigation Console",
+      "type": "link",
+      "url": "/d/lureguard-investigation/lureguard-investigation-console",
+      "keepTime": true,
+      "includeVars": true
+    }
+  ],
   "panels": [
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "description": "Open investigations in scope — more open work outstanding is worse",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 3 },
+              { "color": "red", "value": 8 }
+            ]
+          }
+        }
+      },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
       "id": 1,
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS open FROM investigations WHERE status = 'open'",
+          "rawSql": "SELECT count(*) AS open FROM investigations WHERE status = 'open' AND (NULLIF('${investigation_id}', '') IS NULL OR id::text = NULLIF('${investigation_id}', ''))",
           "refId": "A"
         }
       ],
@@ -21,13 +51,28 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "description": "A spike can mean a runaway/looping agent — more is worse past a point",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 2000 }
+            ]
+          }
+        }
+      },
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
       "id": 2,
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS actions FROM agent_actions WHERE ts >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT count(*) AS actions FROM agent_actions WHERE ts >= NOW() - INTERVAL '24 hours' AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', ''))",
           "refId": "A"
         }
       ],
@@ -36,13 +81,28 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "description": "Inverted: fewer reports than closed work implies stalled documentation, so fewer is worse",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "green", "value": 5 }
+            ]
+          }
+        }
+      },
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
       "id": 3,
       "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS reports FROM reports WHERE created_at >= NOW() - INTERVAL '7 days'",
+          "rawSql": "SELECT count(*) AS reports FROM reports WHERE created_at >= NOW() - INTERVAL '7 days' AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', ''))",
           "refId": "A"
         }
       ],
@@ -58,7 +118,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT coalesce(verdict, 'open') AS metric, count(*) AS value FROM investigations WHERE $__timeFilter(started_at) GROUP BY verdict",
+          "rawSql": "SELECT coalesce(verdict, 'open') AS metric, count(*) AS value FROM investigations WHERE $__timeFilter(started_at) AND (NULLIF('${investigation_id}', '') IS NULL OR id::text = NULLIF('${investigation_id}', '')) GROUP BY verdict",
           "refId": "A"
         }
       ],
@@ -67,13 +127,27 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": { "defaults": { "custom": { "drawStyle": "line", "fillOpacity": 15 } } },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "custom": { "drawStyle": "line", "fillOpacity": 15 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 500 },
+              { "color": "red", "value": 2000 }
+            ]
+          }
+        }
+      },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
       "id": 5,
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), count(*) AS value FROM agent_actions WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), count(*) AS value FROM agent_actions WHERE $__timeFilter(ts) AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -82,13 +156,23 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-investigation_id=${__data.fields.investigation_id}&${__url_time_range}"
+            }
+          ]
+        }
+      },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
       "id": 6,
       "options": { "showHeader": true },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT i.started_at, i.subject, i.status, i.verdict, i.severity, count(a.id) AS tool_calls FROM investigations i LEFT JOIN agent_actions a ON a.investigation_id = i.id WHERE $__timeFilter(i.started_at) GROUP BY i.id ORDER BY i.started_at DESC LIMIT 20",
+          "rawSql": "SELECT i.id AS investigation_id, i.started_at, i.subject, i.status, i.verdict, i.severity, count(a.id) AS tool_calls FROM investigations i LEFT JOIN agent_actions a ON a.investigation_id = i.id WHERE $__timeFilter(i.started_at) AND (NULLIF('${investigation_id}', '') IS NULL OR i.id::text = NULLIF('${investigation_id}', '')) GROUP BY i.id ORDER BY i.started_at DESC LIMIT 20",
           "refId": "A"
         }
       ],
@@ -103,7 +187,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT created_at, title, file_path FROM reports ORDER BY created_at DESC LIMIT 10",
+          "rawSql": "SELECT created_at, title, file_path FROM reports WHERE (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY created_at DESC LIMIT 10",
           "refId": "A"
         }
       ],
@@ -119,7 +203,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT coalesce(mitre_technique, 'none') AS metric, count(*) AS value FROM findings WHERE mitre_technique IS NOT NULL AND ts >= NOW() - INTERVAL '7 days' GROUP BY mitre_technique ORDER BY value DESC LIMIT 10",
+          "rawSql": "SELECT coalesce(mitre_technique, 'none') AS metric, count(*) AS value FROM findings WHERE mitre_technique IS NOT NULL AND ts >= NOW() - INTERVAL '7 days' AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) GROUP BY mitre_technique ORDER BY value DESC LIMIT 10",
           "refId": "A"
         }
       ],
@@ -135,7 +219,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT coalesce(severity, 'unset') AS metric, count(*) AS value FROM findings WHERE ts >= NOW() - INTERVAL '7 days' GROUP BY severity",
+          "rawSql": "SELECT coalesce(severity, 'unset') AS metric, count(*) AS value FROM findings WHERE ts >= NOW() - INTERVAL '7 days' AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) GROUP BY severity",
           "refId": "A"
         }
       ],
@@ -144,13 +228,23 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-investigation_id=${__data.fields.investigation_id}&${__url_time_range}"
+            }
+          ]
+        }
+      },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 42 },
       "id": 10,
       "options": { "showHeader": true },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT f.ts, f.evidence_id, f.finding, f.mitre_technique, f.severity, f.verdict, i.subject FROM findings f JOIN investigations i ON i.id = f.investigation_id ORDER BY f.ts DESC LIMIT 25",
+          "rawSql": "SELECT f.investigation_id, f.ts, f.evidence_id, f.finding, f.mitre_technique, f.severity, f.verdict, i.subject FROM findings f JOIN investigations i ON i.id = f.investigation_id WHERE (NULLIF('${investigation_id}', '') IS NULL OR f.investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY f.ts DESC LIMIT 25",
           "refId": "A"
         }
       ],
@@ -159,13 +253,23 @@
     },
     {
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console (this IP)",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-src_ip=${__data.fields.src_ip}&${__url_time_range}"
+            }
+          ]
+        }
+      },
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 60 },
       "id": 12,
       "options": { "showHeader": true },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT e.ts, host(e.src_ip) AS src_ip, e.geo_country, e.channel, e.wazuh_rule_level, e.wazuh_rule_description, d.p AS ml_score, d.decision FROM events e LEFT JOIN decisions d ON d.event_id = e.id WHERE $__timeFilter(e.ts) ORDER BY e.ts DESC LIMIT 100",
+          "rawSql": "SELECT e.ts, host(e.src_ip) AS src_ip, e.geo_country, e.channel, e.wazuh_rule_level, e.wazuh_rule_description, d.p AS ml_score, d.decision FROM events e LEFT JOIN decisions d ON d.event_id = e.id WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) ORDER BY e.ts DESC LIMIT 100",
           "refId": "A"
         }
       ],
@@ -176,11 +280,21 @@
       "datasource": { "type": "postgres", "uid": "lureguard-pg" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
       "id": 11,
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-investigation_id=${__data.fields.investigation_id}&${__url_time_range}"
+            }
+          ]
+        }
+      },
       "options": { "showHeader": true },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT created_at, type, defanged, reputation, source, investigation_id FROM iocs ORDER BY created_at DESC LIMIT 20",
+          "rawSql": "SELECT created_at, type, defanged, reputation, source, investigation_id FROM iocs WHERE (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) ORDER BY created_at DESC LIMIT 20",
           "refId": "A"
         }
       ],
@@ -191,8 +305,62 @@
   "refresh": "15s",
   "schemaVersion": 39,
   "tags": ["lureguard", "agent"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Investigation ID",
+        "name": "investigation_id",
+        "options": [{ "selected": true, "text": "", "value": "" }],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Source IP",
+        "name": "src_ip",
+        "options": [{ "selected": true, "text": "", "value": "" }],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": { "selected": false, "text": "All", "value": "All" },
+        "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+        "definition": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Channel",
+        "name": "channel",
+        "query": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+        "definition": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "hide": 0,
+        "label": "Agent ID",
+        "name": "agent_id",
+        "query": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "", "value": "" },
+        "hide": 0,
+        "label": "Min severity",
+        "name": "severity",
+        "options": [{ "selected": true, "text": "", "value": "" }],
+        "query": "",
+        "type": "textbox"
+      }
+    ]
+  },
   "time": { "from": "now-24h", "to": "now" },
   "title": "LureGuard Agent Activity",
   "uid": "lureguard-agent-activity",
-  "version": 3
+  "version": 4
 }

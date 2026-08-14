@@ -13,4 +13,4 @@ Everything here matches what's actually in the repo. If something isn't implemen
 | [DATA_CONTRACT.md](../DATA_CONTRACT.md) | You care what the updater touches |
 | [screenshots/](screenshots/) | README images and sample report PDF |
 
-Verification status (what's proven vs code-only): [`PRODUCT-STATUS.md`](../PRODUCT-STATUS.md)
+Engineering register — every known defect, gap and decision with evidence and severity: [`CHANGE-REGISTER.md`](CHANGE-REGISTER.md)

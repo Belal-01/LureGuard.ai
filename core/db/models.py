@@ -4,7 +4,7 @@ SQLAlchemy ORM models — 7 tables matching §3.10.1 of the SRS.
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Boolean, Integer, Float,
+    Column, String, Boolean, Integer, Float, Numeric,
     DateTime, Text, ForeignKey, Index
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
@@ -18,8 +18,13 @@ class Base(DeclarativeBase):
 class Event(Base):
     __tablename__ = "events"
 
+    # STO-2: events is RANGE-partitioned on ts so retention is DROP TABLE
+    # events_2026_05 (a catalog op) instead of a bulk DELETE (WAL amplification,
+    # index bloat, needs VACUUM FULL to reclaim disk). Postgres requires the
+    # partition key in every unique constraint on a partitioned table, so the
+    # PK is composite (id, ts) instead of id alone.
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    ts = Column(DateTime, default=datetime.utcnow, nullable=False)
+    ts = Column(DateTime, primary_key=True, default=datetime.utcnow, nullable=False)
     src_ip = Column(INET)
     src_port = Column(Integer)
     channel = Column(String(32), nullable=False)      # sshd|syscheck|rootcheck|cowrie
@@ -40,10 +45,19 @@ class Event(Base):
     wazuh_rule_description = Column(Text)
     geo_country = Column(String(2))
     geo_city = Column(String(128))
+    # Join key for "agent verdict vs Wazuh rule level" — the one view a SIEM
+    # cannot produce. Nullable: most events never belong to an investigation.
+    investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id"))
 
     __table_args__ = (
         Index("ix_events_src_ip_ts", "src_ip", "ts"),
         Index("ix_events_agent_id_ts", "agent_id", "ts"),
+        Index("ix_events_investigation_id", "investigation_id"),
+        # BRIN, not btree: append-only inserts are physically correlated with
+        # ts, so a few KB of block-range summary gives the same range-scan
+        # pruning a btree would at a fraction of the size and write cost.
+        Index("ix_events_ts_brin", "ts", postgresql_using="brin"),
+        {"postgresql_partition_by": "RANGE (ts)"},
     )
 
 
@@ -61,7 +75,12 @@ class Decision(Base):
     features_hash = Column(String(64))
     profile_id = Column(String(32))
     reason = Column(Text)
-    event_id = Column(UUID(as_uuid=True), ForeignKey("events.id", ondelete="SET NULL"))
+    # No FK to events.id: Postgres requires a partitioned table's unique
+    # constraints to include the partition key (ts), and enforcing one here
+    # would force every "DROP TABLE events_2026_05" to scan decisions for
+    # referencing rows first — reintroducing the exact cost partitioning
+    # exists to avoid (see STO-2). Kept as a plain, unenforced reference.
+    event_id = Column(UUID(as_uuid=True))
 
     __table_args__ = (
         Index("ix_decisions_ts", "ts"),
@@ -196,6 +215,11 @@ class AgentAction(Base):
     args = Column(JSONB)
     result_summary = Column(Text)
     duration_ms = Column(Integer)
+    # Cost per triage — a quality axis with no data source until these are
+    # populated. Numeric, not Float: never store money in binary floating point.
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    cost_usd = Column(Numeric(12, 6))
     ts = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     investigation = relationship("Investigation", back_populates="actions")

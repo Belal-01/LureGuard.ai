@@ -36,6 +36,8 @@ def reset_whitelist_cache() -> None:
     refresh_cache([])
 
 
+# Alias used by tests that import the cache-update entrypoint directly from
+# this module rather than through modules.decision_policy.
 def is_whitelisted(
     src_ip: str | None,
     src_user: str | None = None,

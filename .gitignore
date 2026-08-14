@@ -46,3 +46,6 @@ Thumbs.db
 # IDE
 .vscode/settings.json
 .idea/
+
+# knowledge-graph build output (regenerable)
+graphify-out/

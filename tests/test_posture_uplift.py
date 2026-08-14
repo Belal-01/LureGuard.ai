@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from lureguard_mcp import cve_triage
 from lureguard_mcp.cve_triage import EPSS_URL, fetch_epss_batch, is_eol_os, normalize_cve_id, triage_finding
 from lureguard_mcp.user_scanner import _normalize_wazuh_user, _score_user
 
@@ -46,7 +49,55 @@ def test_normalize_cve_id_ubuntu_prefix():
     assert normalize_cve_id("UBUNTU-CVE-2021-44228") == "CVE-2021-44228"
 
 
-def test_fetch_epss_batch_ubuntu_prefixed_ids():
+def test_fetch_epss_batch_ubuntu_prefixed_ids(monkeypatch):
+    """Distro-prefixed ids are normalized *before* the request, and results come
+    back keyed by the normalized CVE id.
+
+    The HTTP boundary is mocked (VER-4). This test used to call api.first.org
+    live, which made the suite non-hermetic: the passing count was unstable, it
+    failed offline, and `fetch_epss_batch` swallows request errors and returns
+    {} — so a network blip surfaced as a confusing empty-dict assertion failure
+    rather than an outage. Mocking also lets us assert the stronger property:
+    that normalization happens before the call, not after.
+    """
+    sent: dict = {}
+
+    class _Resp:
+        def raise_for_status(self) -> None: ...
+
+        def json(self) -> dict:
+            return {"data": [{"cve": "CVE-2021-44228", "epss": "0.97"}]}
+
+    class _Client:
+        def __init__(self, **kwargs) -> None: ...
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> bool:
+            return False
+
+        def get(self, url, params=None):
+            sent["url"] = url
+            sent["params"] = params
+            return _Resp()
+
+    monkeypatch.setattr(cve_triage.httpx, "Client", _Client)
+
+    scores = fetch_epss_batch(["UBUNTU-CVE-2021-44228"])
+
+    assert scores == {"CVE-2021-44228": pytest.approx(0.97)}
+    assert sent["url"] == EPSS_URL
+    assert sent["params"]["cve"] == "CVE-2021-44228", (
+        "the UBUNTU- prefix must be stripped before the request is sent"
+    )
+
+
+@pytest.mark.integration
+def test_fetch_epss_batch_contract_live():
+    """Opt-in contract test against the real FIRST.org API. Excluded from the
+    default suite; run with `make test-integration` when verifying the API
+    shape hasn't changed under us."""
     scores = fetch_epss_batch(["UBUNTU-CVE-2021-44228"])
     assert "CVE-2021-44228" in scores
 

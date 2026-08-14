@@ -77,9 +77,7 @@ async def _run_pipeline(bruteforce_alert: dict) -> dict:
     geo_result.scalar_one_or_none.return_value = None
     db.execute = AsyncMock(return_value=geo_result)
 
-    with patch("modules.decision_policy.apply_dnat"), patch(
-        "modules.alerting.send_alert", new=AsyncMock()
-    ):
+    with patch("modules.alerting.send_alert", new=AsyncMock()):
         await process_event(event, db)
 
     return {
@@ -148,5 +146,5 @@ def test_post_wazuh_event_to_running_core(bruteforce_alert: dict) -> None:
     except urllib.error.URLError as exc:
         pytest.skip(f"Core not reachable on :8080 ({exc})")
 
-    assert resp.status == 202
-    assert payload.get("status") == "queued"
+    assert resp.status == 200
+    assert payload.get("status") == "processed"

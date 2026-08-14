@@ -1,6 +1,7 @@
 """
 Decision Policy — orchestrates the full pipeline for each event.
 """
+import asyncio
 import hashlib
 import uuid
 from datetime import datetime, timezone
@@ -13,10 +14,29 @@ from config import settings
 from db import crud
 from modules import feature_extractor, inference
 from modules.profile_selector import select_profile
-from modules.enforcer import apply_dnat
 from runtime import whitelist as whitelist_cache
 from schemas.normalized_event import NormalizedEvent
 from schemas.decision_result import DecisionResult
+
+
+# Alerting (Telegram) must never sit inside the ingest request or the open DB
+# transaction (ING-4) — dispatch it as a background task. Keep a strong
+# reference so asyncio can't GC the task mid-flight, and log any exception
+# that a bare create_task would otherwise swallow as an "unretrieved" warning.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _dispatch(coro, label: str) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+
+    def _done(t: asyncio.Task) -> None:
+        _background_tasks.discard(t)
+        exc = t.exception() if not t.cancelled() else None
+        if exc is not None:
+            logger.error(f"Background alert dispatch failed ({label}): {exc!r}")
+
+    task.add_done_callback(_done)
 
 
 def _record_decision_metric(decision: str) -> None:
@@ -102,14 +122,16 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
     else:
         profile_id = select_profile(event.username or "", p)
         reason = (
-            f"p={p:.3f} > T2={t2} → REDIRECT to {profile_id} "
+            f"p={p:.3f} > T2={t2} → RECOMMEND redirect to {profile_id}, not applied "
             f"(attempts={int(x_ssh[0])}, user={event.username})"
         )
 
     profile_id = None
     if decision == "redirect":
+        # Recommendation only. Containment is human-gated via the MCP
+        # recommend_block_ip -> confirm_block_ip path, which executes over SSH on the
+        # enrolled host and verifies the result. Core does not enforce.
         profile_id = select_profile(event.username or "", p)
-        apply_dnat(event.src_ip or "", profile_id)
 
     dec = DecisionResult(
         id=uuid.uuid4(),
@@ -133,12 +155,11 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
     if decision in ("alert", "redirect"):
         from modules.alerting import send_alert
 
-        await send_alert(dec, event)
+        _dispatch(send_alert(dec, event), label=f"send_alert[{event.src_ip}]")
 
 
 def _handle_non_ssh(event: NormalizedEvent) -> None:
     from modules.alerting import send_non_ssh_alert
-    import asyncio
 
     should_alert = (
         (event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7)
@@ -146,4 +167,4 @@ def _handle_non_ssh(event: NormalizedEvent) -> None:
         or event.event_type == "cowrie_session"
     )
     if should_alert:
-        asyncio.create_task(send_non_ssh_alert(event))
+        _dispatch(send_non_ssh_alert(event), label=f"send_non_ssh_alert[{event.channel}]")

@@ -36,9 +36,8 @@ async def test_process_event_allow_no_enforcement():
     with (
         patch("modules.inference.infer", return_value={"p": 0.1, "model_version": "test"}),
         patch("modules.feature_extractor.extract_ssh_features") as mock_features,
-        patch("modules.decision_policy.apply_dnat") as mock_dnat,
         patch("modules.decision_policy.crud.insert_event", new=AsyncMock()),
-        patch("modules.decision_policy.crud.insert_decision", new=AsyncMock()),
+        patch("modules.decision_policy.crud.insert_decision", new=AsyncMock()) as mock_dec,
         patch("modules.alerting.send_alert", new=AsyncMock()),
     ):
         import numpy as np
@@ -47,11 +46,11 @@ async def test_process_event_allow_no_enforcement():
         update_whitelist([])
         await process_event(event, db)
 
-    mock_dnat.assert_not_called()
+    assert mock_dec.await_args.args[1].decision == "allow"
 
 
 @pytest.mark.asyncio
-async def test_process_event_redirect_calls_dnat():
+async def test_process_event_redirect_recommends_without_enforcing():
     from schemas.normalized_event import NormalizedEvent
 
     event = NormalizedEvent(
@@ -65,9 +64,8 @@ async def test_process_event_redirect_calls_dnat():
     with (
         patch("modules.inference.infer", return_value={"p": 0.95, "model_version": "test"}),
         patch("modules.feature_extractor.extract_ssh_features") as mock_features,
-        patch("modules.decision_policy.apply_dnat") as mock_dnat,
         patch("modules.decision_policy.crud.insert_event", new=AsyncMock()),
-        patch("modules.decision_policy.crud.insert_decision", new=AsyncMock()),
+        patch("modules.decision_policy.crud.insert_decision", new=AsyncMock()) as mock_dec,
         patch("modules.alerting.send_alert", new=AsyncMock()),
     ):
         import numpy as np
@@ -78,5 +76,9 @@ async def test_process_event_redirect_calls_dnat():
         update_whitelist([])
         await process_event(event, db)
 
-    mock_dnat.assert_called_once()
-    assert mock_dnat.call_args[0][1] == "db-server"
+    # Records the recommendation (which honeypot profile) but enforces nothing:
+    # core has no iptables path at all now. Containment is human-gated via MCP.
+    dec = mock_dec.await_args.args[1]
+    assert dec.decision == "redirect"
+    assert dec.profile_id == "db-server"
+    assert "not applied" in dec.reason

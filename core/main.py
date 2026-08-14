@@ -45,9 +45,11 @@ async def lifespan(app: FastAPI):
         await db.commit()
         logger.info(f"✅ Whitelist loaded from DB ({n} IP(s))")
 
-    # 2. Load ML model + scaler (verifies SHA-256)
+    # 2. Load ML model + scaler (verifies SHA-256; raises if artifacts are missing)
+    from modules.inference import get_model_version
+
     load_model()
-    logger.info("✅ ML model loaded")
+    logger.info(f"✅ ML model loaded (version={get_model_version()})")
 
     # 3. Start APScheduler tick loop
     start_scheduler()

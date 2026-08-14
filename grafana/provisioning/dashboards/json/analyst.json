@@ -1,0 +1,494 @@
+{
+  "uid": "lureguard-analyst",
+  "title": "LureGuard Analyst",
+  "schemaVersion": 41,
+  "version": 1,
+  "tags": [
+    "lureguard"
+  ],
+  "timezone": "browser",
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "description": "Is the analyst right, and is it saving time? Wazuh answers what happened; this answers what was concluded, on what evidence, and whether it held up.",
+  "templating": {
+    "list": [
+      {
+        "name": "verdict",
+        "label": "Verdict",
+        "type": "custom",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "All"
+        },
+        "query": "All,true_positive,false_positive,benign,undetermined",
+        "includeAll": false,
+        "multi": false,
+        "options": [
+          {
+            "selected": true,
+            "text": "All",
+            "value": "All"
+          },
+          {
+            "selected": false,
+            "text": "true_positive",
+            "value": "true_positive"
+          },
+          {
+            "selected": false,
+            "text": "false_positive",
+            "value": "false_positive"
+          },
+          {
+            "selected": false,
+            "text": "benign",
+            "value": "benign"
+          },
+          {
+            "selected": false,
+            "text": "undetermined",
+            "value": "undetermined"
+          }
+        ]
+      },
+      {
+        "name": "min_level",
+        "label": "Min Wazuh level",
+        "type": "textbox",
+        "current": {
+          "selected": false,
+          "text": "7",
+          "value": "7"
+        },
+        "query": "7",
+        "options": [
+          {
+            "selected": true,
+            "text": "7",
+            "value": "7"
+          }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Agent verdict vs Wazuh rule level",
+      "description": "The comparison a SIEM cannot make. Wazuh reports severity; only this product records a conclusion. Disagreement is the signal.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE WHEN e.wazuh_rule_level >= 12 THEN 'Wazuh 12+ (critical)'\n            WHEN e.wazuh_rule_level >= 7 THEN 'Wazuh 7-11 (high)'\n            ELSE 'Wazuh 0-6 (low)' END AS \"Wazuh severity\",\n       COALESCE(i.verdict,'(unset)') AS \"Agent verdict\", count(*) AS \"Events\"\nFROM events e JOIN investigations i ON i.id = e.investigation_id\nWHERE $__timeFilter(e.ts) AND (NULLIF('${verdict}','') IS NULL OR '${verdict}'='All' OR i.verdict = '${verdict}') AND (NULLIF('${min_level}','') IS NULL OR e.wazuh_rule_level >= NULLIF('${min_level}','')::int)\nGROUP BY 1,2 ORDER BY 1 DESC,3 DESC",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Alerts suppressed as false positive",
+      "description": "High-severity Wazuh alerts a human never had to read. This is the product's value in one line.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(e.ts,'1h'), count(*) AS \"Suppressed (level 7+)\"\nFROM events e JOIN investigations i ON i.id = e.investigation_id\nWHERE $__timeFilter(e.ts) AND e.wazuh_rule_level >= 7\n  AND i.verdict IN ('false_positive','benign') AND (NULLIF('${verdict}','') IS NULL OR '${verdict}'='All' OR i.verdict = '${verdict}')\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Time to detect \u2014 p50 / p95",
+      "description": "Percentiles, not an average: a mean MTTD hides exactly the tail that matters.",
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 300
+              },
+              {
+                "color": "red",
+                "value": 900
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(started_at,'1h'),\n       percentile_cont(0.5)  WITHIN GROUP (ORDER BY mttd_seconds) AS \"p50\",\n       percentile_cont(0.95) WITHIN GROUP (ORDER BY mttd_seconds) AS \"p95\"\nFROM investigations\nWHERE $__timeFilter(started_at) AND mttd_seconds IS NOT NULL\nGROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Investigations opened vs closed",
+      "description": "A widening gap means the analyst is falling behind, which no single number shows.",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 7
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(started_at,'1h'),\n       count(*) AS \"Opened\",\n       count(*) FILTER (WHERE closed_at IS NOT NULL) AS \"Closed\"\nFROM investigations WHERE $__timeFilter(started_at) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "gauge",
+      "title": "Citation coverage",
+      "description": "Share of findings carrying verifiable evidence. The differentiator, made visible \u2014 below 100% means the product is asserting things it cannot show.",
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 60
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COALESCE(100.0 * count(*) FILTER (\n         WHERE citation IS NOT NULL AND btrim(citation) <> '') / NULLIF(count(*),0), 0)\n       AS \"Citation coverage\"\nFROM findings WHERE $__timeFilter(ts)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Cost per investigation",
+      "description": "Tokens and dollars per triage \u2014 the metric nobody in this category publishes.",
+      "gridPos": {
+        "x": 5,
+        "y": 15,
+        "w": 5,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COALESCE(sum(cost_usd) / NULLIF(count(DISTINCT investigation_id),0),0)\n       AS \"Cost per investigation\"\nFROM agent_actions WHERE $__timeFilter(ts)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Tool calls per hour",
+      "description": "Agent activity. Flat while alerts arrive means the analyst has stopped working.",
+      "gridPos": {
+        "x": 10,
+        "y": 15,
+        "w": 14,
+        "h": 6
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroupAlias(ts,'1h'), tool_name AS metric, count(*) AS \"calls\"\nFROM agent_actions WHERE $__timeFilter(ts) GROUP BY 1,2 ORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Disagreement queue \u2014 Wazuh escalated, agent dismissed",
+      "description": "The senior-analyst audit surface. Every row is a claim the product made that a human should check. Click through to the full evidence chain.",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "links": [
+            {
+              "title": "Open investigation",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-investigation_id=${__data.fields.investigation_id}&${__url_time_range}"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "lureguard-pg"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT e.ts AS \"Time\", host(e.src_ip) AS \"Source IP\",\n       e.wazuh_rule_id AS \"Rule\", e.wazuh_rule_level AS \"Level\",\n       e.wazuh_rule_description AS \"Wazuh said\",\n       i.verdict AS \"Agent said\", i.confidence AS \"Confidence\",\n       i.id AS investigation_id\nFROM events e JOIN investigations i ON i.id = e.investigation_id\nWHERE $__timeFilter(e.ts) AND e.wazuh_rule_level >= 7\n  AND i.verdict IN ('false_positive','benign') AND (NULLIF('${verdict}','') IS NULL OR '${verdict}'='All' OR i.verdict = '${verdict}')\nORDER BY e.wazuh_rule_level DESC, e.ts DESC LIMIT 200",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

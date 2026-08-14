@@ -5,7 +5,7 @@ AI security analyst for developers who run servers but don't have a SOC. `docker
 Wazuh collects the logs. Postgres stores the alerts. The MCP server gives the agent tools to triage, investigate, write reports, and enroll hosts. Grafana is where you drill down when you want tables, not when management reads a PDF.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Tier_I-~55%25-yellow?style=for-the-badge" alt="Tier I progress">
+  <img src="https://img.shields.io/badge/status-pre--alpha-orange?style=for-the-badge" alt="pre-alpha">
   <img src="https://img.shields.io/badge/Wazuh-4.14-blue?style=flat" alt="Wazuh">
   <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT">
 </p>
@@ -34,7 +34,7 @@ The bundled ML model only scores **SSH auth events** (failed/successful logins).
 - Enroll Linux VMs over SSH (`onboard_host_tool`)
 - Scan posture: host CVEs, open ports, SCA, users, container image CVEs (Trivy)
 - Block/whitelist IPs with human confirmation
-- Grafana dashboards over Postgres (events, investigations, fleet, containers)
+- Grafana dashboards over Postgres (SOC overview, investigation console, agent activity, log explorer)
 - Safe system updates without touching your `.env` or reports
 
 Full tool list: [`docs/MCP-TOOLS.md`](docs/MCP-TOOLS.md)
@@ -145,7 +145,7 @@ Wazuh manager → integratord → lureguard-core POST /wazuh/event → Postgres
 Grafana → Postgres
 ```
 
-**Startup:** `docker compose up -d` brings up Postgres, Core, Wazuh, Grafana, and two Cowrie honeypots for lab noise. Separately, `make venv` installs the MCP server on your machine. opencode spawns `.venv/bin/python -m lureguard_mcp` when you open a session.
+**Startup:** `docker compose up -d` brings up Postgres, Core, Wazuh, and Grafana. The two Cowrie honeypots are lab noise and off by default — add them with `docker compose --profile honeypots up -d`. Separately, `make venv` installs the MCP server on your machine. opencode spawns `.venv/bin/python -m lureguard_mcp` when you open a session.
 
 **Alert path:** Wazuh fires → `wazuh/integrations/custom-lureguard.py` posts to Core → event lands in `events`. SSH auth rows also get an ML score in `decisions`.
 
@@ -191,24 +191,36 @@ Grafana: http://localhost:3000 (admin / `GRAFANA_ADMIN_PASSWORD`). Dashboard ref
 
 ## Project status
 
-Working toward Tier I analyst replacement (~55% by code; E2E proof still pending on some flows).
+**Pre-alpha. Run it in a lab, not on anything you care about.**
 
-```mermaid
-pie showData title Tier I progress
-    "Verified in lab" : 28
-    "Built, E2E pending" : 27
-    "Remaining" : 45
-```
+Previous versions of this file carried a "~55% Tier I analyst" figure. It was self-scored by code completion and has been removed — it measured output, not outcomes.
 
-| Area | Status |
-|------|--------|
-| Compose stack + ingest | Done |
-| MCP tools + investigations | Done |
-| Posture (6 pillars) + Grafana | Built, lab E2E partial |
-| Auto-triage (`alert_watcher`) | Built, needs level ≥12 event + opencode in PATH |
-| Tier III sign-off | Not yet |
+**Works, and verified:**
 
-Checklist: [`PRODUCT-STATUS.md`](PRODUCT-STATUS.md) · Docs: [`docs/README.md`](docs/README.md)
+| | |
+|---|---|
+| Compose stack, ingest, Postgres schema | Wazuh alerts reach `events` |
+| MCP tool surface + investigation lifecycle | 40+ tools, every call logged to `agent_actions` |
+| Host onboarding over SSH | Linux only |
+| Posture scanners (6 pillars) | CVE via OSV, ports, SCA, users, detection coverage, container CVEs via Trivy |
+| Human-confirmed IP blocking | `recommend_block_ip` → `confirm_block_ip`, executed over SSH and verified per host |
+
+**Built but not proven end to end:** auto-triage (`alert_watcher`, needs a level ≥12 event plus `opencode` on PATH), report quality against a senior-analyst bar, container posture beyond one lab agent.
+
+**Known gaps, stated plainly:**
+
+- **No retention.** The `events` table grows until the disk fills. Partitioning is in progress; there is no cleanup job yet.
+- **No measured detection efficacy.** No TPR/FPR, no ATT&CK mapping, no Atomic Red Team harness. The bundled model scores SSH auth events only; treat its output as a hint, not a verdict.
+- **Alert delivery is best-effort.** The Wazuh hook now retries and fails loudly, but there is no dead-letter queue — a sustained core outage still drops alerts.
+- **Single-node only.** In-memory ingest dedup means you cannot run more than one Core replica.
+- **Linux only.** No Windows agent, no Active Directory. AD attack detection (Kerberos, LDAP, lateral movement) is out of scope for now.
+- **No load or fault-injection testing.** Behaviour under burst, or when Postgres/Wazuh/Telegram fail, is unmeasured.
+
+Full engineering register, including everything above with evidence and severity: [`docs/CHANGE-REGISTER.md`](docs/CHANGE-REGISTER.md) · Docs: [`docs/README.md`](docs/README.md)
+
+### Footprint
+
+Measured idle, default stack (4 services): **~970 MiB** — wazuh-manager 708, core 164, grafana 72, postgres 25. Fits a 2 GB VPS with room for a modest application; will not fit 1 GB. This is an idle figure with no agents connected and no load — expect it to grow under real traffic.
 
 ---
 

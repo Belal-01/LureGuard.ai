@@ -1,5 +1,5 @@
 .PHONY: up down build test test-integration venv ensure-venv migrate doctor db-revision \
-	fetch-dataset train train-quick lint format clean update-check update rollback-update
+	fetch-dataset train train-quick lint format clean update-check update rollback-update demo loadtest eval
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -49,10 +49,48 @@ db-revision: venv
 	$(PYTHON) -m alembic -c migrations/alembic.ini revision --autogenerate -m "$(m)"
 
 test: venv
-	$(PYTHON) -m pytest tests/ -v -m "not integration" --cov=core --cov=ml --cov=lureguard_mcp --cov-report=term-missing
+	$(PYTHON) -m pytest tests/ -v -m "not integration and not acceptance" --cov=core --cov=ml --cov=lureguard_mcp --cov-report=term-missing
+
+# Change-register definition-of-done. Failures here are open register items,
+# not broken code. See tests/acceptance/test_register.py.
+check: venv
+	@$(PYTHON) -m pytest tests/acceptance/ -m acceptance --no-header -q --tb=line || true
 
 test-integration: venv
 	$(PYTHON) -m pytest tests/ -v -m integration
+
+# INS-2: load the deterministic demo dataset (500 normalized events) into
+# Postgres so there's something to triage in ~2 minutes, no Wazuh/agents/
+# attacker required. Idempotent — ids are deterministic, re-running inserts
+# nothing new (see demo_seed.load_demo).
+demo: ensure-venv
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	PYTHONPATH=core:. $(PYTHON) -c "import asyncio; from demo_seed import load_demo; n = asyncio.run(load_demo()); print(f'demo: inserted {n} new event(s)')"
+
+# VER-1: score the product's own decision path (decision_policy.decide over
+# inference.infer_event) against the demo dataset's generator-known labels —
+# offline, no database. Prints TPR/FPR and the confusion matrix.
+# PYTHONHASHSEED pinned: ml/alert_features.decoder_hash_value feeds the model
+# a feature derived from the builtin hash() of a string, which Python
+# randomizes per-process by default — without pinning it, TPR/FPR would
+# change on every run for reasons that have nothing to do with the model.
+eval: ensure-venv
+	PYTHONHASHSEED=0 PYTHONPATH=core:. $(PYTHON) -m evaluate
+
+# ARC-1/ING-3: drive POST /wazuh/event at RATE req/s for DURATION seconds and
+# report latency percentiles + drop rate (core/loadtest.py). Samples container
+# memory before/mid/after so footprint-under-load has more than an idle
+# snapshot behind it. Override: make loadtest RATE=50 DURATION=60
+RATE ?= 20
+DURATION ?= 30
+URL ?= http://localhost:8080/wazuh/event
+loadtest: ensure-venv
+	@set -a; [ -f .env ] && . ./.env; set +a; \
+	echo "== memory before =="; docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' 2>/dev/null || true; \
+	( sleep $$(( $(DURATION) / 2 )); echo "== memory mid-run =="; docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' 2>/dev/null || true ) & \
+	PYTHONPATH=core:. $(PYTHON) -m loadtest --rate $(RATE) --duration $(DURATION) --url $(URL); \
+	wait; \
+	echo "== memory after =="; docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' 2>/dev/null || true
 
 fetch-dataset: venv
 	$(PYTHON) -c "from ml.dataset_loaders import ensure_true_labeled_dataset; ensure_true_labeled_dataset()"

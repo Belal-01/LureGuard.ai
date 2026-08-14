@@ -16,4 +16,6 @@ cowrie_profiles:
     port: 2223
 
 window_seconds: 300
-dnat_ttl_minutes: 60
+
+# STO-1: days to keep events partitions before DROP TABLE.
+retention_days: 90

@@ -25,7 +25,7 @@ def _risk_bar(p: float, width: int = 10) -> str:
 def _risk_label(p: float, t1: float, t2: float, decision: str) -> tuple[str, str]:
     pct = p * 100
     if decision == "redirect":
-        return "🔴 CRITICAL", f"Attack confidence {pct:.0f}% — redirecting to honeypot"
+        return "🔴 CRITICAL", f"Attack confidence {pct:.0f}% — containment recommended"
     if p > t2:
         return "🔴 CRITICAL", f"Attack confidence {pct:.0f}%"
     if p > t1:
@@ -61,7 +61,7 @@ def _wazuh_rule_line(event: NormalizedEvent) -> str:
 
 def _lureguard_action(decision: str, profile_id: str | None) -> str:
     if decision == "redirect":
-        text = "Redirect to honeypot"
+        text = "Recommended: redirect to honeypot (not applied — confirm to contain)"
         if profile_id:
             text += f" → <code>{html.escape(profile_id)}</code>"
         return text
