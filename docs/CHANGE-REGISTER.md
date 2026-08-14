@@ -178,6 +178,8 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 
 | OPS-1 | 🟠 High | **The running container does not contain the repo's code.** `lureguard-core` returns `202` from the ingest endpoint while the source declares `200` — the image predates the ING-6 fix. Every measurement taken against the live stack therefore tested an unknown older build. There is no rebuild step in the test or check path, so this can silently invalidate any future load or E2E result. |
 
+| OPS-2 | 🔴 Critical | **A blocking HTTP call stalls the whole asyncio event loop.** `core/modules/alerting.py:41` is inside `async def` but calls the *synchronous* `telegram_notifier.send_message()`, which does `urllib.request.urlopen(..., timeout=3.0)` — no `await`, no `to_thread`. Because asyncio is single-threaded this stalls **every concurrent request**, not just its own task, for up to 3s per alert-eligible event. ING-4 moved alerting off the transaction and the request path but did not address this; the two are orthogonal. Measured: at 5 req/s of realistic mixed traffic p50 latency pins at the client timeout, well past the ~9.75s budget `custom-lureguard.py` allows for a delivery attempt series — so Wazuh's integratord would time out and lose alerts, confirming ING-3's outcome via a different mechanism than assumed. `connectors/telegram.py:66` |
+
 ## F · Product security
 
 | ID | Sev | Item |
