@@ -49,3 +49,5 @@ Thumbs.db
 
 # knowledge-graph build output (regenerable)
 graphify-out/
+
+register.html

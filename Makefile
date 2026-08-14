@@ -1,5 +1,5 @@
 .PHONY: up down build test test-integration venv ensure-venv migrate doctor db-revision \
-	fetch-dataset train train-quick lint format clean update-check update rollback-update demo loadtest eval
+	fetch-dataset train train-quick lint format clean update-check update rollback-update demo loadtest eval check register
 
 VENV := .venv
 PYTHON := $(VENV)/bin/python
@@ -112,3 +112,9 @@ format: venv
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
 	find . -name "*.pyc" -delete
+
+# Regenerate the register board + counts from the item tables, then render the
+# shareable HTML. Run after editing any row in docs/CHANGE-REGISTER.md.
+register:
+	@python3 scripts/regen_board.py
+	@python3 scripts/render_register.py register.html
