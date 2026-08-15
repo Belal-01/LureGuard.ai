@@ -1,0 +1,3273 @@
+{
+  "_meta": {
+    "purpose": "Rule -> MITRE ATT&CK for rules this product actually ingests (ML-4).",
+    "regenerate": "python3 scripts/build_attack_map.py",
+    "rules_in_scope_without_mitre": 226,
+    "scope": "Only rules whose groups intersect _FORWARD_GROUPS; a rule outside those never reaches LureGuard, so mapping it would overstate coverage.",
+    "source_lureguard": "hand-assigned for local_rules.xml (no <mitre> data) \u2014 lower confidence",
+    "source_wazuh": "the running manager's own <mitre> blocks"
+  },
+  "rules": {
+    "100001": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Cowrie: failed login on honeypot",
+      "groups": [
+        "cowrie",
+        "authentication_failed",
+        "lureguard_custom"
+      ],
+      "level": 8,
+      "source": "lureguard"
+    },
+    "100002": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Cowrie: successful login to honeypot",
+      "groups": [
+        "cowrie",
+        "authentication_success",
+        "lureguard_custom"
+      ],
+      "level": 10,
+      "source": "lureguard"
+    },
+    "100003": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1059"
+        }
+      ],
+      "description": "Cowrie: command executed in honeypot",
+      "groups": [
+        "cowrie",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
+    "100010": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        },
+        {
+          "tactic": "discovery",
+          "technique": "T1083"
+        }
+      ],
+      "description": "LureGuard: SQLi or path traversal probe",
+      "groups": [
+        "web",
+        "web-attack",
+        "sql_injection",
+        "lureguard_custom"
+      ],
+      "level": 10,
+      "source": "lureguard"
+    },
+    "100011": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1059.007"
+        }
+      ],
+      "description": "LureGuard: XSS probe in web request",
+      "groups": [
+        "web",
+        "web-attack",
+        "xss",
+        "lureguard_custom"
+      ],
+      "level": 8,
+      "source": "lureguard"
+    },
+    "100012": {
+      "attack": [
+        {
+          "tactic": "reconnaissance",
+          "technique": "T1595.002"
+        }
+      ],
+      "description": "LureGuard: web scanner signature",
+      "groups": [
+        "web",
+        "scanner",
+        "web-attack",
+        "lureguard_custom"
+      ],
+      "level": 7,
+      "source": "lureguard"
+    },
+    "10100": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "First time user logged in.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 4,
+      "source": "wazuh"
+    },
+    "11109": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "FTPD: Multiple FTP failed login attempts.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "11111": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "FTPD: Attempt to login with disabled account.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 9,
+      "source": "wazuh"
+    },
+    "11205": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "ProFTPD: FTP Authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "11210": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "ProFTPD: Multiple failed login attempts.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "11251": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "ProFTPD: FTP brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "11306": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "pure-ftpd: FTP brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "11309": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "pure-ftpd: FTP Authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "11402": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "vsftpd: FTP Authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "11451": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "vsftpd: FTP brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "11503": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "MS-FTP: FTP Authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "11510": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "MS-FTP: FTP brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "14120": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "racoon: VPN established.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "14201": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "CiscoVPN: VPN authentication successful.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "14203": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "CiscoVPN: VPN Admin authentication successful.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 4,
+      "source": "wazuh"
+    },
+    "14251": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "CiscoVPN: Multiple VPN authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "18107": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Windows Logon Success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "18108": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Windows: Failed attempt to perform a privileged operation.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 4,
+      "source": "wazuh"
+    },
+    "18109": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Windows: Session reconnected/disconnected to winstation.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "19110": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "VMWare ESX authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "19112": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "VMWare ESX user login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "19152": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1497"
+        }
+      ],
+      "description": "Multiple VMWare ESX authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "19153": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1497"
+        }
+      ],
+      "description": "Multiple VMWare ESX user authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "2502": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "syslog: User missed the password more than one time",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "2504": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1548.003"
+        }
+      ],
+      "description": "syslog: Illegal root login.",
+      "groups": [
+        "invalid_login"
+      ],
+      "level": 9,
+      "source": "wazuh"
+    },
+    "30310": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Apache: Multiple authentication failures with invalid user.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "31103": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "SQL injection attempt.",
+      "groups": [
+        "attack",
+        "sql_injection"
+      ],
+      "level": 7,
+      "source": "wazuh"
+    },
+    "31104": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        },
+        {
+          "tactic": "discovery",
+          "technique": "T1083"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "Common web attack.",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31105": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1059.007"
+        }
+      ],
+      "description": "XSS (Cross Site Scripting) attempt.",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31106": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "A web attack returned code 200 (success).",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31109": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "MSSQL Injection attempt (/ur.php, urchin.js)",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31110": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "PHP CGI-bin vulnerability attempt.",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31152": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        }
+      ],
+      "description": "Multiple SQL injection attempts from same",
+      "groups": [
+        "attack",
+        "sql_injection"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "31153": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        },
+        {
+          "tactic": "discovery",
+          "technique": "T1083"
+        }
+      ],
+      "description": "Multiple common web attacks from same source ip.",
+      "groups": [
+        "attack"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "31154": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1059"
+        }
+      ],
+      "description": "Multiple XSS (Cross Site Scripting) attempts",
+      "groups": [
+        "attack"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "31164": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "SQL injection attempt.",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31165": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "SQL injection attempt.",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31166": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1068"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "Shellshock attack attempt",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31167": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1068"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "Shellshock attack attempt",
+      "groups": [
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31168": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1068"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "Shellshock attack detected",
+      "groups": [
+        "attack"
+      ],
+      "level": 15,
+      "source": "wazuh"
+    },
+    "31169": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1068"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "Shellshock attack detected",
+      "groups": [
+        "attack"
+      ],
+      "level": 15,
+      "source": "wazuh"
+    },
+    "31411": {
+      "attack": [
+        {
+          "tactic": "command-and-control",
+          "technique": "T1071.001"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "PHP web attack.",
+      "groups": [
+        "apache",
+        "attack"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31413": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1561.001"
+        }
+      ],
+      "description": "PHP internal error (server out of space).",
+      "groups": [
+        "apache",
+        "attack"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "31501": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1203"
+        }
+      ],
+      "description": "WordPress Comment Spam (coming from a fake search engine UA).",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31502": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1212"
+        }
+      ],
+      "description": "TimThumb vulnerability exploit attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31503": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        }
+      ],
+      "description": "osCommerce login.php bypass attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31504": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "osCommerce file manager login.php bypass attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31505": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1505.003"
+        }
+      ],
+      "description": "TimThumb backdoor access attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31506": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1190"
+        },
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "Cart.php directory transversal attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31507": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        }
+      ],
+      "description": "MSSQL Injection attempt (ur.php, urchin.js).",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31509": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110.001"
+        }
+      ],
+      "description": "CMS (WordPress or Joomla) login attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "31510": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "CMS (WordPress or Joomla) brute force attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "31512": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "Uploadify vulnerability exploit attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31513": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "BBS delete.php exploit attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31514": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1203"
+        },
+        {
+          "tactic": "persistence",
+          "technique": "T1505.003"
+        }
+      ],
+      "description": "Simple shell.php command execution.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31515": {
+      "attack": [
+        {
+          "tactic": "discovery",
+          "technique": "T1083"
+        }
+      ],
+      "description": "PHPMyAdmin scans (looking for setup.php).",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31516": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1055"
+        }
+      ],
+      "description": "Suspicious URL access.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "31533": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1498"
+        }
+      ],
+      "description": "High amount of POST requests in a small period of time (likely bot).",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "31550": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1555.003"
+        }
+      ],
+      "description": "Anomaly URL query (attempting to pass null termination).",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "3357": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Postfix: Multiple SASL authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "35007": {
+      "attack": [
+        {
+          "tactic": "command-and-control",
+          "technique": "T1090"
+        }
+      ],
+      "description": "Squid: Proxy Authentication Required: User is not",
+      "groups": [
+        "apache"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "35021": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1505.003"
+        }
+      ],
+      "description": "Squid: Attempt to access a Beagle worm (or variant)",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "35022": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1505.003"
+        }
+      ],
+      "description": "Squid: Attempt to access a worm/trojan related site.",
+      "groups": [
+        "apache"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "35051": {
+      "attack": [
+        {
+          "tactic": "discovery",
+          "technique": "T1083"
+        }
+      ],
+      "description": "Squid: Multiple attempts to access forbidden file",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "35052": {
+      "attack": [
+        {
+          "tactic": "command-and-control",
+          "technique": "T1090"
+        },
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Squid: Multiple unauthorized attempts to use proxy.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "35053": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "Squid: Multiple Bad requests/Invalid syntax.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "35054": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1565.001"
+        }
+      ],
+      "description": "Squid: Infected machine with W32.Beagle.DP.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "35055": {
+      "attack": [
+        {
+          "tactic": "discovery",
+          "technique": "T1083"
+        }
+      ],
+      "description": "Squid: Multiple attempts to access a non-existent file.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "35056": {
+      "attack": [
+        {
+          "tactic": "resource-development",
+          "technique": "T1588.001"
+        }
+      ],
+      "description": "Squid: Multiple attempts to access a worm/trojan/virus",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "35057": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "Squid: Multiple 400 error codes (requests failed).",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "35058": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "Squid: Multiple 500/600 error codes (server error).",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "3602": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Imapd user login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "3651": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Imapd Multiple failed logins from same source ip.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "3904": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Courier (imap/pop3) authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "3910": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Courier brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "40101": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "System user successfully logged to the system.",
+      "groups": [
+        "apache",
+        "invalid_login"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "40102": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "Buffer overflow attack on rpc.statd",
+      "groups": [
+        "apache"
+      ],
+      "level": 14,
+      "source": "wazuh"
+    },
+    "40103": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "Buffer overflow on WU-FTPD versions prior to 2.6",
+      "groups": [
+        "apache"
+      ],
+      "level": 14,
+      "source": "wazuh"
+    },
+    "40104": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "Possible buffer overflow attempt.",
+      "groups": [
+        "apache"
+      ],
+      "level": 13,
+      "source": "wazuh"
+    },
+    "40105": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1098"
+        }
+      ],
+      "description": "\"Null\" user changed some information.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "40106": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "Buffer overflow attempt (probably on yppasswd).",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "40107": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1210"
+        }
+      ],
+      "description": "Heap overflow in the Solaris cachefsd service.",
+      "groups": [
+        "apache"
+      ],
+      "level": 14,
+      "source": "wazuh"
+    },
+    "40109": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "Stack overflow attempt or program exiting",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "40111": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Multiple authentication failures.",
+      "groups": [
+        "apache",
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "40112": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        },
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Multiple authentication failures followed",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "40501": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1068"
+        },
+        {
+          "tactic": "persistence",
+          "technique": "T1136"
+        },
+        {
+          "tactic": "execution",
+          "technique": "T1203"
+        }
+      ],
+      "description": "Attacks followed by the addition",
+      "groups": [
+        "apache"
+      ],
+      "level": 15,
+      "source": "wazuh"
+    },
+    "40601": {
+      "attack": [
+        {
+          "tactic": "discovery",
+          "technique": "T1046"
+        }
+      ],
+      "description": "Network scan from same source ip.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "4323": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "PIX: Successful login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "4335": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "PIX: AAA (VPN) authentication successful.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "4336": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "PIX: AAA (VPN) user locked out.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "4386": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "PIX: Multiple AAA (VPN) authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "4506": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Netscreen firewall: Successfull admin login",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "4507": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Netscreen firewall: Successfull admin login",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "4810": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "SonicWall: Firewall administrator login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "50105": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "MySQL: authentication success.",
+      "groups": [
+        "apache",
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "50120": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1529"
+        }
+      ],
+      "description": "MySQL: shutdown message.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "50126": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "MySQL: fatal error.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "50180": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "MySQL: Multiple errors.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "50182": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "MySQL: fatal error.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "50183": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "MySQL: Multiple errors.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "50511": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "PostgreSQL: Database authentication success.",
+      "groups": [
+        "apache",
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "50520": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1529"
+        }
+      ],
+      "description": "PostgreSQL: Database shutdown message.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "50521": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1529"
+        }
+      ],
+      "description": "PostgreSQL: Database shutdown message.",
+      "groups": [
+        "apache"
+      ],
+      "level": 12,
+      "source": "wazuh"
+    },
+    "50580": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "PostgreSQL: Multiple database errors.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "50581": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1499"
+        }
+      ],
+      "description": "PostgreSQL: Multiple database errors.",
+      "groups": [
+        "apache"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "51007": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Dropbear: brute force attempt.",
+      "groups": [
+        "apache",
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "51009": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Dropbear: User successfully logged in using a password.",
+      "groups": [
+        "apache",
+        "authentication_success"
+      ],
+      "level": 0,
+      "source": "wazuh"
+    },
+    "51010": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Dropbear: User successfully logged in using a public key.",
+      "groups": [
+        "apache",
+        "authentication_success"
+      ],
+      "level": 0,
+      "source": "wazuh"
+    },
+    "51531": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1531"
+        }
+      ],
+      "description": "User account deleted.",
+      "groups": [
+        "apache"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "518": {
+      "attack": [
+        {
+          "tactic": "execution",
+          "technique": "T1072"
+        }
+      ],
+      "description": "Windows Adware/Spyware application found.",
+      "groups": [
+        "rootcheck"
+      ],
+      "level": 9,
+      "source": "wazuh"
+    },
+    "521": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1014"
+        }
+      ],
+      "description": "Possible kernel level rootkit",
+      "groups": [
+        "rootcheck"
+      ],
+      "level": 11,
+      "source": "wazuh"
+    },
+    "5302": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1548.003"
+        }
+      ],
+      "description": "User missed the password to change UID to root.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 9,
+      "source": "wazuh"
+    },
+    "5303": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "User successfully changed UID to root.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "5304": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "User successfully changed UID.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "550": {
+      "attack": [
+        {
+          "tactic": "impact",
+          "technique": "T1565.001"
+        }
+      ],
+      "description": "Integrity checksum changed.",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 7,
+      "source": "wazuh"
+    },
+    "5501": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "PAM: Login session opened.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "5503": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110.001"
+        }
+      ],
+      "description": "PAM: User login failed.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "553": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1070.004"
+        },
+        {
+          "tactic": "impact",
+          "technique": "T1485"
+        }
+      ],
+      "description": "File deleted.",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 7,
+      "source": "wazuh"
+    },
+    "5551": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "PAM: Multiple failed logins in a small period of time.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "5557": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110.001"
+        }
+      ],
+      "description": "unix_chkpwd: Password check failed.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "5710": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021.004"
+        },
+        {
+          "tactic": "credential-access",
+          "technique": "T1110.001"
+        }
+      ],
+      "description": "sshd: Attempt to login using a non-existent user",
+      "groups": [
+        "authentication_failed",
+        "invalid_login"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "5712": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "sshd: brute force trying to get access to the system. Non existent user.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "5715": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "sshd: authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "5716": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "sshd: authentication failed.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "5718": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "sshd: Attempt to login using a denied user.",
+      "groups": [
+        "invalid_login"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "5719": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "sshd: Multiple access attempts using a denied user.",
+      "groups": [
+        "invalid_login"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "5720": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "sshd: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "5758": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Maximum authentication attempts exceeded.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "5760": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021.004"
+        },
+        {
+          "tactic": "credential-access",
+          "technique": "T1110.001"
+        }
+      ],
+      "description": "sshd: authentication failed.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "5763": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "sshd: brute force trying to get access to the system. Authentication failed.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "594": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1112"
+        },
+        {
+          "tactic": "impact",
+          "technique": "T1565.001"
+        }
+      ],
+      "description": "Registry Key Integrity Checksum Changed",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "597": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1070.004"
+        },
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1112"
+        },
+        {
+          "tactic": "impact",
+          "technique": "T1485"
+        }
+      ],
+      "description": "Registry Key Entry Deleted.",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "598": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1112"
+        }
+      ],
+      "description": "Registry Key Entry Added to the System",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "60105": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Windows Logon Failure",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "60106": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Windows Logon Success",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "60108": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Session reconnected/disconnected to winstation",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "6103": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Solaris: Login session succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "6105": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Solaris: User successfully changed UID.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "61072": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "MS SQL server logon success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "64009": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "ASA: Successful login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "64019": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "ASA: AAA (VPN) authentication successful.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "64020": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "ASA: AAA (VPN) user locked out.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "64033": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "ASA: Multiple AAA (VPN) authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "64102": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Remote access login success",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "64105": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "TS Gateway login success",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "64109": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Multiple remote access login failures",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "64110": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Multiple TS Gateway login failures",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "7415": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Symantec-WS: Login success accessing the web proxy.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "7420": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Symantec-WS: Admin Login success to the web proxy.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "750": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1112"
+        },
+        {
+          "tactic": "impact",
+          "technique": "T1565.001"
+        }
+      ],
+      "description": "Registry Value Integrity Checksum Changed",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "751": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1070.004"
+        },
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1112"
+        },
+        {
+          "tactic": "impact",
+          "technique": "T1485"
+        }
+      ],
+      "description": "Registry Value Entry Deleted.",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "752": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1112"
+        }
+      ],
+      "description": "Registry Value Entry Added to the System",
+      "groups": [
+        "syscheck"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "80102": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Netscaler: Multiple AAA failed to login the user",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "80107": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Netscaler: SSLVPN login succeeds",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "80134": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Netscaler: Login to AAA TM vserver succeeds",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "80138": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Netscaler: UI/API login succeeds",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "80140": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Netscaler: Multiple UI/API login failed",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "80253": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "AWS Cloudtrail: $(aws.eventSource) - $(aws.eventName) - User login success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "80255": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "AWS Cloudtrail: $(aws.eventSource) - $(aws.eventName) - Possible break in attempt (high number of login attemp",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "80503": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Serv-U: User logged in",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "80506": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Serv-U: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "81607": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Fortigate: Multiple failed login events from same source.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 7,
+      "source": "wazuh"
+    },
+    "81615": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "Fortigate: Multiple firewall SSL VPN failed login events from same source.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 7,
+      "source": "wazuh"
+    },
+    "81622": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Fortigate: VPN user connected.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "81623": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Fortigate: Multiple vpn user connected from same source.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 4,
+      "source": "wazuh"
+    },
+    "81710": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "HP 5500 EI: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "81801": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "OpenVPN: User logged in",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "81902": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "RSA Authentication Manager: Authentication success",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 4,
+      "source": "wazuh"
+    },
+    "81904": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "RSA Authentication Manager: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "85006": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "SQL Server: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "85502": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Identity Guard: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "85758": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "MongoDB: Successfully authentication",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "85760": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "MongoDB: Multiple authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "87202": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Proxmox VE brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "87203": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Proxmox VE authentication succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "87302": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "ownCloud brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "87303": {
+      "attack": [
+        {
+          "tactic": "command-and-control",
+          "technique": "T1102"
+        },
+        {
+          "tactic": "execution",
+          "technique": "T1203"
+        }
+      ],
+      "description": "ownCloud possible malicious request.",
+      "groups": [
+        "attack",
+        "web"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "87503": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Exim: brute force attack (multiple auth failures).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "87602": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "OpenVAS (gsad) brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "87603": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "OpenVAS (gsad) authentication succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "87610": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "OpenVAS (openvasmd) brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "88001": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Percona audit: authentication success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "88203": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "NextCloud brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "89602": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Screen unlocked with userID:$(userID).",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "89603": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Screen locked with userID:$(userID).",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "89605": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "User login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "89606": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Attempt to connect to screen sharing with username $(dstuser) from $(ip_address) failed.",
+      "groups": [
+        "authentication_failed",
+        "invalid_login"
+      ],
+      "level": 5,
+      "source": "wazuh"
+    },
+    "89607": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Attempt to connect to screen sharing with username $(dstuser) from $(ip_address) succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "91517": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "FTD: AAA (VPN) authentication successful.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "91518": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1133"
+        }
+      ],
+      "description": "FTD: AAA (VPN) user locked out.",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 8,
+      "source": "wazuh"
+    },
+    "92651": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Successful Remote Logon by user:$(win.eventdata.targetDomainName)\\$(win.eventdata.targetUserName) from $(win.e",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 0,
+      "source": "wazuh"
+    },
+    "92652": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078.002"
+        },
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1550.002"
+        }
+      ],
+      "description": "Successful Remote Logon Detected - User:$(win.eventdata.subjectDomainName)\\$(win.eventdata.targetUserName) - N",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "92657": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021.001"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1078.002"
+        },
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1550.002"
+        }
+      ],
+      "description": "Successful Remote Logon Detected - User:$(win.eventdata.subjectDomainName)\\$(win.eventdata.targetUserName) - N",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 6,
+      "source": "wazuh"
+    },
+    "9305": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Horde IMP successful login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "9351": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Horde brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9402": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Roundcube authentication succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "9403": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Roundcube brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9502": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Wordpress authentication succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "9551": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Multiple wordpress authentication failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9701": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Dovecot Authentication Success.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "9750": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Dovecot Multiple Authentication Failures.",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9751": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "Dovecot brute force attack (multiple auth failures).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9820": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        }
+      ],
+      "description": "vm-pop3d: POP3 brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9904": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "vpopmail: successful login.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 3,
+      "source": "wazuh"
+    },
+    "9951": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "collection",
+          "technique": "T1114"
+        }
+      ],
+      "description": "vpopmail: brute force (multiple failed logins).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9952": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "collection",
+          "technique": "T1114"
+        }
+      ],
+      "description": "vpopmail: brute force (email harvesting).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "9953": {
+      "attack": [
+        {
+          "tactic": "credential-access",
+          "technique": "T1110"
+        },
+        {
+          "tactic": "collection",
+          "technique": "T1114"
+        }
+      ],
+      "description": "vpopmail: brute force (empty password).",
+      "groups": [
+        "authentication_failures"
+      ],
+      "level": 10,
+      "source": "wazuh"
+    },
+    "99909": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Attempt to connect to screen sharing with username $(dstuser) from malicious IP $(ip_address) failed.",
+      "groups": [
+        "authentication_failed",
+        "invalid_login"
+      ],
+      "level": 9,
+      "source": "wazuh"
+    },
+    "99910": {
+      "attack": [
+        {
+          "tactic": "lateral-movement",
+          "technique": "T1021"
+        },
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Attempt to connect to screen sharing with username $(dstuser) from malicious IP $(ip_address) succeeded.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 14,
+      "source": "wazuh"
+    },
+    "99912": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Dovecot authentication from malicious IP $(srcip) was successful.",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 14,
+      "source": "wazuh"
+    },
+    "99919": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Failed logon from malicious IP $(win.eventdata.ipAddress).",
+      "groups": [
+        "authentication_failed"
+      ],
+      "level": 9,
+      "source": "wazuh"
+    },
+    "99920": {
+      "attack": [
+        {
+          "tactic": "initial-access",
+          "technique": "T1078"
+        }
+      ],
+      "description": "Successful remote logon from malicious IP $(win.eventdata.ipAddress).",
+      "groups": [
+        "authentication_success"
+      ],
+      "level": 14,
+      "source": "wazuh"
+    }
+  }
+}

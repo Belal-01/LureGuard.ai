@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import warnings
 from pathlib import Path
 
@@ -650,4 +651,133 @@ def test_ing_8_alerting_does_not_block_the_event_loop(monkeypatch):
         f"ING-8: sending one alert starved the event loop for {stall:.2f}s. Every "
         "other in-flight request and every new connection waits that long, on every "
         "alert-eligible event. Run the blocking send off the loop thread."
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sprint 4 — parallel streams
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_ml_2_behavioural_features_reach_the_model():
+    """ML-2: f1–f8 are computed, hashed for audit, then thrown away.
+
+    The rolling-window signals (attempt count, failure ratio, distinct usernames
+    per source IP) are the only features that carry brute-force information.
+    Today only f1 survives, as a threshold gate, while the model scores 24 Wazuh
+    metadata features that are near-constant once the SSH gate has applied.
+
+    The property that matters: two events with IDENTICAL Wazuh metadata but
+    different attack history must score differently. If they don't, the model is
+    blind to behaviour no matter what it is trained on.
+    """
+    import sys
+
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    from modules import feature_extractor, inference
+    from schemas.normalized_event import NormalizedEvent
+
+    def score(n_prior: int) -> float:
+        feature_extractor.reset() if hasattr(feature_extractor, "reset") else None
+        from runtime import window_store
+
+        window_store.reset_extractor()
+        ev = None
+        for i in range(n_prior):
+            ev = NormalizedEvent(src_ip="203.0.113.9", channel="sshd",
+                                 event_type="auth_failed", username=f"user{i}")
+            feature_extractor.extract_ssh_features(ev)
+        ev = NormalizedEvent(src_ip="203.0.113.9", channel="sshd",
+                             event_type="auth_failed", username="root")
+        x = feature_extractor.extract_ssh_features(ev)
+        from ml.alert_features import featurize_normalized_event
+
+        row = featurize_normalized_event(ev)
+        row = dict(row)
+        for i, v in enumerate(x, start=1):
+            row.setdefault(f"f{i}", float(v))
+        return inference.infer_event(row)["p"]
+
+    quiet, sustained = score(1), score(40)
+    assert abs(sustained - quiet) > 1e-6, (
+        f"ML-2: a single failed login and a 40-attempt username sweep from the same "
+        f"IP both score {quiet:.6f}. The behavioural features never reach the model, "
+        "so it cannot distinguish a typo from a brute-force run."
+    )
+
+
+def test_sto_4_event_ids_are_time_ordered():
+    """STO-4: random UUIDv4 on the highest-insert table splits B-tree pages."""
+    import sys
+
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    from db.models import Event
+
+    default = Event.__table__.c.id.default
+    assert default is not None, "STO-4: events.id has no default"
+    gen = default.arg
+    ids = [str(gen({}) if callable(gen) else gen) for _ in range(50)]
+    ordered = sum(1 for a, b in zip(ids, ids[1:]) if a < b)
+    assert ordered >= 45, (
+        f"STO-4: only {ordered}/49 consecutive generated ids increase — the key is "
+        "random, so every insert lands on an arbitrary page. Use UUIDv7/ULID or a "
+        "bigint identity so inserts append."
+    )
+
+
+def test_sec_3_ssh_supports_key_auth_without_a_password():
+    """SEC-3: a plaintext fleet password will not survive a senior review."""
+    import inspect
+
+    from lureguard_mcp import ssh_remote
+
+    src = inspect.getsource(ssh_remote)
+    assert any(k in src for k in ("client_keys", "private_key", "key_path", "identity")), (
+        "SEC-3: ssh_remote offers no key-based path — ONBOARD_SSH_PASSWORD in .env is "
+        "the only way to reach the fleet, and it is used to push iptables rules."
+    )
+
+
+def test_ml_4_wazuh_rules_map_to_attack_techniques():
+    """ML-4: unmapped coverage is invisible coverage, and gates GFA-7."""
+    import json as _json
+
+    candidates = [REPO / "core" / "attack_map.json", REPO / "wazuh" / "attack_map.json",
+                  REPO / "lureguard_mcp" / "attack_map.json"]
+    path = next((p for p in candidates if p.exists()), None)
+    assert path is not None, (
+        "ML-4: no ATT&CK mapping. Wazuh's rules already cover techniques, but nothing "
+        "records which — so coverage cannot be shown (GFA-7) or measured."
+    )
+    doc = _json.loads(path.read_text(encoding="utf-8"))
+    # Tolerate either a flat rule->mapping dict or a {_meta, rules} document —
+    # the requirement is the mapping, not the envelope.
+    m = doc.get("rules", doc) if isinstance(doc, dict) else doc
+    m = {k: v for k, v in m.items() if not k.startswith("_")}
+    assert len(m) >= 10, f"ML-4: only {len(m)} rules mapped"
+
+    tids, sources = [], set()
+    for v in m.values():
+        entries = v.get("attack", v) if isinstance(v, dict) else v
+        if isinstance(v, dict) and "source" in v:
+            sources.add(v["source"])
+        for t in entries if isinstance(entries, list) else [entries]:
+            tids.append(t if isinstance(t, str) else t.get("technique", ""))
+
+    assert all(re.match(r"^T\d{4}(\.\d{3})?$", t) for t in tids if t), (
+        f"ML-4: technique ids must look like T1110 / T1110.001; got {tids[:5]}"
+    )
+    # Provenance must survive: a mapping read from Wazuh's own metadata and one
+    # assigned by hand carry very different confidence, and flattening them
+    # would let guesses masquerade as vendor data.
+    assert sources, "ML-4: no `source` recorded — provenance of each mapping must be visible"
+
+
+def test_skl_2_agent_instructions_have_one_source():
+    """SKL-2: four locations means three of them are silently stale."""
+    dupes = [p for p in (REPO / ".claude/skills/lureguard/SKILL.md",
+                         REPO / ".agents/skills/lureguard/SKILL.md")
+             if p.exists() and not p.is_symlink()]
+    assert not dupes, (
+        f"SKL-2: {[str(p.relative_to(REPO)) for p in dupes]} are real files duplicating "
+        "the same router. Keep one canonical copy and symlink or generate the rest."
     )

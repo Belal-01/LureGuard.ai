@@ -10,6 +10,8 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB, INET
 from sqlalchemy.orm import DeclarativeBase, relationship
 
+from db.ids import uuid7
+
 
 class Base(DeclarativeBase):
     pass
@@ -23,7 +25,7 @@ class Event(Base):
     # index bloat, needs VACUUM FULL to reclaim disk). Postgres requires the
     # partition key in every unique constraint on a partitioned table, so the
     # PK is composite (id, ts) instead of id alone.
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     ts = Column(DateTime, primary_key=True, default=datetime.utcnow, nullable=False)
     src_ip = Column(INET)
     src_port = Column(Integer)
@@ -64,7 +66,7 @@ class Event(Base):
 class Decision(Base):
     __tablename__ = "decisions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     ts = Column(DateTime, default=datetime.utcnow, nullable=False)
     decision = Column(String(16), nullable=False)     # allow|alert|redirect
     p = Column(Float, nullable=False)
@@ -90,7 +92,7 @@ class Decision(Base):
 class Whitelist(Base):
     __tablename__ = "whitelist"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     ip = Column(INET, nullable=False, unique=True)
     reason = Column(Text)
     added_by = Column(String(64))
@@ -104,7 +106,7 @@ class Whitelist(Base):
 class AuditLog(Base):
     __tablename__ = "audit_log"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     ts = Column(DateTime, default=datetime.utcnow)
     actor = Column(String(64))
     action = Column(String(128))
@@ -115,7 +117,7 @@ class AuditLog(Base):
 class Investigation(Base):
     __tablename__ = "investigations"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     trigger = Column(String(32), nullable=False)  # human | wazuh_event
     subject = Column(String(256), nullable=False)
     status = Column(String(16), nullable=False, default="open")  # open | closed
@@ -144,7 +146,7 @@ class Investigation(Base):
 class Finding(Base):
     __tablename__ = "findings"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False)
     evidence_id = Column(String(16), nullable=False)
     finding = Column(Text, nullable=False)
@@ -170,7 +172,7 @@ class Finding(Base):
 class TimelineEvent(Base):
     __tablename__ = "timeline_events"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False)
     ts_event = Column(DateTime, nullable=False)
     phase = Column(String(32))  # identification | containment | eradication | recovery | lessons
@@ -189,7 +191,7 @@ class TimelineEvent(Base):
 class Ioc(Base):
     __tablename__ = "iocs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id", ondelete="CASCADE"), nullable=False)
     type = Column(String(32), nullable=False)
     value = Column(Text, nullable=False)
@@ -209,7 +211,7 @@ class Ioc(Base):
 class AgentAction(Base):
     __tablename__ = "agent_actions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id"))
     tool_name = Column(String(128), nullable=False)
     args = Column(JSONB)
@@ -233,7 +235,7 @@ class AgentAction(Base):
 class Report(Base):
     __tablename__ = "reports"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     investigation_id = Column(UUID(as_uuid=True), ForeignKey("investigations.id"))
     title = Column(String(256), nullable=False)
     file_path = Column(Text, nullable=False)
@@ -270,7 +272,7 @@ class Host(Base):
 class CveFinding(Base):
     __tablename__ = "cve_findings"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     agent_id = Column(String(16), ForeignKey("hosts.agent_id", ondelete="CASCADE"), nullable=False)
     package_name = Column(String(256), nullable=False)
     package_version = Column(String(128), nullable=False)
@@ -298,7 +300,7 @@ class CveFinding(Base):
 class ExposureFinding(Base):
     __tablename__ = "exposure_findings"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid7)
     agent_id = Column(String(16), ForeignKey("hosts.agent_id", ondelete="CASCADE"), nullable=False)
     port = Column(Integer, nullable=False)
     protocol = Column(String(16), nullable=False)

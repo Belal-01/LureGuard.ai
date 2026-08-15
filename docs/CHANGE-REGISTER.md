@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**68 items — 6 critical · 17 high · 18 medium · 27 fixed**
+**69 items — 6 critical · 14 high · 17 medium · 32 fixed**
 
-20 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+25 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,7 +14,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 20 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 25 items carry an executable acceptance check (`make check`).
 
 ### Sprint 3 · 1
 
@@ -22,7 +22,7 @@ _One item. It blocks two others and is the only failing acceptance check — a s
 
 - 🔴 **ING-8** Every Telegram alert blocks the whole event loop ·  ✓check
 
-### Ready · 29
+### Ready · 25
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
@@ -33,16 +33,13 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟠 **ARC-5** Manager on a laptop is not viable
 - 🟠 **FLT-2** Six invariants stated nowhere, five violated
 - 🟠 **ML-1** Reported accuracy is target leakage
-- 🟠 **ML-2** The informative features are computed and discarded
-- 🟠 **ML-4** Three custom rules, no framework mapping
+- 🟠 **ML-2** The informative features are computed and discarded ·  ✓check
 - 🟠 **OPS-1** The running container does not contain the repo's code
+- 🟠 **OPS-3** Subagent delegation is unavailable on this account
 - 🟠 **POS-3** Positioned against the wrong category
 - 🟠 **POS-4** Users are an operator and a validator, not two audiences
-- 🟠 **SEC-3** Plaintext SSH password for fleet access
 - 🟠 **SKL-1** Skills have no contract and no test
-- 🟠 **STO-4** Random UUIDv4 PK on the highest-insert table
 - 🟠 **STO-7** Datastore decision
-- 🟠 **VER-3** No seeded dataset
 - 🟡 **ARC-6** Topology
 - 🟡 **ING-7** Process + interpreter boot per alert
 - 🟡 **INS-4** make migrate is redundant — init_db() already runs Alembic on startup
@@ -51,8 +48,7 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟡 **ML-6** Windows/AD unsupported and premature
 - 🟡 **POS-7** Distribution: strategy knowable, outcome not
 - 🟡 **SEC-5** Naive laptop-hosted manager would create a DMZ→home pivot
-- 🟡 **SKL-2** Agent instructions live in four places
-- 🟡 **STO-5** Two composite B-trees maintained per insert. BRIN on ts is cheaper for append-
+- 🟡 **STO-5** Partly done
 - 🟡 **STO-6** Log text uncompressed — TOAST only engages above ~2 KB. Log data compresses 10
 - 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job
 
@@ -72,7 +68,7 @@ _Waiting on another item, not on a decision._
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _waits on INS-2 rollout_
 - 🟡 **SKL-3** Invocation is a prompt convention, not a product surface — _waits on SKL-1 contract_
 
-### Verified · 27
+### Verified · 32
 
 _Check passes and the diff was reviewed._
 
@@ -89,6 +85,7 @@ _Check passes and the diff was reviewed._
 - ✅ **INS-2** No demo mode ·  ✓check
 - ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
 - ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0 ·  ✓check
+- ✅ **ML-4** Three custom rules, no framework mapping ·  ✓check
 - ✅ **ML-7** A model feature was randomised per process ·  ✓check
 - ✅ **POS-2** The differentiator existed as an unenforced convention ·  ✓check
 - ✅ **POS-5** "~55% Tier I" vanity metric
@@ -98,10 +95,14 @@ _Check passes and the diff was reviewed._
 - ✅ **SCH-3** No token or cost accounting ·  ✓check
 - ✅ **SEC-1** Containment reported success while doing nothing
 - ✅ **SEC-2** Unnecessary NET_ADMIN
+- ✅ **SEC-3** Plaintext SSH password for fleet access ·  ✓check
+- ✅ **SKL-2** Agent instructions lived in four places ·  ✓check
 - ✅ **STO-1** No retention anywhere ·  ✓check
 - ✅ **STO-2** No time partitioning ·  ✓check
+- ✅ **STO-4** Random UUIDv4 PK on the highest-insert table ·  ✓check
 - ✅ **VER-1** Every quality axis unmeasured ·  ✓check
 - ✅ **VER-2** Tests encoded the defect as the requirement
+- ✅ **VER-3** No seeded dataset
 - ✅ **VER-4** Suite was non-hermetic ·  ✓check
 
 ---
@@ -128,8 +129,8 @@ _Check passes and the diff was reviewed._
 | STO-1 | ✅ Fixed | **No retention anywhere.** `core/retention.py` — pure `partitions_to_drop()` plus `ensure_future_partitions()` and `drop_expired_partitions()`, wired into the scheduler daily with an immediate first run. `retention_days` (default 90) in config. Logs partition name, row count and cutoff before each irreversible drop. Verified on the live database with a throwaway partition; the 132 real rows in `events_default` were left untouched. |
 | STO-2 | ✅ Fixed | **No time partitioning.** `events` is now `RANGE (ts)` partitioned (revision `n4o5p6q7r8s9`). PK became composite `(id, ts)` — Postgres requires the partition key in every unique constraint. `decisions.event_id` lost its FK deliberately: enforcing it would make every `DROP TABLE events_2026_05` scan `decisions` first, reintroducing the cost partitioning removes. BRIN index added on `ts`. **Verified against a live database**, not just the model: upgrade → downgrade → re-upgrade round trip, 135 rows preserved at every step. |
 | STO-3 | 🟠 High | **The SIEM's storage is duplicated for no gain.** Wazuh already stores every alert, rotated and gzipped, with working retention. `raw_ref` shows the original design pointed the right way. |
-| STO-4 | 🟠 High | **Random UUIDv4 PK on the highest-insert table** — page splits, poor locality, index bloat. `core/db/models.py:21` |
-| STO-5 | 🟡 Medium | Two composite B-trees maintained per insert. BRIN on `ts` is cheaper for append-only time data. |
+| STO-4 | ✅ Fixed | **Random UUIDv4 PK on the highest-insert table.** Replaced with UUIDv7 (`core/db/ids.py`) — 48-bit ms timestamp in the high bits, plus a 12-bit intra-millisecond counter so a burst still sorts strictly. Applied to all 12 tables, not just `events`: they all take inserts and all paid the same random-page cost. **No migration needed** — the default was Python-side, not a server default. Verified over 10k ids for ordering and uniqueness, with a uuid4 control asserting the test can actually fail. |
+| STO-5 | 🟡 Medium | **Partly done.** The BRIN index on `ts` landed with the partition migration (`ix_events_ts_brin`). What remains is whether both composite B-trees `(src_ip, ts)` and `(agent_id, ts)` still earn their write cost now that partitioning prunes by time — needs the query evidence from the dashboards before removing either. |
 | STO-6 | 🟡 Medium | Log text uncompressed — TOAST only engages above ~2 KB. Log data compresses 10–20×. |
 | STO-8 | 🟡 Medium | **The DEFAULT partition sets in concrete — blocks the retention job.** Verified on the live database: 132 historical rows landed in `events_default`, and Postgres then refuses any overlapping dated partition — `ERROR: updated partition constraint for default partition "events_default" would be violated by some row`. The retention job cannot simply `CREATE TABLE events_2026_06 PARTITION OF events`; it must `DETACH` the default, create the dated partition, move matching rows across, and re-attach. Alternatively back-fill dated partitions for the existing range so DEFAULT stays empty and serves only as the missing-partition safety net it was intended to be. **Found by running the migration, not by the acceptance check** — model introspection cannot see this. |
 | STO-7 | 🟠 High | **Datastore decision.** OpenSearch would fix retention, compression, partitioning and search — and **none of ING-1…7**, which are upstream pipeline defects. Two arguments make all-OpenSearch disqualifying: it's JVM-based (2–4 GB heap, which is why Wazuh's quickstart says 8 GiB), and it has no joins and no ACID — killing GFA-5 and the audit trail that is the differentiator. Note Wazuh Indexer *is* OpenSearch and isn't deployed (compose declares six services, CVE data comes from OSV — `docker-compose.yml`, `lureguard_mcp/vuln_scanner.py:27`). **Decision: keep events in Postgres, partition by month, retention by `DROP PARTITION`, raw payload stays in Wazuh via `raw_ref`. No OpenSearch.** |
@@ -163,7 +164,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | ML-2 | 🟠 High | **The informative features are computed and discarded.** `f1–f8` are rolling-window behavioural signals (attempt count, failure ratio, distinct usernames per source IP). Computed, hashed for audit, thrown away — only `f1` survives as a gate. The model scores 24 Wazuh metadata features that are near-constant after the SSH gate. `core/modules/decision_policy.py:88` |
 | ML-3 | ✅ Fixed | **Model pickled on sklearn 1.8.0, loaded on 1.9.0.** Dependency was unpinned; the SHA-256 registry check validated bytes but not runtime compatibility. Pinned to `scikit-learn==1.8.0` and installed. |
 | ML-7 | ✅ Fixed | **A model feature was randomised per process.** `decoder_hash` was built from Python's builtin `hash()`, which is seeded per interpreter. The model was trained under one seed and served under a fresh one every restart, so the feature was uncorrelated noise in production — and the same event could score differently in two processes, violating determinism outright rather than merely leaving it unmeasured. Switched to `zlib.crc32`. **Measured effect: eval TPR rose 0.000 → 0.182 from this one line**, confirming the feature was actively poisoning inference. `ml/alert_features.py:104` |
-| ML-4 | 🟠 High | **Three custom rules, no framework mapping.** Wazuh's own coverage is unmapped to ATT&CK, making existing coverage invisible and expansion unmeasurable. |
+| ML-4 | ✅ Fixed | **Three custom rules, no framework mapping.** `core/attack_map.json` now maps **218 rules** to ATT&CK — 212 read from the running manager's own `<mitre>` blocks, 6 hand-assigned for `local_rules.xml` which carries none. Provenance is recorded per rule because vendor metadata and a guess carry different confidence. Scope is deliberate: only rules whose groups intersect `_FORWARD_GROUPS`, since a rule outside those never reaches this product and mapping it would overstate coverage. **226 in-scope rules carry no ATT&CK metadata at all** — that is the honest coverage gap, and it is recorded in the file. Tactics: initial-access 98, credential-access 66, impact 25, lateral-movement 17, then a long tail; collection, exfiltration and reconnaissance are nearly dark. Regenerate with `python3 scripts/build_attack_map.py`. Unblocks GFA-7. |
 | ML-5 | 🟡 Medium | **Attack surface is SSH-shaped end to end** — features are literally `is_sshd`, `decoder_sshd`. |
 | ML-6 | 🟡 Medium | **Windows/AD unsupported and premature.** Onboarding is SSH + `apt`; AD detection is a separate discipline. Deferred deliberately until one platform passes a senior review. |
 
@@ -181,13 +182,15 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | OPS-1 | 🟠 High | **The running container does not contain the repo's code.** `lureguard-core` returns `202` from the ingest endpoint while the source declares `200` — the image predates the ING-6 fix. Every measurement taken against the live stack therefore tested an unknown older build. There is no rebuild step in the test or check path, so this can silently invalidate any future load or E2E result. |
 
 
+| OPS-3 | 🟠 High | **Subagent delegation is unavailable on this account.** Five parallel streams (ML-1/2, STO-4/5, SEC-3, ML-4, SKL-*) all terminated immediately with `Your organization has disabled Claude subscription access for Claude Code`. Not transient and not prompt-related — retrying reproduces it. Everything in this round was completed serially instead. Needs an Anthropic API key or an admin enabling access before parallel work is possible again. |
+
 ## F · Product security
 
 | ID | Sev | Item |
 |---|---|---|
 | SEC-1 | ✅ Fixed | **Containment reported success while doing nothing.** DNAT rules were installed inside a bridged container's namespace, where attacker traffic never transits. iptables returned 0, a gauge incremented, it logged `✅ DNAT`, and Telegram told the user the attacker had been redirected. Enforcement deleted; the decision band is retained as a recommendation. |
 | SEC-2 | ✅ Fixed | **Unnecessary `NET_ADMIN`.** Dropped from compose once no iptables path remained in core. |
-| SEC-3 | 🟠 High | **Plaintext SSH password for fleet access.** `ONBOARD_SSH_PASSWORD` enrols hosts and pushes iptables rules. *Decision: move to keys.* Won't survive a senior review as-is. |
+| SEC-3 | ✅ Fixed | **Plaintext SSH password for fleet access.** `ONBOARD_SSH_KEY` added and preferred; the password remains an explicit fallback, and which method was used is logged rather than falling back silently. A misconfigured key path now refuses rather than quietly reverting to the password. **Found while fixing, and worse than the original item:** the code used `sshpass -p <password>`, putting the credential in the process argv where any local user could read it from `ps`. Switched to `sshpass -e`, which passes it through the environment. |
 | SEC-4 | 🟠 High | **No credential model for remote Postgres.** MCP assumes `localhost:5433`; splitting analyst from collector needs auth, TLS and secret distribution that don't exist. |
 | SEC-5 | 🟡 Medium | **Naive laptop-hosted manager would create a DMZ→home pivot.** If taken, must be an overlay network with ACLs, never router port-forwarding. |
 
@@ -239,7 +242,7 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 |---|---|---|
 | VER-1 | ✅ Fixed | **Every quality axis unmeasured.** `core/evaluate.py` + `make eval` scores the product's real decision path against labels the demo generator sets *by construction* — never derived from `rule_level`/`rule_id`, so they cannot leak the way ML-1's did. **Measured: TPR 0.182, FPR 0.000** (TP=2, FN=9, FP=0, TN=262 over 273 SSH events). The model misses 9 of 11 brute-force events including the level-10 escalation. That is the honest number and it is direct evidence for ML-2. |
 | VER-2 | ✅ Fixed | **Tests encoded the defect as the requirement.** `test_process_event_redirect_calls_dnat` mocked fake enforcement and asserted it fired; `test_infer_stub_when_no_model` asserted the fail-open path. Both rewritten. |
-| VER-3 | 🟠 High | **No seeded dataset**, so nothing can be evaluated or demonstrated. One artefact unblocks quality measurement, skill testing, and time-to-first-value. |
+| VER-3 | ✅ Fixed | **No seeded dataset.** *Duplicate of INS-2* — `core/demo_seed.py` provides `generate_events()` and `load_demo()`, and `make demo` loads them. Closed as already delivered rather than left open to be worked twice. |
 | VER-4 | ✅ Fixed | **Suite was non-hermetic.** The EPSS test mocked at the HTTP boundary and now asserts something stronger — that the `UBUNTU-` prefix is stripped *before* the request is sent. A live contract test remains, marked `integration` and excluded from the default run. |
 ## J · Install & surface
 
@@ -257,7 +260,7 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 | ID | Sev | Item |
 |---|---|---|
 | SKL-1 | 🟠 High | **Skills have no contract and no test**, so nothing prevents drift. Each should declare required MCP tools and carry a golden test run headless against the seeded dataset, asserting citations and expected verdict. |
-| SKL-2 | 🟡 Medium | **Agent instructions live in four places** — `skills/`, `.opencode/command/`, `.claude/skills/lureguard/`, `.agents/skills/lureguard/` (last two near-duplicates). |
+| SKL-2 | ✅ Fixed | **Agent instructions lived in four places.** They had already diverged: `.agents/` was missing the system-update routing row, so an agent reading that copy did not know `check_system_update`/`apply_system_update` existed. `skills/SKILL.md` is now canonical and the `.claude/` and `.agents/` paths are symlinks to it. |
 | SKL-3 | 🟡 Medium | Invocation is a prompt convention, not a product surface. |
 
 ## L · Product & positioning

@@ -138,6 +138,16 @@ def allow_agent_restart() -> bool:
     )
 
 
+def onboard_ssh_key() -> str:
+    """Path to the private key used to reach enrolled hosts (SEC-3).
+
+    Preferred over ONBOARD_SSH_PASSWORD. `~` is expanded so the usual
+    ~/.ssh/id_ed25519 form works. Empty string means unset.
+    """
+    raw = os.getenv("ONBOARD_SSH_KEY", "").strip()
+    return os.path.expanduser(raw) if raw else ""
+
+
 def ssh_strict_host_keys() -> bool:
     """When true, SSH uses StrictHostKeyChecking=yes (full strict). Default is accept-new."""
     return os.getenv("LUREGUARD_SSH_STRICT_HOST_KEYS", "false").lower() in (
