@@ -16,26 +16,27 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 25 items carry an executable acceptance check (`make check`).
 
-### Deferred · 2
+### Deferred · 6
 
 _Parked deliberately, last in priority. The reason is recorded on each card so this does not decay into 'never'._
 
 - 🔴 **ING-8** Every Telegram alert blocks the whole event loop ·  ✓check — _deferred: owned by a separate session_
+- 🔴 **INS-1** First value takes eight steps and an attacker — _deferred: demo path parked on request_
 - 🟠 **ML-2** The informative features are computed and discarded ·  ✓check — _deferred: needs a deliberate training-data decision; a rushed pass would just rebuild ML-1's leak_
+- 🟡 **INS-4** make migrate is redundant — init_db() already runs Alembic on startup — _deferred: demo path parked on request_
+- 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
+- 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
 
-### Ready · 30
+### Ready · 24
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
 - 🔴 **ARC-2** A fleet-aggregation SIEM watching one host
 - 🔴 **GFA-1** 82% stat+table cannot show deviation
-- 🔴 **INS-1** First value takes eight steps and an attacker
-- 🔴 **POS-1** No atomic unit of value
 - 🟠 **ARC-3** Two products built as one
 - 🟠 **ARC-4** The analyst/collector seam exists by accident
 - 🟠 **ARC-5** Manager on a laptop is not viable
 - 🟠 **FLT-2** Six invariants stated nowhere, five violated
-- 🟠 **ML-1** Reported accuracy is target leakage
 - 🟠 **OPS-1** The running container does not contain the repo's code
 - 🟠 **OPS-3** Subagent delegation is unavailable on this account
 - 🟠 **POS-3** Positioned against the wrong category
@@ -47,9 +48,6 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟡 **GFA-7** No coverage or blind-spot view
 - 🟡 **GFA-8** Competing with Kibana Discover instead of delegating to it. Own the decision l
 - 🟡 **ING-7** Process + interpreter boot per alert
-- 🟡 **INS-4** make migrate is redundant — init_db() already runs Alembic on startup
-- 🟡 **INS-5** Installer neither interactive nor self-healing
-- 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3
 - 🟡 **ML-5** Attack surface is SSH-shaped end to end
 - 🟡 **ML-6** Windows/AD unsupported and premature
 - 🟡 **POS-7** Distribution: strategy knowable, outcome not
@@ -58,14 +56,16 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟡 **STO-6** Log text uncompressed — TOAST only engages above ~2 KB. Log data compresses 10
 - 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job
 
-### Blocked · 5
+### Blocked · 7
 
 _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the moment its blocker is fixed._
 
-- 🔴 **ING-3** A slow consumer makes Wazuh drop alerts — _waits on ING-8_
+- 🔴 **ING-3** A slow consumer makes Wazuh drop alerts — _waits on ING-8 (deferred)_
+- 🔴 **POS-1** No atomic unit of value — _waits on INS-1 (deferred)_
+- 🟠 **ML-1** Reported accuracy is target leakage — _waits on ML-2 (deferred)_
 - 🟠 **SEC-4** No credential model for remote Postgres — _waits on ARC-6_
 - 🟠 **STO-3** The SIEM's storage is duplicated for no gain — _waits on STO-7_
-- 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8_
+- 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
 - 🟡 **SKL-3** Invocation is a prompt convention, not a product surface — _waits on SKL-1_
 
 ### Verified · 32

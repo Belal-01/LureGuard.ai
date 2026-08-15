@@ -26,9 +26,17 @@ for m in re.finditer(r'def test_([a-z]+)_(\d+)_', pathlib.Path('tests/acceptance
 # blocker that gets fixed automatically releases whatever was waiting on it.
 # The previous hardcoded list went stale the moment GFA-5, INS-2 and ML-4
 # landed and left six items showing as blocked when they were free.
-BLOCKS = {"GFA-1": "GFA-5", "POS-1": "INS-2", "SEC-4": "ARC-6", "STO-3": "STO-7",
-          "GFA-6": "GFA-5", "GFA-7": "ML-4", "GFA-8": "GFA-5", "INS-6": "INS-2",
-          "SKL-3": "SKL-1", "ING-3": "ING-8", "ARC-1": "ING-8"}
+BLOCKS = {"GFA-1": "GFA-5", "SEC-4": "ARC-6", "STO-3": "STO-7",
+          "GFA-6": "GFA-5", "GFA-7": "ML-4", "GFA-8": "GFA-5",
+          "SKL-3": "SKL-1", "ING-3": "ING-8", "ARC-1": "ING-8",
+          # POS-1 is not parked by choice — it cannot close without the demo
+          # path, which is. Recording it as blocked rather than deferred keeps
+          # the distinction between "we chose to wait" and "we are waiting".
+          "POS-1": "INS-1",
+          # ML-1 and ML-2 are one problem. Retraining while the behavioural
+          # features are still discarded would just re-fit Wazuh's own rule_id,
+          # which is the leak ML-1 describes.
+          "ML-1": "ML-2"}
 
 # Explicitly parked. Not blocked and not forgotten — deprioritised on purpose,
 # with the reason recorded so "last" does not quietly become "never".
@@ -36,6 +44,10 @@ DEFERRED = {
     "ING-8": "owned by a separate session",
     "ML-2":  "needs a deliberate training-data decision; a rushed pass would "
              "just rebuild ML-1's leak",
+    "INS-1": "demo path parked on request",
+    "INS-4": "demo path parked on request",
+    "INS-5": "demo path parked on request",
+    "INS-6": "demo path parked on request",
 }
 SPRINT: list[str] = []
 c = Counter(sev.values())
@@ -74,7 +86,9 @@ for lane, ids in lanes.items():
         if r in DEFERRED:
             w = f" — _deferred: {DEFERRED[r]}_"
         elif r in BLOCKED:
-            w = f" — _waits on {BLOCKED[r]}_"
+            b = BLOCKED[r]
+            tag = f"{b} (deferred)" if b in DEFERRED else b
+            w = f" — _waits on {tag}_"
         else:
             w = ""
         chk = " ·  ✓check" if r in checks else ""
