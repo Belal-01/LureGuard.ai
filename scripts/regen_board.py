@@ -20,26 +20,48 @@ checks = set()
 for m in re.finditer(r'def test_([a-z]+)_(\d+)_', pathlib.Path('tests/acceptance/test_register.py').read_text()):
     checks.add(f"{m.group(1).upper()}-{m.group(2)}")
 
-# Lane assignment. Blocked = waiting on another ITEM (not a decision).
-BLOCKED = {"GFA-1":"GFA-5 rollout","POS-1":"INS-2 rollout","SEC-4":"ARC-6 rollout",
-           "STO-3":"STO-7 rollout","GFA-6":"GFA-5 rollout","GFA-7":"ML-4 (ATT&CK mapping)",
-           "GFA-8":"GFA-5 rollout","INS-6":"INS-2 rollout","SKL-3":"SKL-1 contract",
-           "ING-3":"ING-8 fix","ARC-1":"ING-8 fix"}
-SPRINT = ["ING-8"]
+# Lane assignment.
+#
+# BLOCKS maps item -> the item it waits on, by ID rather than by prose, so a
+# blocker that gets fixed automatically releases whatever was waiting on it.
+# The previous hardcoded list went stale the moment GFA-5, INS-2 and ML-4
+# landed and left six items showing as blocked when they were free.
+BLOCKS = {"GFA-1": "GFA-5", "POS-1": "INS-2", "SEC-4": "ARC-6", "STO-3": "STO-7",
+          "GFA-6": "GFA-5", "GFA-7": "ML-4", "GFA-8": "GFA-5", "INS-6": "INS-2",
+          "SKL-3": "SKL-1", "ING-3": "ING-8", "ARC-1": "ING-8"}
+
+# Explicitly parked. Not blocked and not forgotten — deprioritised on purpose,
+# with the reason recorded so "last" does not quietly become "never".
+DEFERRED = {
+    "ING-8": "owned by a separate session",
+    "ML-2":  "needs a deliberate training-data decision; a rushed pass would "
+             "just rebuild ML-1's leak",
+}
+SPRINT: list[str] = []
 c = Counter(sev.values())
 openids = [r for r in sev if sev[r] != 'fixed']
+rank = {'crit': 0, 'high': 1, 'med': 2}
+
+def blocked_by(r):
+    """The unmet blocker for r, or None once that blocker is fixed/absent."""
+    b = BLOCKS.get(r)
+    if not b or sev.get(b) == 'fixed':
+        return None
+    return b
+
+BLOCKED = {r: blocked_by(r) for r in openids if blocked_by(r)}
 lanes = {
- "Sprint 3": [r for r in openids if r in SPRINT],
- "Ready":    sorted([r for r in openids if r not in SPRINT and r not in BLOCKED],
-                    key=lambda r: ({'crit':0,'high':1,'med':2}[sev[r]], r)),
- "Blocked":  sorted([r for r in openids if r in BLOCKED],
-                    key=lambda r: ({'crit':0,'high':1,'med':2}[sev[r]], r)),
+ "Deferred": sorted([r for r in openids if r in DEFERRED], key=lambda r: (rank[sev[r]], r)),
+ "Ready":    sorted([r for r in openids if r not in DEFERRED and r not in BLOCKED],
+                    key=lambda r: (rank[sev[r]], r)),
+ "Blocked":  sorted([r for r in openids if r not in DEFERRED and r in BLOCKED],
+                    key=lambda r: (rank[sev[r]], r)),
  "Verified": sorted([r for r in sev if sev[r] == 'fixed']),
 }
 NOTE = {
- "Sprint 3":"One item. It blocks two others and is the only failing acceptance check — a second session is on it.",
+ "Deferred":"Parked deliberately, last in priority. The reason is recorded on each card so this does not decay into 'never'.",
  "Ready":"Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate.",
- "Blocked":"Waiting on another item, not on a decision.",
+ "Blocked":"Waiting on another item. Blockers resolve by ID, so a card leaves this lane the moment its blocker is fixed.",
  "Verified":"Check passes and the diff was reviewed.",
 }
 E = {"crit":"🔴","high":"🟠","med":"🟡","fixed":"✅"}
@@ -49,7 +71,12 @@ out = ["## Board\n",
 for lane, ids in lanes.items():
     out += [f"### {lane} · {len(ids)}\n", f"_{NOTE[lane]}_\n"]
     for r in ids:
-        w = f" — _waits on {BLOCKED[r]}_" if r in BLOCKED else ""
+        if r in DEFERRED:
+            w = f" — _deferred: {DEFERRED[r]}_"
+        elif r in BLOCKED:
+            w = f" — _waits on {BLOCKED[r]}_"
+        else:
+            w = ""
         chk = " ·  ✓check" if r in checks else ""
         out.append(f"- {E[sev[r]]} **{r}** {title[r]}{chk}{w}")
     out.append("")
