@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**69 items — 6 critical · 14 high · 17 medium · 32 fixed**
+**70 items — 5 critical · 14 high · 17 medium · 34 fixed**
 
-25 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+26 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,7 +14,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 25 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 26 items carry an executable acceptance check (`make check`).
 
 ### Deferred · 6
 
@@ -27,12 +27,11 @@ _Parked deliberately, last in priority. The reason is recorded on each card so t
 - 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
 
-### Ready · 24
+### Ready · 23
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
 - 🔴 **ARC-2** A fleet-aggregation SIEM watching one host
-- 🔴 **GFA-1** 82% stat+table cannot show deviation
 - 🟠 **ARC-3** Two products built as one
 - 🟠 **ARC-4** The analyst/collector seam exists by accident
 - 🟠 **ARC-5** Manager on a laptop is not viable
@@ -68,15 +67,17 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 - 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
 - 🟡 **SKL-3** Invocation is a prompt convention, not a product surface — _waits on SKL-1_
 
-### Verified · 32
+### Verified · 34
 
 _Check passes and the diff was reviewed._
 
 - ✅ **FLT-1** Detector failed open and reported success
+- ✅ **GFA-1** 82% stat+table cannot show deviation ·  ✓check
 - ✅ **GFA-2** Zero template variables on five of seven dashboards ·  ✓check
 - ✅ **GFA-3** Units on 3 of 106, thresholds on 6 of 106, data links on 3 of 106
 - ✅ **GFA-4** ~85 of 106 panels re-implement Wazuh modules
 - ✅ **GFA-5** The panel that proves the product works ·  ✓check
+- ✅ **GFA-9** Five stat panels hardcoded their own time window and ignored the dashboard tim
 - ✅ **ING-1** No retry, no error handling ·  ✓check
 - ✅ **ING-2** Status code never checked ·  ✓check
 - ✅ **ING-4** Telegram on the ingest path, inside an open transaction ·  ✓check
@@ -206,13 +207,14 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 
 | ID | Sev | Item |
 |---|---|---|
-| GFA-1 | 🔴 Critical | **82% stat+table cannot show deviation.** *Not addressed by the config pass — units and thresholds make a stat legible, not temporal. Fixing this means replacing stats with trends, which happens in the `analyst` dashboard design.* A stat is a number with no baseline; a table is state with no trend. Security analysis *is* deviation detection. Target ~50% timeseries. |
+| GFA-1 | ✅ Fixed | **82% stat+table cannot show deviation.** A bare number cannot be judged normal or abnormal, and security analysis is deviation detection — so the panel could not answer the analyst's only question. **Fixed by splitting the 23 stat panels honestly rather than uniformly.** 11 whose data has history now carry a sparkline (`graphMode: area`) backed by a `$__timeGroup` query, so the number arrives with its recent shape. The other 12 read posture caches that each scan overwrites — no history exists, so a sparkline would have been fabricated. Those are now explicitly labelled point-in-time, which tells the reader the number has no trend rather than leaving them to assume one was forgotten. Panel-type churn was avoided entirely; the fix is a sparkline and honest labelling, not converting everything to timeseries. **All 11 rewritten queries were EXPLAIN-planned against the live database** — which caught one referencing an undefined table alias that would have rendered as a broken panel. |
 | GFA-2 | ✅ Fixed | **Zero template variables on five of seven dashboards.** The mechanical cause of cross-dashboard redundancy: with no variables, the only way to show another slice is another panel. It's why `cve-posture` has 31 panels. The two dashboards that have variables are the two that work. |
 | GFA-3 | ✅ Fixed | **Units on 3 of 106, thresholds on 6 of 106, data links on 3 of 106.** Unformatted integers, nothing coloured by severity, almost no click-through. This is the entire visual gap against the references. |
 | GFA-4 | ✅ Fixed | **~85 of 106 panels re-implement Wazuh modules.** *Done:* `cve-posture` (31), `containers-assets` (15) and `fleet-hosts` (6) deleted; 3 orphaned cross-links removed from the overview. Four dashboards remain, all uids preserved. `analyst` and `coverage` still to be designed — GFA-5 and GFA-7. |
 | GFA-5 | ✅ Fixed | **The panel that proves the product works.** `analyst.json` — verdict-vs-Wazuh-level matrix, disagreement queue deep-linked to the evidence chain, alerts-suppressed trend, MTTD p50/p95 (percentiles, not an average that hides the tail), citation-coverage gauge, cost per investigation. 8 panels, 50% timeseries by design. |
 | GFA-6 | 🟡 Medium | Sections group by category, not by question. |
 | GFA-7 | 🟡 Medium | **No coverage or blind-spot view.** ATT&CK matrix, silent channels, agents gone quiet. A broken log path is invisible in Wazuh — genuinely defensible ground. |
+| GFA-9 | ✅ Fixed | **Five stat panels hardcoded their own time window and ignored the dashboard time picker.** `Agent tool calls (24h)`, `Reports (7d)`, `Avg MTTD`, `Avg MTTR` and `False positive rate` filtered on `NOW() - INTERVAL '24 hours'`, so selecting a 7-day range still reported 24 hours — silently, with the stale window baked into the panel title. It also disguised them as snapshots: because they never called `$__timeFilter` they looked like point-in-time reads when their data has history, which is how they nearly escaped GFA-1's trend requirement. All five now use `$__timeFilter` and respect the picker. **Found by listing panels for GFA-1, not by looking for it.** |
 | GFA-8 | 🟡 Medium | Competing with Kibana Discover instead of delegating to it. Own the decision layer; link out for the haystack. |
 
 ## H · Data model

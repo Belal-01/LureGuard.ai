@@ -181,7 +181,7 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Time to detect \u2014 p50 / p95",
+      "title": "Time to detect — p50 / p95",
       "description": "Percentiles, not an average: a mean MTTD hides exactly the tail that matters.",
       "gridPos": {
         "x": 0,
@@ -284,7 +284,7 @@
       "id": 5,
       "type": "gauge",
       "title": "Citation coverage",
-      "description": "Share of findings carrying verifiable evidence. The differentiator, made visible \u2014 below 100% means the product is asserting things it cannot show.",
+      "description": "Share of findings carrying verifiable evidence. The differentiator, made visible — below 100% means the product is asserting things it cannot show.",
       "gridPos": {
         "x": 0,
         "y": 15,
@@ -335,7 +335,7 @@
       "id": 6,
       "type": "stat",
       "title": "Cost per investigation",
-      "description": "Tokens and dollars per triage \u2014 the metric nobody in this category publishes.",
+      "description": "Tokens and dollars per triage — the metric nobody in this category publishes.",
       "gridPos": {
         "x": 5,
         "y": 15,
@@ -377,10 +377,18 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COALESCE(sum(cost_usd) / NULLIF(count(DISTINCT investigation_id),0),0)\n       AS \"Cost per investigation\"\nFROM agent_actions WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time,\n       COALESCE(sum(cost_usd) / NULLIF(count(DISTINCT investigation_id), 0), 0)\n       AS \"Cost per investigation\"\nFROM agent_actions WHERE $__timeFilter(ts) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
-      ]
+      ],
+      "options": {
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      }
     },
     {
       "id": 7,
@@ -436,7 +444,7 @@
     {
       "id": 8,
       "type": "table",
-      "title": "Disagreement queue \u2014 Wazuh escalated, agent dismissed",
+      "title": "Disagreement queue — Wazuh escalated, agent dismissed",
       "description": "The senior-analyst audit surface. Every row is a claim the product made that a human should check. Click through to the full evidence chain.",
       "gridPos": {
         "x": 0,

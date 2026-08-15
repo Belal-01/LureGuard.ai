@@ -781,3 +781,76 @@ def test_skl_2_agent_instructions_have_one_source():
         f"SKL-2: {[str(p.relative_to(REPO)) for p in dupes]} are real files duplicating "
         "the same router. Keep one canonical copy and symlink or generate the rest."
     )
+
+
+def test_gfa_1_stat_panels_carry_a_baseline():
+    """GFA-1: a bare number cannot be judged normal or abnormal.
+
+    Security analysis is deviation detection — the analyst's only real question
+    is "is this different from usual?". A stat panel showing `47` cannot answer
+    it. Grafana's stat panel draws a sparkline behind the number when
+    options.graphMode is "area"/"line", which turns a point reading into a
+    reading plus its recent shape — the cheapest honest fix, no panel-type churn.
+
+    A sparkline needs a series to draw, so the panel's query must group by time.
+    Setting graphMode on a query that returns one scalar row yields a flat line,
+    which looks like a baseline while carrying no information — the same class
+    of defect as every other item in this register.
+
+    Not every stat can have one, and pretending otherwise would be its own
+    defect. Panels reading the posture caches (cve_findings, sca_findings,
+    user_findings, hosts, container_cve_findings, blocklist) show current state:
+    those tables are overwritten by each scan, so no history exists and a
+    sparkline drawn over them would be fabricated. Those must instead say in
+    their description that they are point-in-time, so the reader knows the
+    number has no trend rather than assuming one was omitted.
+
+    So: time-scoped panels must show their trend; snapshot panels must admit
+    they are snapshots. Silence is what is not allowed.
+    """
+    bare, scalar, unlabelled, hardcoded = [], [], [], []
+    for f, p in _all_panels():
+        if p.get("type") != "stat":
+            continue
+        name = f"{f}:{p.get('title')}"
+        sql = " ".join(t.get("rawSql", "") for t in p.get("targets", [])).lower()
+        grouped = any(k in sql for k in ("$__timegroup", "date_trunc", "time_bucket"))
+        time_scoped = "$__timefilter" in sql or grouped
+        has_spark = p.get("options", {}).get("graphMode") in ("area", "line")
+
+        # GFA-9: a hardcoded window silently ignores the dashboard time picker.
+        # Select 7 days and the panel still reports 24 hours — and because it
+        # never calls $__timeFilter it also *looks* like a snapshot when its
+        # data has history, which is how these escaped the trend requirement.
+        if "interval '" in sql and "$__timefilter" not in sql:
+            hardcoded.append(name)
+
+        if time_scoped:
+            if not has_spark:
+                bare.append(name)
+            elif not grouped:
+                scalar.append(name)
+        else:
+            desc = (p.get("description") or "").lower()
+            if not any(k in desc for k in ("point-in-time", "snapshot", "current state")):
+                unlabelled.append(name)
+
+    assert not bare, (
+        f"GFA-1: {len(bare)} time-scoped stat panels render a bare number with no "
+        f"baseline, though their data has history. First few: {bare[:5]}"
+    )
+    assert not scalar, (
+        f"GFA-1: {len(scalar)} stat panels declare a sparkline but their query "
+        f"returns a single scalar, so the line is flat and meaningless — a visual "
+        f"implying information it does not have. First few: {scalar[:5]}"
+    )
+    assert not unlabelled, (
+        f"GFA-1: {len(unlabelled)} snapshot stat panels neither show a trend nor say "
+        f"they cannot. Mark them point-in-time so a reader knows the number has no "
+        f"history. First few: {unlabelled[:5]}"
+    )
+    assert not hardcoded, (
+        f"GFA-9: {len(hardcoded)} stat panels hardcode their own time window and "
+        f"ignore the dashboard time picker — select 7 days and they still report 24 "
+        f"hours. Use $__timeFilter. First few: {hardcoded[:5]}"
+    )

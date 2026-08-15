@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "graphTooltip": 1,
   "id": null,
@@ -20,25 +22,51 @@
   ],
   "panels": [
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Open investigations in scope — more open work outstanding is worse",
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Point-in-time: how many investigations are open right now. Not a trend — `investigations` records state, not a per-hour history.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 3 },
-              { "color": "red", "value": 8 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3
+              },
+              {
+                "color": "red",
+                "value": 8
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
       "id": 1,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
       "targets": [
         {
           "format": "table",
@@ -50,29 +78,55 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "description": "A spike can mean a runaway/looping agent — more is worse past a point",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 500 },
-              { "color": "red", "value": 2000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
       "id": 2,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS actions FROM agent_actions WHERE ts >= NOW() - INTERVAL '24 hours' AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', ''))",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS actions FROM agent_actions WHERE $__timeFilter(ts) AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -80,29 +134,55 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "description": "Inverted: fewer reports than closed work implies stalled documentation, so fewer is worse",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "mode": "thresholds" },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 5 }
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 5
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
       "id": 3,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS reports FROM reports WHERE created_at >= NOW() - INTERVAL '7 days' AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', ''))",
+          "rawSql": "SELECT $__timeGroup(created_at, '$__interval') AS time, count(*) AS reports FROM reports WHERE $__timeFilter(created_at) AND (NULLIF('${investigation_id}', '') IS NULL OR investigation_id::text = NULLIF('${investigation_id}', '')) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -110,11 +190,30 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
       "id": 4,
-      "options": { "legend": { "displayMode": "list" }, "pieType": "donut" },
+      "options": {
+        "legend": {
+          "displayMode": "list"
+        },
+        "pieType": "donut"
+      },
       "targets": [
         {
           "format": "table",
@@ -126,23 +225,45 @@
       "type": "piechart"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "mode": "thresholds" },
-          "custom": { "drawStyle": "line", "fillOpacity": 15 },
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 500 },
-              { "color": "red", "value": 2000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
       "id": 5,
       "targets": [
         {
@@ -155,7 +276,10 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
         "defaults": {
           "links": [
@@ -166,9 +290,16 @@
           ]
         }
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
       "id": 6,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
@@ -180,10 +311,20 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
       "id": 7,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
@@ -195,11 +336,30 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 34 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 34
+      },
       "id": 8,
-      "options": { "legend": { "displayMode": "list" }, "pieType": "donut" },
+      "options": {
+        "legend": {
+          "displayMode": "list"
+        },
+        "pieType": "donut"
+      },
       "targets": [
         {
           "format": "table",
@@ -211,11 +371,30 @@
       "type": "piechart"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 34 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 34
+      },
       "id": 9,
-      "options": { "legend": { "displayMode": "list" }, "pieType": "donut" },
+      "options": {
+        "legend": {
+          "displayMode": "list"
+        },
+        "pieType": "donut"
+      },
       "targets": [
         {
           "format": "table",
@@ -227,7 +406,10 @@
       "type": "piechart"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
         "defaults": {
           "links": [
@@ -238,9 +420,16 @@
           ]
         }
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 42 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 42
+      },
       "id": 10,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
@@ -252,7 +441,10 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
         "defaults": {
           "links": [
@@ -263,9 +455,16 @@
           ]
         }
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 60 },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
       "id": 12,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
@@ -277,8 +476,16 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 52 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
       "id": 11,
       "fieldConfig": {
         "defaults": {
@@ -290,7 +497,9 @@
           ]
         }
       },
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
@@ -304,30 +513,60 @@
   ],
   "refresh": "15s",
   "schemaVersion": 39,
-  "tags": ["lureguard", "agent"],
+  "tags": [
+    "lureguard",
+    "agent"
+  ],
   "templating": {
     "list": [
       {
-        "current": { "selected": false, "text": "", "value": "" },
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
         "hide": 0,
         "label": "Investigation ID",
         "name": "investigation_id",
-        "options": [{ "selected": true, "text": "", "value": "" }],
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
         "query": "",
         "type": "textbox"
       },
       {
-        "current": { "selected": false, "text": "", "value": "" },
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
         "hide": 0,
         "label": "Source IP",
         "name": "src_ip",
-        "options": [{ "selected": true, "text": "", "value": "" }],
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
         "query": "",
         "type": "textbox"
       },
       {
-        "current": { "selected": false, "text": "All", "value": "All" },
-        "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "lureguard-pg"
+        },
         "definition": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
         "hide": 0,
         "includeAll": false,
@@ -338,8 +577,15 @@
         "type": "query"
       },
       {
-        "current": { "selected": false, "text": "", "value": "" },
-        "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "lureguard-pg"
+        },
         "definition": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
         "hide": 0,
         "label": "Agent ID",
@@ -349,17 +595,30 @@
         "type": "query"
       },
       {
-        "current": { "selected": false, "text": "", "value": "" },
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
         "hide": 0,
         "label": "Min severity",
         "name": "severity",
-        "options": [{ "selected": true, "text": "", "value": "" }],
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
         "query": "",
         "type": "textbox"
       }
     ]
   },
-  "time": { "from": "now-24h", "to": "now" },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
   "title": "LureGuard Agent Activity",
   "uid": "lureguard-agent-activity",
   "version": 4

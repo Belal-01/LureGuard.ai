@@ -40,12 +40,13 @@
           "calcs": [
             "lastNotNull"
           ]
-        }
+        },
+        "graphMode": "area"
       },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS cnt FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int)",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS cnt FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -95,7 +96,8 @@
           "calcs": [
             "lastNotNull"
           ]
-        }
+        },
+        "graphMode": "none"
       },
       "targets": [
         {
@@ -130,7 +132,8 @@
             ]
           }
         }
-      }
+      },
+      "description": "Point-in-time count for the current filter scope."
     },
     {
       "datasource": {
