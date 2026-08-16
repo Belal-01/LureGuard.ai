@@ -89,15 +89,23 @@ async def _run_pipeline(bruteforce_alert: dict) -> dict:
 
 @pytest.mark.asyncio
 async def test_bruteforce_pipeline_redirect_decision(bruteforce_alert: dict) -> None:
-    """12 failed attempts + one alert should score above T2 (redirect)."""
-    from modules.decision_policy import decide
-    from modules.inference import infer_event
-    from modules.collector import normalize_event
-    from schemas.wazuh_alert import WazuhAlert
-    from runtime.window_store import get_extractor, reset_extractor
-    from modules.inference import load_model
+    """12 failed attempts from one source must escalate to a redirect.
 
-    load_model()
+    ML-8: this used to assert the *classifier* scored the event above T2, by
+    feeding featurize_normalized_event's 24 Wazuh-metadata features to the
+    model. SSH no longer goes through the model at all — Wazuh rule 5712
+    already correlates 8 failures in 120s from one source, and reimplementing
+    that in Python is what let our score veto a confirmed detection.
+
+    The property under test is unchanged and still worth holding: a sustained
+    brute force must escalate. Only the mechanism moved, from a probability to
+    the rule that fires.
+    """
+    from modules.collector import normalize_event
+    from modules.decision_policy import _ssh_verdict, decide
+    from runtime.window_store import get_extractor, reset_extractor
+    from schemas.wazuh_alert import WazuhAlert
+
     reset_extractor()
     extractor = get_extractor()
     base = datetime.now(tz=timezone.utc)
@@ -106,14 +114,16 @@ async def test_bruteforce_pipeline_redirect_decision(bruteforce_alert: dict) -> 
         extractor.update_from_raw(BRUTEFORCE_IP, "root", "failed", ts)
 
     event = normalize_event(WazuhAlert.model_validate(bruteforce_alert))
-    from ml.alert_features import featurize_normalized_event
-    from modules.inference import infer_event
+    p = _ssh_verdict(event, attempts=12)
 
-    feat = featurize_normalized_event(event)
-    p = infer_event(feat)["p"]
+    assert p == 1.0, "a sustained brute force is a rule that fired, not a probability"
+    assert decide(p, t1=0.40, t2=0.70) == "redirect"
 
-    assert decide(p, t1=0.40, t2=0.70) in ("alert", "redirect")
-    assert p > 0.40
+    # And the inverse, so this cannot pass by always returning 1.0: a single
+    # failure with no Wazuh escalation must not escalate.
+    quiet = normalize_event(WazuhAlert.model_validate(bruteforce_alert))
+    quiet.wazuh_rule_level = 5
+    assert _ssh_verdict(quiet, attempts=1) == 0.0
 
 
 @pytest.mark.asyncio

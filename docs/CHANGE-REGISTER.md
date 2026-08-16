@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**77 items — 2 critical · 2 high · 3 medium · 70 fixed**
+**78 items — 2 critical · 0 high · 3 medium · 73 fixed**
 
-36 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+37 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,14 +14,13 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 36 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 37 items carry an executable acceptance check (`make check`).
 
-### Deferred · 5
+### Deferred · 4
 
 _Parked deliberately, last in priority. The reason is recorded on each card so this does not decay into 'never'._
 
 - 🔴 **INS-1** First value takes eight steps and an attacker — _deferred: demo path parked on request_
-- 🟠 **ML-2** The informative features are computed and discarded ·  ✓check — _deferred: needs a deliberate training-data decision; a rushed pass would just rebuild ML-1's leak_
 - 🟡 **INS-4** make migrate is redundant — init_db() already runs Alembic on startup — _deferred: demo path parked on request_
 - 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
@@ -31,14 +30,13 @@ _Parked deliberately, last in priority. The reason is recorded on each card so t
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
 
-### Blocked · 2
+### Blocked · 1
 
 _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the moment its blocker is fixed._
 
 - 🔴 **POS-1** No atomic unit of value — _waits on INS-1 (deferred)_
-- 🟠 **ML-1** Reported accuracy is target leakage ·  ✓check — _waits on ML-2 (deferred)_
 
-### Verified · 70
+### Verified · 73
 
 _Check passes and the diff was reviewed._
 
@@ -72,6 +70,9 @@ _Check passes and the diff was reviewed._
 - ✅ **ING-9** A new detection alerted nobody by default
 - ✅ **INS-2** No demo mode ·  ✓check
 - ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
+- ✅ **ML-1** Reported accuracy was target leakage ·  ✓check
+- ✅ **ML-10** Web alerted on every event; the trained model was unwired ·  ✓check
+- ✅ **ML-2** The informative features were computed and discarded ·  ✓check — _deferred: needs a deliberate training-data decision; a rushed pass would just rebuild ML-1's leak_
 - ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0 ·  ✓check
 - ✅ **ML-4** Three custom rules, no framework mapping ·  ✓check
 - ✅ **ML-5** Attack surface was SSH-shaped end to end
@@ -173,8 +174,9 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 
 | ID | Sev | Item |
 |---|---|---|
-| ML-1 | 🟠 High | **Reported accuracy is target leakage.** Precision 0.9996 comes from predicting Wazuh's severity from Wazuh's own `rule_id`/`rule_level`; the dataset loader labels alerts malicious at `rule_level >= 10`. Adds no information over the SIEM that fed it. `ml/dataset_loaders.py:312` |
-| ML-2 | 🟠 High | **The informative features are computed and discarded.** `f1–f8` are rolling-window behavioural signals (attempt count, failure ratio, distinct usernames per source IP). Computed, hashed for audit, thrown away — only `f1` survives as a gate. The model scores 24 Wazuh metadata features that are near-constant after the SSH gate. `core/modules/decision_policy.py:88` |
+| ML-1 | ✅ Fixed | **Reported accuracy was target leakage.** The shipped model scored `rule_level`, `rule_id` and `decoder_hash` and reported 0.9996 precision — it had learned to predict Wazuh's severity from Wazuh's severity. Retrained on behavioural features only; `feature_columns` is exactly `f1–f8`, so the verdict is **structurally unscoreable** rather than merely excluded by discipline. `ml/datasets/true_labeled_dataset.csv` is retired from training with the reason recorded in `model_registry.json` under `retired_datasets`: no timestamp column, 7 distinct rule_ids, and a pure `rule_id` lookup scores **98.36%** across 1.7M rows. **The same leak was then found inside the demo generator** — every benign web row was level 3 and every attack ≥5, making `rule_level` a perfect separator there too. Fixed by adding three hard negatives that genuinely trip Wazuh 31151 (retry storm, uptime monitor, stale-URL crawler), each sharing exactly one of the scanner's signatures; best single-feature threshold fell to 0.959 against an always-benign floor of 0.847. |
+| ML-10 | ✅ Fixed | **Web alerted on every event; the trained model was unwired.** `should_alert` returned `True` for the whole web channel — the `FPR=1.000` row in `make eval` — while the classifier sat trained and unused. Web is now scored, **strictly below the Wazuh level-10 floor**: a level-10 detection alerts whatever the model thinks. That boundary is what keeps this from reopening ML-8 — vetoing a confirmed brute force and filtering a blanket alert-on-everything are different acts, and only the floor separates them. `score_web_event` **fails open to 1.0**: if scoring breaks the event alerts anyway, because a scorer that silently swallows detections is FLT-1 and SEC-1 a third time. **Verified: floor holds at 0.0 model score, sub-floor noise is filtered, a crash still alerts.** Known limit, accepted deliberately: the model does not generalise to unseen benign patterns (ML-2), so this is a noise dial, not a calibrated probability. |
+| ML-2 | ✅ Fixed | **The informative features were computed and discarded.** `f1–f8` are now generalised from auth-specific to per-source behaviour — `f2` is failed logins on sshd and 4xx/5xx on web, `f3` is distinct usernames or distinct request paths — and reach the model through `feature_extractor`, the same code that runs in production, so a feature cannot mean one thing at fit time and another at serve time. Trained across 12 seeds with the eval seed held out. **Measured honestly, and the number does not survive scrutiny:** TPR 0.956 / FPR 0.000 on the generator, but a leave-one-out check produced **52 false positives on a held-out benign pattern against 6 for the rule it was meant to beat.** It memorised three authored shapes rather than learning benign traffic. The eval prints the caveat itself. Recorded because a flattering number nobody qualified is how ML-1 happened. |
 | ML-3 | ✅ Fixed | **Model pickled on sklearn 1.8.0, loaded on 1.9.0.** Dependency was unpinned; the SHA-256 registry check validated bytes but not runtime compatibility. Pinned to `scikit-learn==1.8.0` and installed. |
 | ML-7 | ✅ Fixed | **A model feature was randomised per process.** `decoder_hash` was built from Python's builtin `hash()`, which is seeded per interpreter. The model was trained under one seed and served under a fresh one every restart, so the feature was uncorrelated noise in production — and the same event could score differently in two processes, violating determinism outright rather than merely leaving it unmeasured. Switched to `zlib.crc32`. **Measured effect: eval TPR rose 0.000 → 0.182 from this one line**, confirming the feature was actively poisoning inference. `ml/alert_features.py:104` |
 | ML-4 | ✅ Fixed | **Three custom rules, no framework mapping.** `core/attack_map.json` now maps **218 rules** to ATT&CK — 212 read from the running manager's own `<mitre>` blocks, 6 hand-assigned for `local_rules.xml` which carries none. Provenance is recorded per rule because vendor metadata and a guess carry different confidence. Scope is deliberate: only rules whose groups intersect `_FORWARD_GROUPS`, since a rule outside those never reaches this product and mapping it would overstate coverage. **226 in-scope rules carry no ATT&CK metadata at all** — that is the honest coverage gap, and it is recorded in the file. Tactics: initial-access 98, credential-access 66, impact 25, lateral-movement 17, then a long tail; collection, exfiltration and reconnaissance are nearly dark. Regenerate with `python3 scripts/build_attack_map.py`. Unblocks GFA-7. |

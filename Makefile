@@ -96,7 +96,6 @@ fetch-dataset: venv
 
 train: venv
 	$(PYTHON) -m ml.train --output-dir ml/models
-	$(PYTHON) -m ml.generate_tutor_report
 
 train-quick: venv
 	$(PYTHON) -m ml.train --sample-cap 100000 --output-dir ml/models

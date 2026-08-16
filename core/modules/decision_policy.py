@@ -87,6 +87,34 @@ WAZUH_ALERT_LEVEL = 10
 FIM_ALERT_LEVEL = 7
 
 
+# Below this the web classifier's score has to clear the bar to alert. Tuned
+# against the demo scenarios; the model's own eval is circular, so treat this
+# as a noise dial rather than a calibrated probability.
+WEB_SCORE_THRESHOLD = 0.5
+
+
+def score_web_event(event: NormalizedEvent) -> float:
+    """Behavioural score for a web event, 0.0 when it cannot be computed.
+
+    ML-10: web previously alerted on every event (`return True`) — the FPR=1.000
+    row in `make eval`. The classifier discriminates *below* the Wazuh level-10
+    floor only; it filters noise and never overrules a rule that fired.
+
+    Fails open to 1.0, not 0.0: if scoring breaks we alert rather than go quiet.
+    A scorer that silently swallows detections is FLT-1 and SEC-1 again.
+    """
+    try:
+        from modules import feature_extractor, inference
+
+        row = feature_extractor.extract_event_features(event)
+        return float(inference.infer_event(
+            {f"f{i}": float(v) for i, v in enumerate(row, start=1)}
+        )["p"])
+    except Exception as exc:  # noqa: BLE001 - never let scoring drop an alert
+        logger.warning(f"web scoring failed for {event.src_ip}, alerting anyway: {exc!r}")
+        return 1.0
+
+
 def should_alert(event: NormalizedEvent, decision: str | None = None) -> bool:
     """The one place that decides whether an event reaches the operator.
 
@@ -103,7 +131,11 @@ def should_alert(event: NormalizedEvent, decision: str | None = None) -> bool:
         return True
     if event.channel in ("syscheck", "rootcheck"):
         return event.wazuh_rule_level >= FIM_ALERT_LEVEL
-    if event.channel in ("cowrie", "cowrie_session", "web", "windows"):
+    if event.channel == "web":
+        # Scored, not blanket-alerted (ML-10). The level-10 floor above already
+        # returned True, so the model only ever sees sub-floor traffic.
+        return score_web_event(event) >= WEB_SCORE_THRESHOLD
+    if event.channel in ("cowrie", "cowrie_session", "windows"):
         return True
     if event.event_type == "cowrie_session":
         return True

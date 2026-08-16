@@ -1230,3 +1230,67 @@ def test_ml_9_alert_carries_evidence_not_just_a_verdict():
     assert "%" not in body or "confidence" not in low, (
         "ML-9: the alert still leads with a probability. Lead with what happened."
     )
+
+
+def test_ml_10_model_scores_web_but_cannot_override_the_wazuh_floor():
+    """ML-10: the classifier is wired to web, and only below the level-10 floor.
+
+    Decision: web is scored by the model, SSH by rules. Today every web event
+    alerts unconditionally (`return True`), which is the FPR=1.000 baseline in
+    `make eval` — the model's job there is discrimination, not detection.
+
+    The constraint that keeps this from reopening ML-8: a Wazuh level-10
+    detection alerts whatever the model thinks. ML-8 was the model vetoing a
+    confirmed brute force; suppressing a blanket alert-on-everything is a
+    different thing, and the floor is what separates them.
+
+    This matters because the model is known not to generalise — held-out, it
+    produced 52 false positives on a benign pattern it had not seen, against 6
+    for the rule. It may filter noise. It may not overrule a rule that fired.
+    """
+    import sys
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    import importlib
+
+    from modules import decision_policy
+
+    importlib.reload(decision_policy)
+    decision_policy.update_whitelist([])
+    from schemas.normalized_event import NormalizedEvent
+
+    def web(level: int) -> NormalizedEvent:
+        return NormalizedEvent(
+            src_ip="203.0.113.50", channel="web", event_type="generic",
+            wazuh_rule_id=31151, wazuh_rule_level=level,
+        )
+
+    scorer = getattr(decision_policy, "score_web_event", None)
+    assert scorer is not None, (
+        "ML-10: web is not scored. `should_alert` returns True for every web "
+        "event, so the trained model contributes nothing and the channel alerts "
+        "on all traffic. Add score_web_event(event) and consult it below the floor."
+    )
+
+    # The floor is absolute: a level-10 detection alerts even if the model
+    # is certain the traffic is benign.
+    assert decision_policy.should_alert(web(10)) is True, (
+        "ML-10: a Wazuh level-10 web detection did not alert. The model must "
+        "never overrule a rule that fired — that is ML-8."
+    )
+    assert decision_policy.should_alert(web(12)) is True
+
+    # Below the floor the model is consulted, so the outcome must be able to
+    # differ. If it cannot, nothing was wired.
+    import unittest.mock as m
+
+    with m.patch.object(decision_policy, "score_web_event", return_value=0.99):
+        noisy = decision_policy.should_alert(web(5))
+    with m.patch.object(decision_policy, "score_web_event", return_value=0.01):
+        quiet = decision_policy.should_alert(web(5))
+    assert noisy is True and quiet is False, (
+        f"ML-10: model score does not change the outcome below the floor "
+        f"(scanner={noisy}, benign={quiet}) — the classifier is not consulted."
+    )
