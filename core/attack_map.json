@@ -110,6 +110,129 @@
       "level": 7,
       "source": "lureguard"
     },
+    "100020": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1098.004"
+        }
+      ],
+      "description": "LureGuard: SSH authorized_keys changed",
+      "groups": [
+        "syscheck",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
+    "100021": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1053.003"
+        }
+      ],
+      "description": "LureGuard: cron entry added or changed",
+      "groups": [
+        "syscheck",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
+    "100022": {
+      "attack": [
+        {
+          "tactic": "persistence",
+          "technique": "T1543.002"
+        }
+      ],
+      "description": "LureGuard: systemd unit added or changed",
+      "groups": [
+        "syscheck",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
+    "100023": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1548.003"
+        }
+      ],
+      "description": "LureGuard: sudoers changed",
+      "groups": [
+        "syscheck",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
+    "100024": {
+      "attack": [
+        {
+          "tactic": "privilege-escalation",
+          "technique": "T1548.003"
+        }
+      ],
+      "description": "LureGuard: sudo shell escape to root",
+      "groups": [
+        "lureguard_custom"
+      ],
+      "level": 10,
+      "source": "lureguard"
+    },
+    "100030": {
+      "attack": [
+        {
+          "tactic": "discovery",
+          "technique": "T1082"
+        },
+        {
+          "tactic": "discovery",
+          "technique": "T1033"
+        }
+      ],
+      "description": "LureGuard: discovery commands in honeypot session",
+      "groups": [
+        "cowrie",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
+    "100031": {
+      "attack": [
+        {
+          "tactic": "command-and-control",
+          "technique": "T1105"
+        }
+      ],
+      "description": "LureGuard: payload download in honeypot session",
+      "groups": [
+        "cowrie",
+        "lureguard_custom"
+      ],
+      "level": 13,
+      "source": "lureguard"
+    },
+    "100032": {
+      "attack": [
+        {
+          "tactic": "defense-evasion",
+          "technique": "T1070.003"
+        }
+      ],
+      "description": "LureGuard: history or log tampering in honeypot session",
+      "groups": [
+        "cowrie",
+        "lureguard_custom"
+      ],
+      "level": 12,
+      "source": "lureguard"
+    },
     "10100": {
       "attack": [
         {

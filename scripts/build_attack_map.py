@@ -37,6 +37,25 @@ CUSTOM = {
                "LureGuard: XSS probe in web request"),
     "100012": (["T1595.002"], 7, ["web", "scanner", "web-attack", "lureguard_custom"],
                "LureGuard: web scanner signature"),
+    # ML-5 post-compromise rules. Each is mapped to the tactic the *observed
+    # signal* belongs to, not every tactic ATT&CK lists for the technique —
+    # a cron file appearing is persistence here, whatever else T1053 can be.
+    "100020": (["T1098.004"], 12, ["syscheck", "lureguard_custom"],
+               "LureGuard: SSH authorized_keys changed"),
+    "100021": (["T1053.003"], 12, ["syscheck", "lureguard_custom"],
+               "LureGuard: cron entry added or changed"),
+    "100022": (["T1543.002"], 12, ["syscheck", "lureguard_custom"],
+               "LureGuard: systemd unit added or changed"),
+    "100023": (["T1548.003"], 12, ["syscheck", "lureguard_custom"],
+               "LureGuard: sudoers changed"),
+    "100024": (["T1548.003"], 10, ["lureguard_custom"],
+               "LureGuard: sudo shell escape to root"),
+    "100030": (["T1082", "T1033"], 12, ["cowrie", "lureguard_custom"],
+               "LureGuard: discovery commands in honeypot session"),
+    "100031": (["T1105"], 13, ["cowrie", "lureguard_custom"],
+               "LureGuard: payload download in honeypot session"),
+    "100032": (["T1070.003"], 12, ["cowrie", "lureguard_custom"],
+               "LureGuard: history or log tampering in honeypot session"),
 }
 
 TACTIC = {
@@ -44,6 +63,9 @@ TACTIC = {
     "T1078": "initial-access", "T1133": "initial-access", "T1190": "initial-access",
     "T1195": "initial-access", "T1566": "initial-access",
     "T1059": "execution", "T1203": "execution", "T1072": "execution", "T1053": "execution",
+    # Sub-technique overrides win over the base id (see tactic_for): a cron job
+    # planted by an intruder is persistence, even though T1053 defaults to execution.
+    "T1053.003": "persistence",
     "T1595": "reconnaissance", "T1592": "reconnaissance", "T1590": "reconnaissance",
     "T1046": "discovery", "T1083": "discovery", "T1018": "discovery", "T1082": "discovery",
     "T1057": "discovery", "T1518": "discovery", "T1033": "discovery", "T1016": "discovery",

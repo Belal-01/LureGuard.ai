@@ -165,6 +165,12 @@ def _handle_non_ssh(event: NormalizedEvent) -> None:
         (event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7)
         or event.channel in ("cowrie", "cowrie_session", "web", "windows")
         or event.event_type == "cowrie_session"
+        # Channel allow-list means a new detection is silent until someone
+        # remembers to add it here (ML-5's sudo rule 100024 landed on the sshd
+        # channel with no auth event_type and would have alerted nobody).
+        # Level >= 10 is Wazuh's own "this matters" line — honour it whatever
+        # the channel.
+        or event.wazuh_rule_level >= 10
     )
     if should_alert:
         _dispatch(send_non_ssh_alert(event), label=f"send_non_ssh_alert[{event.channel}]")
