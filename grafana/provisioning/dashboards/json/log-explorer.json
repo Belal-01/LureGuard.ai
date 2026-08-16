@@ -23,6 +23,22 @@
   ],
   "panels": [
     {
+      "type": "text",
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**This is a filtered slice of the events Wazuh forwarded, not a search engine.** For ad-hoc full-text pivots over the raw corpus \u2014 every field, every rule group, every agent, not just what this product ingests \u2014 that belongs to Wazuh, not here: trying to match Kibana Discover over SQL is how you lose.\n\nThis deployment does not run a Wazuh web UI \u2014 `docker-compose.yml` exposes only the manager's REST API (`wazuh-manager:55000`), no Wazuh Dashboard/OpenSearch Dashboards container. Raw hunting today means the Wazuh API directly at **[`${wazuh_manager_url}`](${wazuh_manager_url})** (edit the variable above for your deployment) or SSH to the manager and grep `/var/ossec/logs/alerts/alerts.json`.\n\nLureGuard owns the decision layer \u2014 verdicts, investigations, coverage. Wazuh owns the haystack."
+      },
+      "title": "This dashboard is not Kibana Discover",
+      "transparent": false
+    },
+    {
       "datasource": {
         "type": "postgres",
         "uid": "lureguard-pg"
@@ -69,7 +85,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 4
       },
       "id": 1,
       "options": {
@@ -157,7 +173,7 @@
         "h": 16,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 12
       },
       "id": 2,
       "options": {
@@ -289,6 +305,26 @@
         ],
         "query": "",
         "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "https://localhost:55000",
+          "value": "https://localhost:55000"
+        },
+        "description": "Wazuh manager REST API \u2014 no browser UI ships with this deployment (docker-compose.yml has no Wazuh Dashboard service). Override for a deployment that adds one.",
+        "hide": 0,
+        "label": "Wazuh manager (API only)",
+        "name": "wazuh_manager_url",
+        "options": [
+          {
+            "selected": true,
+            "text": "https://localhost:55000",
+            "value": "https://localhost:55000"
+          }
+        ],
+        "query": "https://localhost:55000",
+        "type": "textbox"
       }
     ]
   },
@@ -308,5 +344,5 @@
   "timezone": "utc",
   "title": "LureGuard Log Explorer",
   "uid": "lureguard-log-explorer",
-  "version": 1
+  "version": 2
 }

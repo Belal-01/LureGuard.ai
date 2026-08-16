@@ -213,7 +213,7 @@ Previous versions of this file carried a "~55% Tier I analyst" figure. It was se
 - **No measured detection efficacy.** No TPR/FPR, no ATT&CK mapping, no Atomic Red Team harness. The bundled model scores SSH auth events only; treat its output as a hint, not a verdict.
 - **Alert delivery is best-effort.** The Wazuh hook now retries and fails loudly, but there is no dead-letter queue — a sustained core outage still drops alerts.
 - **Single-node only.** In-memory ingest dedup means you cannot run more than one Core replica.
-- **Linux only.** No Windows agent, no Active Directory. AD attack detection (Kerberos, LDAP, lateral movement) is out of scope for now.
+- **Linux only.** No Windows agent, no Active Directory. This is a deliberate scope decision, not a gap planned for later. See [`docs/SCOPE.md`](docs/SCOPE.md).
 - **No load or fault-injection testing.** Behaviour under burst, or when Postgres/Wazuh/Telegram fail, is unmeasured.
 
 Full engineering register, including everything above with evidence and severity: [`docs/CHANGE-REGISTER.md`](docs/CHANGE-REGISTER.md) · Docs: [`docs/README.md`](docs/README.md)
