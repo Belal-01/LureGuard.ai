@@ -111,6 +111,56 @@ def format_ssh_alert(
     return "\n".join(lines)
 
 
+def _window_human(seconds: int) -> str:
+    if seconds < 90:
+        return f"{seconds}s"
+    minutes = round(seconds / 60)
+    return f"{minutes} minutes" if minutes != 1 else "1 minute"
+
+
+def _recurrence_human(days: float) -> str:
+    if days < 1:
+        return "first contact — no prior history"
+    if days < 2:
+        return "1 day ago"
+    return f"{days:.0f} days ago"
+
+
+def format_evidence_alert(
+    event: NormalizedEvent,
+    *,
+    attempts: int,
+    window_seconds: int,
+    usernames: list[str],
+    first_seen_days: float | None = None,
+) -> str:
+    """SSH brute-force alert: what happened, then the evidence, no model score.
+
+    ML-9: the classifier being retired for SSH duplicated Wazuh and hid the
+    one number (attempts) that actually let a human call false-positive. This
+    leads with the fact pattern instead — severity comes from the Wazuh rule
+    level, which is an independent signal already on the event.
+    """
+    host = html.escape(event.agent_name or "unknown host")
+    ip = html.escape(event.src_ip or "unknown")
+    level = event.wazuh_rule_level
+    emoji = "🔴" if level >= 10 else "🟠" if level >= 7 else "🟡"
+    users = ", ".join(html.escape(u) for u in usernames) if usernames else "—"
+
+    lines = [
+        f"<b>{emoji} SSH brute force</b> · {host}",
+        f"{attempts} failed logins from <code>{ip}</code> in {_window_human(window_seconds)}",
+        f"users tried: {users}",
+    ]
+    if first_seen_days is not None:
+        lines.append(f"source first seen {_recurrence_human(first_seen_days)}")
+    lines.append(
+        f"Wazuh {event.wazuh_rule_id} (level {level})"
+    )
+    lines.append(f"→ investigate <code>{ip}</code>")
+    return "\n".join(lines)
+
+
 def format_fim_alert(event: NormalizedEvent) -> str:
     what = html.escape(_EVENT_LABELS.get(event.event_type, event.event_type))
     path = html.escape(event.syscheck_path or "—")

@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**75 items — 2 critical · 2 high · 3 medium · 68 fixed**
+**77 items — 2 critical · 2 high · 3 medium · 70 fixed**
 
-33 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+36 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,7 +14,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 33 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 36 items carry an executable acceptance check (`make check`).
 
 ### Deferred · 5
 
@@ -36,9 +36,9 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the moment its blocker is fixed._
 
 - 🔴 **POS-1** No atomic unit of value — _waits on INS-1 (deferred)_
-- 🟠 **ML-1** Reported accuracy is target leakage — _waits on ML-2 (deferred)_
+- 🟠 **ML-1** Reported accuracy is target leakage ·  ✓check — _waits on ML-2 (deferred)_
 
-### Verified · 68
+### Verified · 70
 
 _Check passes and the diff was reviewed._
 
@@ -77,6 +77,8 @@ _Check passes and the diff was reviewed._
 - ✅ **ML-5** Attack surface was SSH-shaped end to end
 - ✅ **ML-6** Windows/AD unsupported and premature
 - ✅ **ML-7** A model feature was randomised per process ·  ✓check
+- ✅ **ML-8** The classifier could suppress an alert Wazuh had already escalated ·  ✓check
+- ✅ **ML-9** The alert led with a verdict and carried no evidence ·  ✓check
 - ✅ **OPS-1** The running container does not contain the repo's code ·  ✓check
 - ✅ **OPS-3** Subagent delegation is unavailable on this account
 - ✅ **OPS-4** WeasyPrint logged three CSS-parsing lines into the middle of make doctor outpu
@@ -127,6 +129,8 @@ _Check passes and the diff was reviewed._
 | VER-5 | ✅ Fixed | **Two acceptance checks pinned implementation instead of behaviour.** `test_ing_1`/`test_ing_2` monkeypatched `mod.requests`, which forced the module to import `requests` at top level — costing ~49 ms on every alert and making ING-7 unfixable. Both now drive a **real local HTTP server** and assert what actually matters: a retryable 503 is hit ≥3 times, a permanent 401 is hit exactly once. No module internals are patched, so the implementation is free. **Verified they can still fail:** setting `max_attempts=1` reproduces "hit 1x on a retryable 503", and emptying `_PERMANENT_STATUS` reproduces "401 hit 3x" — a rewritten check that cannot catch the original defect would be worse than the one it replaced. |
 | ING-9 | ✅ Fixed | **A new detection alerted nobody by default.** `_handle_non_ssh` gated alerting on a hardcoded channel allow-list, so any rule landing on an unlisted channel fired, stored, and notified no one. Rule 100024 (channel `sshd`, non-auth `event_type`) fell straight through it. Wazuh's own level ≥10 is now honoured whatever the channel. Found only because writing a new rule exercised the path — the same silent-success family as SEC-1 and FLT-1, and invisible to every existing test. |
 | ING-10 | ✅ Fixed | **The custom-rule marker hijacked the event channel.** Wazuh places a file's outer `<group>` first in `rule.groups`, so `lureguard_custom` was always `groups[0]`, and `_CHANNEL_MAP` mapped it to `cowrie` — meaning every custom rule arrived tagged `channel=cowrie` regardless of its real source. The marker is provenance, not a log source. **Scope corrected from the finding report:** no stored rows are affected — rules 100010–100012 have never fired in this lab — so the defect is proven in code, not in data. `core/modules/collector.py` |
+| ML-8 | ✅ Fixed | **The classifier could suppress an alert Wazuh had already escalated.** Wazuh rule 5712 fires at level 10 on 8 failures in 120s from one source — `frequency="8" timeframe="120" same_source_ip`, which is exactly what `f1` and `f3` were built to compute, at the identical threshold `min_attempts_for_alert = 8`. The model sat between that detection and the operator, and `_apply_min_attempts_gate` could clamp `p` below `T1` when our 300s window held fewer events than Wazuh's 120s one. **Reproduced before the fix:** Wazuh level 10 + model p=0.95 → gate → 0.549999 → `allow` → **nothing sent**. Now a single `should_alert()` decides every dispatch, with Wazuh's level-10 floor honoured whatever the channel and whatever our scoring makes of it; a whitelist still suppresses, because that is a human decision rather than a model verdict. SSH scoring is rule-driven and records `model_version="rules-wazuh"`, so the audit trail no longer implies a prediction. **Verified: the reproduction now alerts, the whitelist case still suppresses, and ING-9's odd-channel case holds.** |
+| ML-9 | ✅ Fixed | **The alert led with a verdict and carried no evidence.** It rendered "Suspicious activity 83%" and an 83% progress bar — the classifier's probability, the least trustworthy number in the system — while `attempts=12` sat unused in `DecisionResult.reason` and never reached the screen. An operator could not call false-positive because there was nothing to judge. `format_evidence_alert` now leads with the fact pattern: *12 failed logins from 203.0.113.9 in 4 minutes · users tried: root, admin, oracle · Wazuh 5712 (level 10)*. Severity comes from the Wazuh rule level, an independent signal already on the event. Dropped `model_version` and `features_hash` as unable to change what anyone does next. **Honest gap:** `first_seen_days` renders when supplied but has no production source — it needs a DB query keyed on `src_ip` and `send_alert` has no session; the line is omitted rather than showing a fabricated placeholder. Recurrence is arguably the strongest triage signal in the message, so this is real follow-up work. |
 | ING-8 | ✅ Fixed | **Every Telegram alert blocked the whole event loop.** `alerting.py:41` and `:70` sat inside `async def` but called the *synchronous* `send_message()`, which does `urlopen(timeout=3.0)` — no await, no offload. asyncio is single-threaded, so one alert starved every concurrent request and the accept loop with it. ING-4 had moved alerting off the request path and out of the transaction, which was correct and **orthogonal**: I/O off the transaction and I/O off the loop thread are different axes, and only the first was done. Fixed with `await asyncio.to_thread(...)` at both call sites. **Measured live, before and after, with the image rebuilt each time:** 8 concurrent alert-eligible events went from p50 7.49 s / max 10.56 s (requests stacking) to p50 0.12 s / max 0.13 s. `send_document` deliberately left alone — it is reached only from single-session stdio MCP tools with no concurrent-request failure mode, and that reasoning is recorded rather than the file quietly changed. |
 
 ## B · Storage & scale

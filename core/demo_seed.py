@@ -10,7 +10,13 @@ count):
   - an SSH brute-force burst from one public IP against many usernames,
     escalating to a "multiple auth failures" alert (level 10), ending in a
     successful login — the classic escalation
-  - web scanner noise: many 404s hammered from one IP
+  - web scanner noise: many 404s hammered from one IP across many paths
+  - three benign sources that look like that to a counter but are not — a
+    broken-asset retry storm, a fixed-cadence uptime monitor, and a search
+    crawler walking stale URLs. Each shares one of the scanner's signatures
+    (volume, failure ratio, distinct paths) and differs on the rest, so triage
+    and the classifier both have to read them together instead of thresholding
+    a request count
   - FIM/syscheck changes and a rootcheck finding
   - what happens *after* the door opens (ML-5): the same attacker in the
     honeypot running discovery, pulling a payload and clearing history, then
@@ -60,6 +66,14 @@ _AGENTS = [
 _WEB_PATHS = ["/wp-login.php", "/.env", "/admin", "/phpmyadmin", "/.git/config", "/etc/passwd"]
 _FIM_PATHS = ["/etc/passwd", "/etc/shadow", "/etc/cron.d/root", "/usr/bin/sshd", "/etc/ssh/sshd_config"]
 
+# Stale URLs a search crawler still has indexed after a site restructure. Used
+# by the benign-but-noisy crawler scenario, which produces 404s across many
+# distinct paths exactly like a scanner does — see _hard negatives_ below.
+_STALE_PATHS = [
+    "/blog/2019/old-post", "/downloads/v1.zip", "/team/alice", "/pricing-old",
+    "/docs/v1/intro", "/careers/2020", "/feed.rss", "/tags/python",
+]
+
 
 def _det_id(tag: str) -> uuid.UUID:
     """Deterministic UUID from a stable tag — makes rows re-generatable and
@@ -105,10 +119,16 @@ def generate_events(n: int = 500, seed: int = SEED) -> list[dict]:
             "geo_city": None,
             "investigation_id": None,
             # VER-1: ground truth for the eval harness (core/evaluate.py) — set
-            # only by the generator, on rows it built as the SSH brute-force
-            # scenario. Never derived from wazuh_rule_id/wazuh_rule_level or
-            # any other field the scorer consumes, or the label and the
-            # feature would share a source (the ML-1 target-leakage mistake).
+            # by the generator on the rows it built as an attack: the SSH
+            # brute-force burst, the web scanner sweep, and the SQLi/XSS probe
+            # chain. Never derived from wazuh_rule_id/wazuh_rule_level or any
+            # other field the scorer consumes, or the label and the feature
+            # would share a source (the ML-1 target-leakage mistake).
+            #
+            # The benign rows are not all easy: three scenarios (retry storm,
+            # uptime monitor, stale-URL crawler) are high-volume sources that a
+            # request counter calls an attack. They are the reason a score on
+            # this dataset is worth reading at all.
             # Not a real `events` column — load_demo() strips it before insert.
             "is_attack_scenario": False,
         }
@@ -174,7 +194,71 @@ def generate_events(n: int = 500, seed: int = SEED) -> list[dict]:
             wazuh_rule_description="Multiple web server 400 error codes from same source ip",
             agent_id=_AGENTS[2][0], agent_name=web_agent_name, agent_ip=web_agent_ip,
             raw_ref=f'{scanner_ip} - - "GET {path} HTTP/1.1" 404 162',
+            is_attack_scenario=True,
         )
+
+    # ── Hard negatives: benign sources that look like an attack to a counter. ──
+    #
+    # Without these the web channel is trivially separable — measured on the
+    # generator before they existed, every benign web source was 1-4 requests
+    # spread over tens of hours while the scanner was 35 in 105 seconds, so a
+    # threshold on "requests in window" scored perfectly and proved nothing.
+    # That is ML-1's leak wearing a behavioural costume.
+    #
+    # Each of these shares exactly one of the scanner's three signatures
+    # (volume / failure ratio / distinct targets) and differs on the others, so
+    # separating them requires the features to be read together rather than any
+    # one of them thresholded. All three really do trip Wazuh rule 31151
+    # ("multiple 400 error codes from same source ip") — repeated 4xx from one
+    # client is exactly what it matches, which is why it is the rule's most
+    # common false positive and why the rule baseline is not free.
+
+    def web_row(ts, ip, path, status, rule_id, level, desc, event_type):
+        add(
+            ts, src_ip=ip, src_port=rng.randint(1024, 65535),
+            channel="web", event_type=event_type, success=status < 400,
+            wazuh_rule_id=rule_id, wazuh_rule_level=level,
+            wazuh_rule_description=desc,
+            agent_id=_AGENTS[2][0], agent_name=web_agent_name, agent_ip=web_agent_ip,
+            raw_ref=f'{ip} - - "GET {path} HTTP/1.1" {status} 162',
+        )
+
+    _MULTI_400 = (31151, 5, "Multiple web server 400 error codes from same source ip")
+
+    # N1 — broken-asset retry storm. A real visitor's browser re-requesting an
+    # icon the last deploy deleted: high volume, 100% failure, ONE target.
+    retry_ip = rng.choice([ip for ip in _PRIVATE_IPS])
+    retry_start = window_start + timedelta(hours=6, minutes=40)
+    for i in range(24):
+        web_row(retry_start + timedelta(seconds=8 * i), retry_ip,
+                "/static/img/logo-v2.png", 404, *_MULTI_400, "web_error")
+
+    # N2 — uptime monitor. Fixed 60s cadence for an hour, 200 OK, until a deploy
+    # window makes it 503 for six minutes: perfectly regular, ONE target, and
+    # failure only in a burst that a naive counter reads as an attack.
+    monitor_ip = rng.choice([ip for ip in _PUBLIC_IPS
+                             if ip not in (attacker_ip, scanner_ip)])
+    monitor_start = window_start + timedelta(hours=14)
+    for i in range(60):
+        deploying = 40 <= i < 46
+        web_row(
+            monitor_start + timedelta(seconds=60 * i), monitor_ip, "/health",
+            503 if deploying else 200,
+            *(_MULTI_400 if deploying else (31100, 3, "Web server 400 error code")),
+            "web_error",
+        )
+
+    # N3 — search crawler on stale URLs. The hard one: many distinct paths, many
+    # 404s, one source — the scanner's whole signature except the cadence. It
+    # walks at ~20s intervals with no burst, where the scanner runs at 3s. If
+    # the model cannot hold this apart from the sweep, burstiness and
+    # inter-arrival (f4-f6) are not earning their place in the contract.
+    crawler_ip = rng.choice([ip for ip in _PUBLIC_IPS
+                             if ip not in (attacker_ip, scanner_ip, monitor_ip)])
+    crawl_start = window_start + timedelta(hours=20, minutes=25)
+    for i in range(45):
+        web_row(crawl_start + timedelta(seconds=20 * i), crawler_ip,
+                _STALE_PATHS[i % len(_STALE_PATHS)], 404, *_MULTI_400, "web_error")
 
     # ── FIM / syscheck changes. ──
     fim_start = window_start + timedelta(hours=18)
@@ -311,6 +395,7 @@ def generate_events(n: int = 500, seed: int = SEED) -> list[dict]:
             wazuh_rule_id=rule_id, wazuh_rule_level=level, wazuh_rule_description=desc,
             agent_id=_AGENTS[2][0], agent_name=_AGENTS[2][1], agent_ip=_AGENTS[2][2],
             raw_ref=f"{probe_ip} - - {log}",
+            is_attack_scenario=True,
         )
 
     # ── Benign majority: low-level sshd/web noise, spread across the whole

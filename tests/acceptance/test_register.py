@@ -1121,3 +1121,112 @@ def test_gfa_7_coverage_dashboard_shows_blind_spots():
         "GFA-7: must surface channels configured but producing nothing — a broken "
         "log path is invisible in Wazuh, and that is the gap worth owning."
     )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ML rebuild — rules for SSH, classifier for web
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_ml_1_model_features_exclude_wazuh_verdict_fields():
+    """ML-1: the model must not be fed Wazuh's own answer.
+
+    The shipped model scored `rule_level`, `rule_id` and `decoder_hash` and
+    reported 0.9996 precision — it had learned to predict Wazuh's severity from
+    Wazuh's severity. On the web corpus the same trap is sharper: a pure
+    `rule_id` lookup table scores **98.36%** across 1.7M rows, because only
+    seven rule_ids exist there. Excluding those fields is the only way the leak
+    is structurally impossible rather than merely avoided this time.
+    """
+    import json as _json
+
+    reg = REPO / "ml" / "models" / "model_registry.json"
+    if not reg.exists():
+        pytest.skip("no model registry")
+    cols = _json.loads(reg.read_text(encoding="utf-8")).get("feature_columns", [])
+    assert cols, "ML-1: registry declares no feature_columns"
+
+    banned = {c for c in cols if any(
+        k in c.lower() for k in ("rule_level", "rule_id", "decoder", "wazuh"))}
+    assert not banned, (
+        f"ML-1: the feature set contains Wazuh's own verdict: {sorted(banned)}. "
+        "Any accuracy measured on these is a lookup of what the SIEM already said."
+    )
+
+
+def test_ml_8_ssh_path_is_rule_driven_not_model_gated():
+    """ML-8: the classifier could suppress an alert Wazuh had already escalated.
+
+    Wazuh rule 5712 fires at level 10 on 8 failures in 120s from one source —
+    exactly the behaviour f1/f3 were built to compute. The model sat between
+    that detection and the operator, and `_apply_min_attempts_gate` could clamp
+    p below t1 when our 300s window held fewer events than Wazuh's 120s one.
+    Measured: a confirmed level-10 brute force with model p=0.95 resolved to
+    `allow` and sent nothing.
+
+    A Wazuh detection must never be silently discarded by our own scoring.
+    """
+    import sys
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    import importlib
+
+    from modules import decision_policy
+
+    importlib.reload(decision_policy)
+
+    # Whatever the internals, a level-10 Wazuh event must reach the operator.
+    from schemas.normalized_event import NormalizedEvent
+
+    ev = NormalizedEvent(
+        src_ip="203.0.113.9", channel="sshd", event_type="auth_failed",
+        username="root", wazuh_rule_id=5712, wazuh_rule_level=10,
+    )
+    assert hasattr(decision_policy, "should_alert"), (
+        "ML-8: no single place decides whether an event reaches the operator. "
+        "Expose should_alert(event, ...) so the Wazuh-level floor is one rule, "
+        "not a condition scattered across the SSH and non-SSH branches."
+    )
+    assert decision_policy.should_alert(ev) is True, (
+        "ML-8: a level-10 Wazuh brute-force detection did not produce an alert. "
+        "Rules detect; our scoring must not be able to veto them."
+    )
+
+
+def test_ml_9_alert_carries_evidence_not_just_a_verdict():
+    """ML-9: the alert led with a model probability and omitted every fact.
+
+    Rendered today it says 'Suspicious activity 83%' and draws an 83% bar — a
+    number from the model this rebuild is retiring — while the attempt count
+    sits unused in `reason`. A reader cannot call false-positive from it,
+    because it contains a verdict and no evidence.
+    """
+    import sys
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    from modules import alert_format
+    from schemas.normalized_event import NormalizedEvent
+
+    ev = NormalizedEvent(
+        src_ip="203.0.113.9", channel="sshd", event_type="auth_failed",
+        username="root", agent_name="web-01", agent_id="007",
+        wazuh_rule_id=5712, wazuh_rule_level=10,
+        wazuh_rule_description="sshd: brute force trying to get access",
+    )
+    fn = getattr(alert_format, "format_evidence_alert", None)
+    assert fn is not None, (
+        "ML-9: no evidence-first alert formatter. The operator needs attempts, "
+        "window, usernames tried and whether the source is new — not a score."
+    )
+    body = re.sub(r"<[^>]+>", "", fn(ev, attempts=12, window_seconds=240,
+                                     usernames=["root", "admin", "oracle"],
+                                     first_seen_days=3))
+    low = body.lower()
+    for token in ("12", "root", "admin", "203.0.113.9", "5712"):
+        assert token in body, f"ML-9: alert omits {token!r} — evidence, not decoration"
+    assert "%" not in body or "confidence" not in low, (
+        "ML-9: the alert still leads with a probability. Lead with what happened."
+    )
