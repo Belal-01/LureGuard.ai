@@ -1,3 +1,22 @@
+---
+name: daily-summary
+description: "Mode: daily-summary — Shift handover / daily SOC summary"
+requires_tools:
+  - add_timeline_event
+  - close_investigation
+  - get_agent_vulnerabilities
+  - get_fleet_posture_summary
+  - get_fleet_vulnerability_summary
+  - get_recent_alerts
+  - get_soc_health
+  - list_agents
+  - list_enrolled_hosts
+  - open_investigation
+  - record_finding
+  - save_report
+  - send_report_to_telegram
+produces: report
+---
 # Mode: daily-summary — Shift handover / daily SOC summary
 
 ## Purpose

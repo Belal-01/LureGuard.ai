@@ -1,3 +1,25 @@
+---
+name: investigate-web
+description: "Mode: investigate-web — Web server incident (apache/nginx)"
+requires_tools:
+  - add_timeline_event
+  - analyze_web_attack
+  - check_domain_virustotal
+  - check_url_urlhaus
+  - check_url_virustotal
+  - close_investigation
+  - defang_ioc
+  - get_agent_detail
+  - get_agent_exposure
+  - get_agent_vulnerabilities
+  - get_event_timeline
+  - get_investigation_artifacts
+  - list_agents
+  - open_investigation
+  - record_finding
+  - search_events
+produces: investigation
+---
 # Mode: investigate-web — Web server incident (apache/nginx)
 
 ## Purpose

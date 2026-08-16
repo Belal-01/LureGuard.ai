@@ -1,3 +1,14 @@
+---
+name: refresh-posture
+description: "Mode: refresh-posture — On-demand CVE / exposure / detection rescan"
+requires_tools:
+  - get_agent_vulnerabilities
+  - get_posture_scan_status
+  - get_posture_snapshot
+  - save_report
+  - trigger_posture_scan
+produces: posture
+---
 # Mode: refresh-posture — On-demand CVE / exposure / detection rescan
 
 ## Purpose

@@ -51,7 +51,14 @@ async def lifespan(app: FastAPI):
     load_model()
     logger.info(f"✅ ML model loaded (version={get_model_version()})")
 
-    # 3. Start APScheduler tick loop
+    # 3. Project the ATT&CK map into Postgres so Grafana can join it (GFA-7).
+    #    Reloaded every boot: the JSON is the source of truth, the table a copy.
+    from attack_seed import load_attack_map
+
+    async with AsyncSessionLocal() as db:
+        await load_attack_map(db)
+
+    # 4. Start APScheduler tick loop
     start_scheduler()
     logger.info("✅ Scheduler started (tick=2s)")
 

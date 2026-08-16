@@ -1,3 +1,21 @@
+---
+name: opencode-mcp
+description: "opencode — MCP behavior (mandatory)"
+requires_tools:
+  - apply_system_update
+  - audited
+  - check_system_update
+  - close_investigation
+  - convert_report_to_pdf
+  - generate_report_chart
+  - generate_report_chart_preset
+  - get_recent_alerts
+  - list_agents
+  - rollback_system_update
+  - save_report
+  - send_report_to_telegram
+produces: notes
+---
 # opencode — MCP behavior (mandatory)
 
 You run inside **opencode** with the **LureGuard MCP server** (`lureguard`). Follow these rules in every session.

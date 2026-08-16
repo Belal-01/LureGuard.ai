@@ -1,0 +1,421 @@
+{
+  "uid": "lureguard-coverage",
+  "title": "LureGuard Detection Coverage",
+  "tags": [
+    "lureguard",
+    "coverage",
+    "attack"
+  ],
+  "schemaVersion": 41,
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "description": "What should have fired and did not. Wazuh shows what fired; it cannot show the gap. GFA-7.",
+  "templating": {
+    "list": [
+      {
+        "name": "agent_id",
+        "label": "Agent",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      },
+      {
+        "name": "tactic",
+        "label": "Tactic",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "lureguard-postgres"
+        },
+        "query": "SELECT DISTINCT tactic FROM attack_rule_map ORDER BY 1",
+        "includeAll": true,
+        "multi": false,
+        "refresh": 1,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Techniques seen",
+      "description": "Distinct ATT&CK techniques with at least one matching event over the selected range. Counts what the fleet actually produced, not what the ruleset could theoretically detect.",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "options": {
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 5
+              },
+              {
+                "color": "green",
+                "value": 15
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(DISTINCT m.technique) AS techniques_seen\nFROM events e\nJOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\nWHERE $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  AND ('${tactic}' = '$__all' OR m.tactic = '${tactic}')"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Techniques dark",
+      "description": "Mapped techniques with zero matching events over the selected range. These are the blind spots — a rule exists, and nothing has tripped it here.",
+      "gridPos": {
+        "x": 5,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "options": {
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 20
+              },
+              {
+                "color": "red",
+                "value": 35
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS techniques_dark FROM (\n  SELECT m.technique\n  FROM attack_rule_map m\n  WHERE ('${tactic}' = '$__all' OR m.tactic = '${tactic}')\n  GROUP BY m.technique\n  HAVING NOT EXISTS (\n    SELECT 1 FROM events e\n    WHERE e.wazuh_rule_id = ANY (\n      SELECT wazuh_rule_id FROM attack_rule_map x WHERE x.technique = m.technique\n    )\n    AND $__timeFilter(e.ts)\n    AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  )\n) d"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Rules mapped",
+      "description": "Point-in-time: Wazuh rules carrying an ATT&CK mapping. Projection of core/attack_map.json, reloaded at Core startup — not editable here.",
+      "gridPos": {
+        "x": 10,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "options": {
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 150
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(DISTINCT wazuh_rule_id) AS rules_mapped FROM attack_rule_map"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Silent channels",
+      "description": "Channels that produced events historically but none over the selected range. A broken log path is invisible in Wazuh; this is the panel that surfaces it.",
+      "gridPos": {
+        "x": 15,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "options": {
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT count(*) AS silent_channels FROM (\n  SELECT DISTINCT channel FROM events\n  EXCEPT\n  SELECT DISTINCT channel FROM events WHERE $__timeFilter(ts)\n) s"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Techniques observed over time",
+      "description": "Distinct techniques tripping per interval. A drop is either quiet traffic or a broken pipeline — cross-check against Silent channels.",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "fillOpacity": 12,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 10
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT $__timeGroup(e.ts, '$__interval') AS time,\n       count(DISTINCT m.technique) AS techniques\nFROM events e\nJOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\nWHERE $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  AND ('${tactic}' = '$__all' OR m.tactic = '${tactic}')\nGROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Dark techniques — mapped but never observed",
+      "description": "The blind spots. A rule covers each of these and nothing has tripped it in the selected range: either the attack has not occurred, or the log path feeding that rule is broken. Wazuh cannot show this, because it only knows what did fire.",
+      "gridPos": {
+        "x": 0,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT m.technique AS \"Technique\",\n       m.tactic AS \"Tactic\",\n       count(DISTINCT m.wazuh_rule_id) AS \"Rules covering it\",\n       min(m.description) AS \"Example rule\"\nFROM attack_rule_map m\nWHERE ('${tactic}' = '$__all' OR m.tactic = '${tactic}')\nGROUP BY m.technique, m.tactic\nHAVING NOT EXISTS (\n  SELECT 1 FROM events e\n  WHERE e.wazuh_rule_id = ANY (\n    SELECT wazuh_rule_id FROM attack_rule_map x WHERE x.technique = m.technique\n  )\n  AND $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n)\nORDER BY 2, 1"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "Coverage by tactic",
+      "description": "Seen versus mapped per ATT&CK tactic. A tactic at 0 seen is entirely dark for this fleet.",
+      "gridPos": {
+        "x": 12,
+        "y": 11,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH seen AS (\n  SELECT DISTINCT m.technique, m.tactic\n  FROM events e\n  JOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\n  WHERE $__timeFilter(e.ts)\n    AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n)\nSELECT m.tactic AS \"Tactic\",\n       count(DISTINCT m.technique) AS \"Mapped\",\n       count(DISTINCT s.technique) AS \"Seen\",\n       round(100.0 * count(DISTINCT s.technique) / NULLIF(count(DISTINCT m.technique), 0)) AS \"Covered %\"\nFROM attack_rule_map m\nLEFT JOIN seen s ON s.tactic = m.tactic AND s.technique = m.technique\nGROUP BY m.tactic\nORDER BY 4 NULLS FIRST, 1"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "Channels gone quiet",
+      "description": "Channels that have produced events before but none in the selected range, with how long ago they were last heard from. This is the ingestion blind spot — a silent decoder looks identical to a quiet network.",
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "lureguard-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT channel AS \"Channel\",\n       max(ts) AS \"Last event\",\n       round(extract(epoch FROM (now() - max(ts))) / 3600.0, 1) AS \"Hours quiet\",\n       count(*) AS \"Events all time\"\nFROM events\nGROUP BY channel\nHAVING max(ts) < now() - interval '1 hour'\nORDER BY 3 DESC"
+        }
+      ]
+    }
+  ]
+}

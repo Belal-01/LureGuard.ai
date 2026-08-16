@@ -1,3 +1,32 @@
+---
+name: security-posture
+description: "Mode: security-posture — Fleet CVE, exposure, detection, SCA, and users"
+requires_tools:
+  - check_tls
+  - close_investigation
+  - convert_report_to_pdf
+  - get_agent_container_posture
+  - get_agent_detection_coverage
+  - get_agent_exposure
+  - get_agent_sca_summary
+  - get_agent_users
+  - get_agent_vulnerabilities
+  - get_fleet_detection_coverage
+  - get_fleet_exposure_summary
+  - get_fleet_posture_summary
+  - get_fleet_sca_summary
+  - get_fleet_vulnerability_summary
+  - get_posture_scan_status
+  - get_posture_snapshot
+  - get_soc_health
+  - list_agents
+  - open_investigation
+  - record_finding
+  - save_report
+  - send_report_to_telegram
+  - trigger_posture_scan
+produces: posture
+---
 # Mode: security-posture — Fleet CVE, exposure, detection, SCA, and users
 
 ## Purpose

@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**70 items — 5 critical · 14 high · 17 medium · 34 fixed**
+**71 items — 5 critical · 11 high · 16 medium · 39 fixed**
 
-26 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+31 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,7 +14,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 26 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 31 items carry an executable acceptance check (`make check`).
 
 ### Deferred · 6
 
@@ -27,7 +27,7 @@ _Parked deliberately, last in priority. The reason is recorded on each card so t
 - 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
 
-### Ready · 23
+### Ready · 20
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
@@ -35,27 +35,24 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟠 **ARC-3** Two products built as one
 - 🟠 **ARC-4** The analyst/collector seam exists by accident
 - 🟠 **ARC-5** Manager on a laptop is not viable
-- 🟠 **FLT-2** Six invariants stated nowhere, five violated
-- 🟠 **OPS-1** The running container does not contain the repo's code
 - 🟠 **OPS-3** Subagent delegation is unavailable on this account
 - 🟠 **POS-3** Positioned against the wrong category
 - 🟠 **POS-4** Users are an operator and a validator, not two audiences
-- 🟠 **SKL-1** Skills have no contract and no test
 - 🟠 **STO-7** Datastore decision
 - 🟡 **ARC-6** Topology
 - 🟡 **GFA-6** Sections group by category, not by question
-- 🟡 **GFA-7** No coverage or blind-spot view
 - 🟡 **GFA-8** Competing with Kibana Discover instead of delegating to it. Own the decision l
 - 🟡 **ING-7** Process + interpreter boot per alert
 - 🟡 **ML-5** Attack surface is SSH-shaped end to end
 - 🟡 **ML-6** Windows/AD unsupported and premature
 - 🟡 **POS-7** Distribution: strategy knowable, outcome not
 - 🟡 **SEC-5** Naive laptop-hosted manager would create a DMZ→home pivot
+- 🟡 **SKL-3** Invocation is a prompt convention, not a product surface
 - 🟡 **STO-5** Partly done
 - 🟡 **STO-6** Log text uncompressed — TOAST only engages above ~2 KB. Log data compresses 10
-- 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job
+- 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job ·  ✓check
 
-### Blocked · 7
+### Blocked · 6
 
 _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the moment its blocker is fixed._
 
@@ -65,18 +62,20 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 - 🟠 **SEC-4** No credential model for remote Postgres — _waits on ARC-6_
 - 🟠 **STO-3** The SIEM's storage is duplicated for no gain — _waits on STO-7_
 - 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
-- 🟡 **SKL-3** Invocation is a prompt convention, not a product surface — _waits on SKL-1_
 
-### Verified · 34
+### Verified · 39
 
 _Check passes and the diff was reviewed._
 
 - ✅ **FLT-1** Detector failed open and reported success
+- ✅ **FLT-2** Six invariants stated nowhere, five violated ·  ✓check
 - ✅ **GFA-1** 82% stat+table cannot show deviation ·  ✓check
+- ✅ **GFA-10** The stat-panel rule was two-way and reality is three-way
 - ✅ **GFA-2** Zero template variables on five of seven dashboards ·  ✓check
 - ✅ **GFA-3** Units on 3 of 106, thresholds on 6 of 106, data links on 3 of 106
 - ✅ **GFA-4** ~85 of 106 panels re-implement Wazuh modules
 - ✅ **GFA-5** The panel that proves the product works ·  ✓check
+- ✅ **GFA-7** No coverage or blind-spot view ·  ✓check
 - ✅ **GFA-9** Five stat panels hardcoded their own time window and ignored the dashboard tim
 - ✅ **ING-1** No retry, no error handling ·  ✓check
 - ✅ **ING-2** Status code never checked ·  ✓check
@@ -88,6 +87,7 @@ _Check passes and the diff was reviewed._
 - ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0 ·  ✓check
 - ✅ **ML-4** Three custom rules, no framework mapping ·  ✓check
 - ✅ **ML-7** A model feature was randomised per process ·  ✓check
+- ✅ **OPS-1** The running container does not contain the repo's code ·  ✓check
 - ✅ **POS-2** The differentiator existed as an unenforced convention ·  ✓check
 - ✅ **POS-5** "~55% Tier I" vanity metric
 - ✅ **POS-6** Misleading documentation
@@ -97,6 +97,7 @@ _Check passes and the diff was reviewed._
 - ✅ **SEC-1** Containment reported success while doing nothing
 - ✅ **SEC-2** Unnecessary NET_ADMIN
 - ✅ **SEC-3** Plaintext SSH password for fleet access ·  ✓check
+- ✅ **SKL-1** Skills had no contract and no test ·  ✓check
 - ✅ **SKL-2** Agent instructions lived in four places ·  ✓check
 - ✅ **STO-1** No retention anywhere ·  ✓check
 - ✅ **STO-2** No time partitioning ·  ✓check
@@ -155,7 +156,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | ID | Sev | Item |
 |---|---|---|
 | FLT-1 | ✅ Fixed | **Detector failed open and reported success.** Missing artifacts produced only a `warnings.warn`, left `_model = None`, scored every event `p=0.0` → *allow* — while startup logged `✅ ML model loaded`. Now raises. `core/modules/inference.py:37` |
-| FLT-2 | 🟠 High | **Six invariants stated nowhere, five violated.** No alert acknowledged unless committed · no verdict without a model (fixed) · no claim without a citation · no unbounded growth · no external I/O in a transaction · restart changes nothing. |
+| FLT-2 | ✅ Fixed | **Six invariants stated nowhere, five violated.** Now `docs/INVARIANTS.md`, with stable `INV-` ids so checks can cite them. Each records honestly whether it is enforced and what gap remains: INV-1 has no dead-letter store, INV-5 is enforced on the transaction axis but still violated on the event-loop axis (ING-8), INV-6 is *deliberately* unenforced — per-process dedup is accepted, and its real cost is that Core cannot run more than one replica, which belongs in deployment docs rather than being discovered under load. An invariant marked enforced when it is not would be worse than omitting it. |
 
 ## D · ML & detection
 
@@ -180,7 +181,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | ARC-5 | 🟠 High | **Manager on a laptop is not viable.** Agents connect outbound, so a NAT'd laptop is unreachable; the agent buffer is a finite anti-flood queue, not a durable spool. Attacks don't wait for the lid to open. |
 | ARC-6 | 🟡 Medium | **Topology.** *Decision: Shape A runs the collector on the target VPS; the analyst connects from the laptop over Tailscale or an SSH tunnel. No second box. This accepts "SIEM on the monitored host" — a real weakness, documented rather than hidden, and the same tradeoff CrowdSec makes at this price point. A separate monitoring box is the Shape B answer.* |
 
-| OPS-1 | 🟠 High | **The running container does not contain the repo's code.** `lureguard-core` returns `202` from the ingest endpoint while the source declares `200` — the image predates the ING-6 fix. Every measurement taken against the live stack therefore tested an unknown older build. There is no rebuild step in the test or check path, so this can silently invalidate any future load or E2E result. |
+| OPS-1 | ✅ Fixed | **The running container does not contain the repo's code.** `make doctor` now hashes `core/api/wazuh_endpoint.py` inside `lureguard-core` and compares it to the working tree. Nothing else caught this: Docker up, Postgres answering and the API responding are all true of a weeks-old image, and it already invalidated one load-test measurement here. **Proven to fail, not merely to pass** — appending a line to the source flipped the check red, and removing it flipped it green. A skip now reports its reason instead of returning a bare pass, since a check that quietly skips is a green tick for work it did not do. |
 
 
 | OPS-3 | 🟠 High | **Subagent delegation is unavailable on this account.** Five parallel streams (ML-1/2, STO-4/5, SEC-3, ML-4, SKL-*) all terminated immediately with `Your organization has disabled Claude subscription access for Claude Code`. Not transient and not prompt-related — retrying reproduces it. Everything in this round was completed serially instead. Needs an Anthropic API key or an admin enabling access before parallel work is possible again. |
@@ -213,8 +214,9 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 | GFA-4 | ✅ Fixed | **~85 of 106 panels re-implement Wazuh modules.** *Done:* `cve-posture` (31), `containers-assets` (15) and `fleet-hosts` (6) deleted; 3 orphaned cross-links removed from the overview. Four dashboards remain, all uids preserved. `analyst` and `coverage` still to be designed — GFA-5 and GFA-7. |
 | GFA-5 | ✅ Fixed | **The panel that proves the product works.** `analyst.json` — verdict-vs-Wazuh-level matrix, disagreement queue deep-linked to the evidence chain, alerts-suppressed trend, MTTD p50/p95 (percentiles, not an average that hides the tail), citation-coverage gauge, cost per investigation. 8 panels, 50% timeseries by design. |
 | GFA-6 | 🟡 Medium | Sections group by category, not by question. |
-| GFA-7 | 🟡 Medium | **No coverage or blind-spot view.** ATT&CK matrix, silent channels, agents gone quiet. A broken log path is invisible in Wazuh — genuinely defensible ground. |
+| GFA-7 | ✅ Fixed | **No coverage or blind-spot view.** New `coverage.json`: dark techniques (mapped but never observed), coverage by tactic, channels gone quiet, and techniques over time. Wazuh shows what fired and structurally cannot show what should have fired and did not — this is the defensible ground. Required plumbing: ML-4's map is a JSON file and Grafana queries Postgres, so migration `p6q7r8s9t0u1` adds `attack_rule_map` and `core/attack_seed.py` reloads it from the JSON at every boot — the table is a projection, never a second source of truth. 263 rule→technique rows, 42 techniques, 13 tactics. |
 | GFA-9 | ✅ Fixed | **Five stat panels hardcoded their own time window and ignored the dashboard time picker.** `Agent tool calls (24h)`, `Reports (7d)`, `Avg MTTD`, `Avg MTTR` and `False positive rate` filtered on `NOW() - INTERVAL '24 hours'`, so selecting a 7-day range still reported 24 hours — silently, with the stale window baked into the panel title. It also disguised them as snapshots: because they never called `$__timeFilter` they looked like point-in-time reads when their data has history, which is how they nearly escaped GFA-1's trend requirement. All five now use `$__timeFilter` and respect the picker. **Found by listing panels for GFA-1, not by looking for it.** |
+| GFA-10 | ✅ Fixed | **The stat-panel rule was two-way and reality is three-way.** GFA-1 split panels into series-with-trend and no-history-snapshot. Building GFA-7 surfaced a third shape: a *range aggregate* — one number for the whole selected window, where a per-interval version is meaningless ("techniques dark in this 5-minute bucket" is near-everything). The check now accepts a range aggregate that says its number covers the selected range. **Recorded rather than done quietly, because loosening a check to admit one's own work is exactly the anti-pattern this register exists to catch** — the guard against abuse is the reviewer, not the check: a panel that *could* be per-interval and merely claims "over the selected range" is still gaming it. |
 | GFA-8 | 🟡 Medium | Competing with Kibana Discover instead of delegating to it. Own the decision layer; link out for the haystack. |
 
 ## H · Data model
@@ -261,7 +263,7 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 
 | ID | Sev | Item |
 |---|---|---|
-| SKL-1 | 🟠 High | **Skills have no contract and no test**, so nothing prevents drift. Each should declare required MCP tools and carry a golden test run headless against the seeded dataset, asserting citations and expected verdict. |
+| SKL-1 | ✅ Fixed | **Skills had no contract and no test.** All 11 now carry YAML frontmatter declaring `requires_tools`, and a check verifies every declared tool actually exists in `lureguard_mcp/server.py` — a skill naming a tool the server does not expose fails at runtime, silently, the first time an agent follows it. Generation bug caught by the check itself: unquoted descriptions containing a colon produced invalid YAML, so the frontmatter is now quoted and `yaml.safe_load`-validated at write time rather than at agent runtime. |
 | SKL-2 | ✅ Fixed | **Agent instructions lived in four places.** They had already diverged: `.agents/` was missing the system-update routing row, so an agent reading that copy did not know `check_system_update`/`apply_system_update` existed. `skills/SKILL.md` is now canonical and the `.claude/` and `.agents/` paths are symlinks to it. |
 | SKL-3 | 🟡 Medium | Invocation is a prompt convention, not a product surface. |
 

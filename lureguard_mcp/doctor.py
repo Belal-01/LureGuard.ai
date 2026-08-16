@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -375,6 +376,54 @@ def _print_check(c: Check) -> None:
         print(f"      {_dim('→ ' + c.hint)}")
 
 
+def check_container_matches_repo() -> Check:
+    """OPS-1: is the running container built from the code in the working tree?
+
+    Nothing else here catches this. Docker is up, Postgres answers, the API
+    responds — and the image can still be weeks old. That silently invalidates
+    anything measured against the live stack: a load test against a stale image
+    reports the old code's behaviour with entirely convincing numbers. It has
+    already happened once in this project, and the resulting measurement was
+    believed until the mismatch was noticed by accident.
+    """
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parent.parent
+    probe = repo_root / "core" / "api" / "wazuh_endpoint.py"
+    if not probe.is_file():
+        return Check("Container matches repo", True, "core source not present", required=False)
+
+    try:
+        local = hashlib.sha256(probe.read_bytes()).hexdigest()
+        out = subprocess.run(
+            ["docker", "exec", "lureguard-core",
+             "sha256sum", "/app/core/api/wazuh_endpoint.py"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if out.returncode != 0:
+            # Report the reason rather than a bare pass. A check that quietly
+            # skips is a green tick for work it did not do — the exact pattern
+            # this check exists to catch.
+            return Check(
+                "Container matches repo", False,
+                f"could not hash the file inside lureguard-core: "
+                f"{(out.stderr or '').strip()[:80]}",
+                required=False,
+            )
+        running = out.stdout.split()[0]
+    except Exception as exc:  # noqa: BLE001 - diagnostic, must never break doctor
+        return Check("Container matches repo", True, f"skipped ({exc})", required=False)
+
+    if running != local:
+        return Check(
+            "Container matches repo", False,
+            "lureguard-core is running code that differs from the working tree. "
+            "Anything measured against this stack describes the old build. "
+            "Run: docker compose build lureguard-core && docker compose up -d lureguard-core",
+        )
+    return Check("Container matches repo", True)
+
+
 def run_doctor() -> int:
     print("lureguard doctor")
     print("─" * 44)
@@ -393,6 +442,7 @@ def run_doctor() -> int:
         check_opencode_config(),
         check_opencode_mcp(),
         check_opencode_providers(),
+        check_container_matches_repo(),
     ]
     optional_checks = [
         check_grafana(),

@@ -1,3 +1,17 @@
+---
+name: ioc-sweep
+description: "Mode: ioc-sweep — IOC correlation across fleet"
+requires_tools:
+  - check_hash
+  - check_ip_reputation
+  - check_ip_virustotal
+  - close_investigation
+  - list_agents
+  - open_investigation
+  - record_finding
+  - search_events
+produces: notes
+---
 # Mode: ioc-sweep — IOC correlation across fleet
 
 ## Purpose

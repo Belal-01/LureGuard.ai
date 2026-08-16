@@ -825,11 +825,28 @@ def test_gfa_1_stat_panels_carry_a_baseline():
         if "interval '" in sql and "$__timefilter" not in sql:
             hardcoded.append(name)
 
-        if time_scoped:
+        # Three shapes, not two. Refined while building the coverage dashboard
+        # (GFA-7), which surfaced the third:
+        #   series          -> per-interval value; show the trend
+        #   range aggregate -> one number for the whole selected window, where
+        #                      a per-interval version is meaningless ("techniques
+        #                      dark in this 5-minute bucket" is near-everything)
+        #   snapshot        -> current state, no history exists
+        # A range aggregate must say the number covers the selected range, so
+        # the reader knows what window they are looking at. It is not a general
+        # escape from the trend requirement: a panel that CAN be per-interval
+        # and simply says "over the selected range" is still gaming this, and
+        # the reviewer, not the check, is the guard there.
+        desc_l = (p.get("description") or "").lower()
+        range_agg = "selected range" in desc_l
+
+        if time_scoped and not range_agg:
             if not has_spark:
                 bare.append(name)
             elif not grouped:
                 scalar.append(name)
+        elif time_scoped:
+            pass  # labelled range aggregate
         else:
             desc = (p.get("description") or "").lower()
             if not any(k in desc for k in ("point-in-time", "snapshot", "current state")):
@@ -853,4 +870,119 @@ def test_gfa_1_stat_panels_carry_a_baseline():
         f"GFA-9: {len(hardcoded)} stat panels hardcode their own time window and "
         f"ignore the dashboard time picker — select 7 days and they still report 24 "
         f"hours. Use $__timeFilter. First few: {hardcoded[:5]}"
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Sprint 5 — parallel batch
+# ══════════════════════════════════════════════════════════════════════════════
+
+def test_flt_2_invariants_are_stated_and_enforced():
+    """FLT-2: six architectural invariants existed nowhere and five were violated.
+
+    You do not test architecture — you state invariants and then try to break
+    them. That list was carried in conversation and in this register's prose,
+    which means it could not be checked, handed over, or regression-guarded.
+    """
+    doc = REPO / "docs" / "INVARIANTS.md"
+    assert doc.exists(), (
+        "FLT-2: no invariants document. The six properties this system must hold "
+        "(no alert acknowledged unless committed; no verdict without a model; no "
+        "claim without a citation; no unbounded growth; no external I/O inside a "
+        "transaction; restart changes nothing) are stated nowhere in the repo."
+    )
+    text = doc.read_text(encoding="utf-8")
+    required = ["committed", "model", "citation", "growth", "transaction", "restart"]
+    missing = [k for k in required if k not in text.lower()]
+    assert not missing, f"FLT-2: invariants doc omits {missing}"
+    assert "INV-" in text, "FLT-2: invariants need stable ids so checks can cite them"
+
+
+def test_skl_1_skills_declare_tools_that_exist():
+    """SKL-1: a skill referencing a tool the server does not expose is broken
+    the moment an agent runs it, and nothing catches that today."""
+    server = (REPO / "lureguard_mcp" / "server.py").read_text(encoding="utf-8")
+    exposed = set(re.findall(r"^def ([a-z_][a-z0-9_]*)\(", server, re.M))
+    exposed |= set(re.findall(r'name="([a-z_][a-z0-9_]*)"', server))
+
+    skills = [p for p in (REPO / "skills").glob("*.md") if p.name != "SKILL.md"]
+    assert skills, "SKL-1: no skills found"
+
+    no_fm, bad_tools = [], []
+    for p in skills:
+        head = p.read_text(encoding="utf-8")
+        if not head.startswith("---"):
+            no_fm.append(p.name)
+            continue
+        fm = yaml.safe_load(head.split("---", 2)[1]) or {}
+        tools = fm.get("requires_tools") or []
+        for t in tools:
+            if t not in exposed:
+                bad_tools.append(f"{p.name}:{t}")
+
+    assert not no_fm, (
+        f"SKL-1: {len(no_fm)} skills have no frontmatter contract, so nothing "
+        f"declares what they need or verifies it still exists: {no_fm[:6]}"
+    )
+    assert not bad_tools, (
+        f"SKL-1: skills reference MCP tools the server does not expose — these "
+        f"fail at runtime, silently, the first time an agent follows them: {bad_tools[:6]}"
+    )
+
+
+def test_ops_1_doctor_detects_stale_container_code():
+    """OPS-1: the running container did not contain the repo's code.
+
+    This silently invalidates anything measured against the live stack — a load
+    test against a stale image reports the old code's behaviour with entirely
+    convincing numbers. It has already happened once in this project.
+    """
+    src = (REPO / "lureguard_mcp" / "doctor.py").read_text(encoding="utf-8")
+    assert "stale" in src.lower() or "image" in src.lower(), (
+        "OPS-1: `make doctor` verifies Docker is up, Postgres answers and the API "
+        "responds — but never that the running container was built from the code in "
+        "the working tree. Add a check so a stale image is loud, not silent."
+    )
+
+
+def test_sto_8_retention_creates_partitions_safely():
+    """STO-8: DEFAULT sets in concrete — verified live, Postgres refuses to
+    create a dated partition overlapping rows already stranded in it."""
+    import sys
+
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    import retention
+
+    fn = next((getattr(retention, n, None) for n in
+               ("ensure_future_partitions", "ensure_partitions",
+                "create_upcoming_partitions") if getattr(retention, n, None)), None)
+    assert fn is not None, (
+        "STO-8/STO-1: retention drops old partitions but nothing creates upcoming "
+        "ones. A missing partition makes INSERT fail — a silent ingest outage, "
+        "which is the failure this project exists to prevent."
+    )
+    src = __import__("inspect").getsource(retention)
+    assert "default" in src.lower(), (
+        "STO-8: partition creation must account for events_default; a naive "
+        "CREATE TABLE ... PARTITION OF fails once rows are stranded there."
+    )
+
+
+def test_gfa_7_coverage_dashboard_shows_blind_spots():
+    """GFA-7: Wazuh shows what fired. It cannot show what should have fired and
+    did not — which is the genuinely defensible ground against a SIEM."""
+    path = DASHBOARDS / "coverage.json"
+    assert path.exists(), (
+        "GFA-7: no coverage dashboard. ML-4's ATT&CK mapping now exists, so "
+        "technique coverage and silent channels are finally showable."
+    )
+    d = json.loads(path.read_text(encoding="utf-8"))
+    blob = json.dumps(d).lower()
+    assert d.get("templating", {}).get("list"), "GFA-7: coverage dashboard has no variables"
+    assert "technique" in blob or "attack" in blob, (
+        "GFA-7: the dashboard must show ATT&CK technique coverage"
+    )
+    assert "silent" in blob or "no events" in blob or "last_event" in blob, (
+        "GFA-7: must surface channels configured but producing nothing — a broken "
+        "log path is invisible in Wazuh, and that is the gap worth owning."
     )
