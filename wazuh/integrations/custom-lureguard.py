@@ -27,11 +27,13 @@ ERR_DELIVERY_FAILED = 8
 # integratord queue's time budget.
 _PERMANENT_STATUS = {400, 401, 403, 404, 422}
 
-try:
-    import requests
-except ModuleNotFoundError:
-    print("No module 'requests' found. Install: pip install requests")
-    sys.exit(ERR_NO_REQUEST_MODULE)
+# stdlib only. integratord fork/execs this file once per alert, so every
+# top-level import is paid per event: `import requests` measured ~49ms in the
+# manager's bundled interpreter versus ~8.5ms for bare startup, almost all of
+# it urllib3 and its transitive ssl/email/charset imports (ING-7). urllib
+# is already loaded by the interpreter and costs nothing extra.
+import urllib.error
+import urllib.request
 
 pwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 LOG_FILE = f"{pwd}/logs/integrations.log"
@@ -138,27 +140,38 @@ def _post_alert(
     if api_key:
         headers["X-LureGuard-Token"] = api_key
     payload = _normalize_alert(alert)
+    body = json.dumps(payload).encode("utf-8")
 
     last_error: Exception | None = None
     for attempt in range(1, max_attempts + 1):
+        req = urllib.request.Request(
+            webhook, data=body, headers=headers, method="POST"
+        )
         try:
-            response = requests.post(
-                webhook, json=payload, headers=headers, timeout=timeout_seconds
-            )
-        except requests.exceptions.RequestException as exc:
-            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} raised: {exc}")
-            last_error = exc
-        else:
-            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} -> {response.status_code}")
-            if 200 <= response.status_code < 300:
+            with urllib.request.urlopen(req, timeout=timeout_seconds) as response:
+                status = response.status
+            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} -> {status}")
+            if 200 <= status < 300:
                 return
-            if response.status_code in _PERMANENT_STATUS:
+            last_error = AlertDeliveryError(f"POST {webhook} -> {status}")
+        except urllib.error.HTTPError as exc:
+            # urllib raises on 4xx/5xx rather than returning them, so the
+            # permanent-vs-retryable split lives here.
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8", "replace")[:200]
+            except Exception:  # noqa: BLE001 - body is best-effort context only
+                pass
+            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} -> {exc.code}")
+            if exc.code in _PERMANENT_STATUS:
                 # Wrong token / bad request — retrying is pointless, fail loud now.
                 raise AlertDeliveryError(
-                    f"POST {webhook} rejected with {response.status_code} "
-                    f"(non-retryable): {response.text[:200]}"
-                )
-            last_error = AlertDeliveryError(f"POST {webhook} -> {response.status_code}")
+                    f"POST {webhook} rejected with {exc.code} (non-retryable): {detail}"
+                ) from exc
+            last_error = AlertDeliveryError(f"POST {webhook} -> {exc.code}")
+        except (urllib.error.URLError, OSError) as exc:
+            _debug(f"# POST {webhook} attempt {attempt}/{max_attempts} raised: {exc}")
+            last_error = exc
 
         if attempt < max_attempts:
             time.sleep(backoff_seconds * attempt)

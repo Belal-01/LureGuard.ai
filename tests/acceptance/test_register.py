@@ -54,47 +54,96 @@ def _load_integration():
 
 # ── A · Ingest ────────────────────────────────────────────────────────────────
 
-def test_ing_1_alert_delivery_retries_and_signals_failure(monkeypatch):
+def _stub_server(status: int):
+    """A real HTTP server that records hits and returns `status`.
+
+    VER-5: these checks used to monkeypatch `mod.requests`, which forced the
+    module to import requests at top level — pinning the HTTP library into the
+    contract and costing ~49ms per alert that ING-7 could not remove. The
+    requirement was always behavioural: retry transport failures, fail fast on
+    permanent rejections. Driving a real server asserts exactly that and leaves
+    the implementation free.
+    """
+    import http.server
+    import threading
+
+    hits: list[str] = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            hits.append(self.path)
+            self.send_response(status)
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, hits, f"http://127.0.0.1:{srv.server_port}/wazuh/event"
+
+
+def _free_port() -> int:
+    """A port with nothing listening — connecting to it fails at transport."""
+    import socket
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    return port
+
+
+def test_ing_1_alert_delivery_retries_and_signals_failure():
     """ING-1: a transport failure must retry, then signal — never vanish."""
     mod = _load_integration()
-    calls = []
 
-    def boom(*a, **kw):
-        calls.append(1)
-        raise mod.requests.exceptions.ConnectionError("core down")
+    # 5xx is retryable: the server is reachable but unhealthy.
+    srv, hits, url = _stub_server(503)
+    try:
+        with pytest.raises(Exception) as exc:
+            mod._post_alert({"rule": {}}, url, api_key="t", backoff_seconds=0.01)
+    finally:
+        srv.shutdown()
 
-    monkeypatch.setattr(mod.requests, "post", boom)
-
-    with pytest.raises(Exception) as exc:
-        mod._post_alert({"rule": {}}, "http://core:8080/wazuh/event", api_key="t")
-
-    assert len(calls) >= 3, (
-        f"ING-1: no retry — requests.post called {len(calls)}x. "
-        "A single ConnectionError currently loses the alert permanently."
+    assert len(hits) >= 3, (
+        f"ING-1: no retry — the endpoint was hit {len(hits)}x on a retryable 503. "
+        "A single failure currently loses the alert permanently."
     )
     assert not isinstance(exc.value, SystemExit), (
         "ING-1: must raise a catchable delivery error, not sys.exit — the caller "
         "needs a chance to dead-letter the alert."
     )
 
+    # And a genuine transport failure (nothing listening) must behave the same.
+    dead = f"http://127.0.0.1:{_free_port()}/wazuh/event"
+    with pytest.raises(Exception) as exc2:
+        mod._post_alert({"rule": {}}, dead, api_key="t", backoff_seconds=0.01)
+    assert not isinstance(exc2.value, SystemExit), (
+        "ING-1: a connection failure must raise a catchable error, not exit."
+    )
 
-def test_ing_2_non_2xx_response_is_treated_as_failure(monkeypatch):
-    """ING-2: a 401 from a wrong INGEST_TOKEN must be loud, not silent."""
+
+def test_ing_2_non_2xx_response_is_treated_as_failure():
+    """ING-2: a 401 from a wrong INGEST_TOKEN must be loud, and must not burn
+    the retry budget — the request arrived and was permanently rejected."""
     mod = _load_integration()
 
-    class Resp:
-        status_code = 401
-        text = "unauthorized"
-
-    monkeypatch.setattr(mod.requests, "post", lambda *a, **kw: Resp())
-
-    with pytest.raises(Exception) as exc:
-        mod._post_alert({"rule": {}}, "http://core:8080/wazuh/event", api_key="wrong")
+    srv, hits, url = _stub_server(401)
+    try:
+        with pytest.raises(Exception) as exc:
+            mod._post_alert({"rule": {}}, url, api_key="wrong", backoff_seconds=0.01)
+    finally:
+        srv.shutdown()
 
     assert not isinstance(exc.value, SystemExit), (
         "ING-2: must signal a delivery failure the caller can act on."
     )
-    # Currently _post_alert logs the status code and returns None -> silent loss.
+    assert len(hits) == 1, (
+        f"ING-2: a 401 is permanent, but the endpoint was hit {len(hits)}x. "
+        "Retrying a bad token wastes integratord's time budget (ING-3)."
+    )
 
 
 # ── B · Storage ───────────────────────────────────────────────────────────────
