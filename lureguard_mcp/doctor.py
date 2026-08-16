@@ -12,9 +12,12 @@ from pathlib import Path
 
 import logging
 
-# Suppress httpx noise before any health-check imports run.
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+# Quieten third-party loggers before any health-check imports run. WeasyPrint
+# logs "Step 2 - Fetching and parsing CSS" at INFO on import, which printed
+# three lines into the middle of doctor's output and made a passing run look
+# like something had gone wrong.
+for _noisy in ("httpx", "httpcore", "weasyprint", "fontTools", "PIL"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -389,16 +392,34 @@ def check_container_matches_repo() -> Check:
     import subprocess
 
     repo_root = Path(__file__).resolve().parent.parent
-    probe = repo_root / "core" / "api" / "wazuh_endpoint.py"
-    if not probe.is_file():
+    core_dir = repo_root / "core"
+    if not core_dir.is_dir():
         return Check("Container matches repo", True, "core source not present", required=False)
 
+    # Hash the whole tree, not one file. An earlier version probed only
+    # wazuh_endpoint.py and would have reported "matches" while main.py and a
+    # brand-new module were stale — a false green from the very check that
+    # exists to prevent false greens.
+    def _tree_digest(names_and_bytes) -> str:
+        h = hashlib.sha256()
+        for name, blob in sorted(names_and_bytes):
+            h.update(name.encode())
+            h.update(blob if isinstance(blob, bytes) and len(blob) == 64
+                     else hashlib.sha256(blob).hexdigest().encode())
+        return h.hexdigest()
+
     try:
-        local = hashlib.sha256(probe.read_bytes()).hexdigest()
+        local_files = [
+            (str(p.relative_to(core_dir)), p.read_bytes())
+            for p in sorted(core_dir.rglob("*.py"))
+            if "__pycache__" not in p.parts
+        ]
+        local = _tree_digest(local_files)
         out = subprocess.run(
-            ["docker", "exec", "lureguard-core",
-             "sha256sum", "/app/core/api/wazuh_endpoint.py"],
-            capture_output=True, text=True, timeout=10,
+            ["docker", "exec", "lureguard-core", "sh", "-c",
+             "cd /app/core && find . -name '*.py' -not -path '*/__pycache__/*' "
+             "| sort | xargs sha256sum"],
+            capture_output=True, text=True, timeout=20,
         )
         if out.returncode != 0:
             # Report the reason rather than a bare pass. A check that quietly
@@ -410,9 +431,21 @@ def check_container_matches_repo() -> Check:
                 f"{(out.stderr or '').strip()[:80]}",
                 required=False,
             )
-        running = out.stdout.split()[0]
+        remote_files = []
+        for line in out.stdout.splitlines():
+            digest, _, path = line.partition(" ")
+            path = path.strip().lstrip("*").lstrip("./")
+            if path:
+                remote_files.append((path, digest.encode()))
+        # Re-hash the remote digests the same way, so both sides are comparable.
+        h = hashlib.sha256()
+        for name, digest in sorted(remote_files):
+            h.update(name.encode())
+            h.update(digest)
+        running = h.hexdigest()
+        local = _tree_digest(local_files)
     except Exception as exc:  # noqa: BLE001 - diagnostic, must never break doctor
-        return Check("Container matches repo", True, f"skipped ({exc})", required=False)
+        return Check("Container matches repo", False, f"could not compare: {exc}", required=False)
 
     if running != local:
         return Check(

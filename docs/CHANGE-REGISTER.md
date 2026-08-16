@@ -2,7 +2,7 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**71 items — 5 critical · 11 high · 16 medium · 39 fixed**
+**72 items — 5 critical · 12 high · 15 medium · 40 fixed**
 
 31 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
@@ -35,6 +35,7 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟠 **ARC-3** Two products built as one
 - 🟠 **ARC-4** The analyst/collector seam exists by accident
 - 🟠 **ARC-5** Manager on a laptop is not viable
+- 🟠 **ML-5** Attack surface is SSH-shaped end to end
 - 🟠 **OPS-3** Subagent delegation is unavailable on this account
 - 🟠 **POS-3** Positioned against the wrong category
 - 🟠 **POS-4** Users are an operator and a validator, not two audiences
@@ -43,7 +44,6 @@ _Scoped and unblocked. Each needs an acceptance check written before it is safe 
 - 🟡 **GFA-6** Sections group by category, not by question
 - 🟡 **GFA-8** Competing with Kibana Discover instead of delegating to it. Own the decision l
 - 🟡 **ING-7** Process + interpreter boot per alert
-- 🟡 **ML-5** Attack surface is SSH-shaped end to end
 - 🟡 **ML-6** Windows/AD unsupported and premature
 - 🟡 **POS-7** Distribution: strategy knowable, outcome not
 - 🟡 **SEC-5** Naive laptop-hosted manager would create a DMZ→home pivot
@@ -63,7 +63,7 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 - 🟠 **STO-3** The SIEM's storage is duplicated for no gain — _waits on STO-7_
 - 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
 
-### Verified · 39
+### Verified · 40
 
 _Check passes and the diff was reviewed._
 
@@ -88,6 +88,7 @@ _Check passes and the diff was reviewed._
 - ✅ **ML-4** Three custom rules, no framework mapping ·  ✓check
 - ✅ **ML-7** A model feature was randomised per process ·  ✓check
 - ✅ **OPS-1** The running container does not contain the repo's code ·  ✓check
+- ✅ **OPS-4** WeasyPrint logged three CSS-parsing lines into the middle of make doctor outpu
 - ✅ **POS-2** The differentiator existed as an unenforced convention ·  ✓check
 - ✅ **POS-5** "~55% Tier I" vanity metric
 - ✅ **POS-6** Misleading documentation
@@ -167,7 +168,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | ML-3 | ✅ Fixed | **Model pickled on sklearn 1.8.0, loaded on 1.9.0.** Dependency was unpinned; the SHA-256 registry check validated bytes but not runtime compatibility. Pinned to `scikit-learn==1.8.0` and installed. |
 | ML-7 | ✅ Fixed | **A model feature was randomised per process.** `decoder_hash` was built from Python's builtin `hash()`, which is seeded per interpreter. The model was trained under one seed and served under a fresh one every restart, so the feature was uncorrelated noise in production — and the same event could score differently in two processes, violating determinism outright rather than merely leaving it unmeasured. Switched to `zlib.crc32`. **Measured effect: eval TPR rose 0.000 → 0.182 from this one line**, confirming the feature was actively poisoning inference. `ml/alert_features.py:104` |
 | ML-4 | ✅ Fixed | **Three custom rules, no framework mapping.** `core/attack_map.json` now maps **218 rules** to ATT&CK — 212 read from the running manager's own `<mitre>` blocks, 6 hand-assigned for `local_rules.xml` which carries none. Provenance is recorded per rule because vendor metadata and a guess carry different confidence. Scope is deliberate: only rules whose groups intersect `_FORWARD_GROUPS`, since a rule outside those never reaches this product and mapping it would overstate coverage. **226 in-scope rules carry no ATT&CK metadata at all** — that is the honest coverage gap, and it is recorded in the file. Tactics: initial-access 98, credential-access 66, impact 25, lateral-movement 17, then a long tail; collection, exfiltration and reconnaissance are nearly dark. Regenerate with `python3 scripts/build_attack_map.py`. Unblocks GFA-7. |
-| ML-5 | 🟡 Medium | **Attack surface is SSH-shaped end to end** — features are literally `is_sshd`, `decoder_sshd`. |
+| ML-5 | 🟠 High | **Attack surface is SSH-shaped end to end.** Features are literally `is_sshd` and `decoder_sshd`. **Now measured, not asserted:** GFA-7's coverage query shows 8 of 42 mapped techniques observed and 8 of 13 tactics completely dark, concentrated in everything post-compromise. Severity raised from Medium — this is no longer a design observation, it is a quantified detection gap. |
 | ML-6 | 🟡 Medium | **Windows/AD unsupported and premature.** Onboarding is SSH + `apt`; AD detection is a separate discipline. Deferred deliberately until one platform passes a senior review. |
 
 ## E · Architecture & deployment
@@ -181,7 +182,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | ARC-5 | 🟠 High | **Manager on a laptop is not viable.** Agents connect outbound, so a NAT'd laptop is unreachable; the agent buffer is a finite anti-flood queue, not a durable spool. Attacks don't wait for the lid to open. |
 | ARC-6 | 🟡 Medium | **Topology.** *Decision: Shape A runs the collector on the target VPS; the analyst connects from the laptop over Tailscale or an SSH tunnel. No second box. This accepts "SIEM on the monitored host" — a real weakness, documented rather than hidden, and the same tradeoff CrowdSec makes at this price point. A separate monitoring box is the Shape B answer.* |
 
-| OPS-1 | ✅ Fixed | **The running container does not contain the repo's code.** `make doctor` now hashes `core/api/wazuh_endpoint.py` inside `lureguard-core` and compares it to the working tree. Nothing else caught this: Docker up, Postgres answering and the API responding are all true of a weeks-old image, and it already invalidated one load-test measurement here. **Proven to fail, not merely to pass** — appending a line to the source flipped the check red, and removing it flipped it green. A skip now reports its reason instead of returning a bare pass, since a check that quietly skips is a green tick for work it did not do. |
+| OPS-1 | ✅ Fixed | **The running container does not contain the repo's code.** *Strengthened after first landing: the initial version hashed a single file and would have reported a match while `main.py` and a new module were stale — a false green from the check built to prevent false greens. Now hashes the whole `core/` tree; verified by drifting `retention.py`, a file the one-file version ignored.* `make doctor` now hashes `core/api/wazuh_endpoint.py` inside `lureguard-core` and compares it to the working tree. Nothing else caught this: Docker up, Postgres answering and the API responding are all true of a weeks-old image, and it already invalidated one load-test measurement here. **Proven to fail, not merely to pass** — appending a line to the source flipped the check red, and removing it flipped it green. A skip now reports its reason instead of returning a bare pass, since a check that quietly skips is a green tick for work it did not do. |
 
 
 | OPS-3 | 🟠 High | **Subagent delegation is unavailable on this account.** Five parallel streams (ML-1/2, STO-4/5, SEC-3, ML-4, SKL-*) all terminated immediately with `Your organization has disabled Claude subscription access for Claude Code`. Not transient and not prompt-related — retrying reproduces it. Everything in this round was completed serially instead. Needs an Anthropic API key or an admin enabling access before parallel work is possible again. |
@@ -214,7 +215,7 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 | GFA-4 | ✅ Fixed | **~85 of 106 panels re-implement Wazuh modules.** *Done:* `cve-posture` (31), `containers-assets` (15) and `fleet-hosts` (6) deleted; 3 orphaned cross-links removed from the overview. Four dashboards remain, all uids preserved. `analyst` and `coverage` still to be designed — GFA-5 and GFA-7. |
 | GFA-5 | ✅ Fixed | **The panel that proves the product works.** `analyst.json` — verdict-vs-Wazuh-level matrix, disagreement queue deep-linked to the evidence chain, alerts-suppressed trend, MTTD p50/p95 (percentiles, not an average that hides the tail), citation-coverage gauge, cost per investigation. 8 panels, 50% timeseries by design. |
 | GFA-6 | 🟡 Medium | Sections group by category, not by question. |
-| GFA-7 | ✅ Fixed | **No coverage or blind-spot view.** New `coverage.json`: dark techniques (mapped but never observed), coverage by tactic, channels gone quiet, and techniques over time. Wazuh shows what fired and structurally cannot show what should have fired and did not — this is the defensible ground. Required plumbing: ML-4's map is a JSON file and Grafana queries Postgres, so migration `p6q7r8s9t0u1` adds `attack_rule_map` and `core/attack_seed.py` reloads it from the JSON at every boot — the table is a projection, never a second source of truth. 263 rule→technique rows, 42 techniques, 13 tactics. |
+| GFA-7 | ✅ Fixed | **No coverage or blind-spot view.** New `coverage.json`: dark techniques (mapped but never observed), coverage by tactic, channels gone quiet, and techniques over time. Wazuh shows what fired and structurally cannot show what should have fired and did not — this is the defensible ground. Required plumbing: ML-4's map is a JSON file and Grafana queries Postgres, so migration `p6q7r8s9t0u1` adds `attack_rule_map` and `core/attack_seed.py` reloads it from the JSON at every boot — the table is a projection, never a second source of truth. 263 rule→technique rows, 42 techniques, 13 tactics. **Verified live once Docker returned:** migration applied, 263 rows seeded by Core at boot, all 8 panel queries EXPLAIN-planned, then actually executed. First measured coverage: **8 of 42 techniques observed in 7 days, and 8 of 13 ATT&CK tactics entirely dark** — persistence, privilege-escalation, execution, discovery, command-and-control, collection, reconnaissance and resource-development have zero observations. Every post-compromise tactic is unseen. That is the honest answer to what this product currently detects, and it is exactly the gap Wazuh cannot show you. |
 | GFA-9 | ✅ Fixed | **Five stat panels hardcoded their own time window and ignored the dashboard time picker.** `Agent tool calls (24h)`, `Reports (7d)`, `Avg MTTD`, `Avg MTTR` and `False positive rate` filtered on `NOW() - INTERVAL '24 hours'`, so selecting a 7-day range still reported 24 hours — silently, with the stale window baked into the panel title. It also disguised them as snapshots: because they never called `$__timeFilter` they looked like point-in-time reads when their data has history, which is how they nearly escaped GFA-1's trend requirement. All five now use `$__timeFilter` and respect the picker. **Found by listing panels for GFA-1, not by looking for it.** |
 | GFA-10 | ✅ Fixed | **The stat-panel rule was two-way and reality is three-way.** GFA-1 split panels into series-with-trend and no-history-snapshot. Building GFA-7 surfaced a third shape: a *range aggregate* — one number for the whole selected window, where a per-interval version is meaningless ("techniques dark in this 5-minute bucket" is near-everything). The check now accepts a range aggregate that says its number covers the selected range. **Recorded rather than done quietly, because loosening a check to admit one's own work is exactly the anti-pattern this register exists to catch** — the guard against abuse is the reviewer, not the check: a panel that *could* be per-interval and merely claims "over the selected range" is still gaming it. |
 | GFA-8 | 🟡 Medium | Competing with Kibana Discover instead of delegating to it. Own the decision layer; link out for the haystack. |
@@ -255,6 +256,7 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 | INS-1 | 🔴 Critical | **First value takes eight steps and an attacker.** clone → env → containers → `make venv` → `make migrate` → 13 doctor checks → opencode → LLM credentials → *wait to be attacked*. The last gate isn't under the user's control. |
 | INS-2 | ✅ Fixed | **No demo mode.** `core/demo_seed.py` + `make demo` — 500 deterministic events (seeded RNG, `uuid5` ids, fixed time anchor) across 4 channels: an SSH brute-force burst escalating to a level-10 alert and a root success, web scanner noise, FIM and rootcheck findings, and a benign majority so triage must discriminate rather than count. Idempotent via `ON CONFLICT (id, ts) DO NOTHING`. Public-looking IPs use documentation ranges only. |
 | INS-3 | ✅ Fixed | **Honeypots shipped in the default stack.** Both Cowrie services moved behind a `honeypots` profile; default stack is now four services. |
+| OPS-4 | ✅ Fixed | **WeasyPrint logged three CSS-parsing lines into the middle of `make doctor` output**, so a completely passing run looked like something had gone wrong. Third-party loggers are now quietened before health-check imports run. Cosmetic, but doctor is the product's trust surface — noise there teaches people to skim it. |
 | INS-4 | 🟡 Medium | `make migrate` is redundant — `init_db()` already runs Alembic on startup. |
 | INS-5 | 🟡 Medium | **Installer neither interactive nor self-healing.** Target the openclaw pattern: TTY detection with a non-interactive override, styled prompts degrading to plain markers, stage counters, and a remediation path on every failure. `make doctor`'s renderer is already right — reuse it. |
 | INS-6 | 🟡 Medium | Doctor gates all 13 checks regardless of intent; demo mode needs ~3. |
