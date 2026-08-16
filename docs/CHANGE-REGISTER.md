@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**78 items — 2 critical · 0 high · 3 medium · 73 fixed**
+**79 items — 2 critical · 0 high · 3 medium · 74 fixed**
 
-37 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+38 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,7 +14,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 37 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 38 items carry an executable acceptance check (`make check`).
 
 ### Deferred · 4
 
@@ -36,7 +36,7 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 
 - 🔴 **POS-1** No atomic unit of value — _waits on INS-1 (deferred)_
 
-### Verified · 73
+### Verified · 74
 
 _Check passes and the diff was reviewed._
 
@@ -72,6 +72,7 @@ _Check passes and the diff was reviewed._
 - ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
 - ✅ **ML-1** Reported accuracy was target leakage ·  ✓check
 - ✅ **ML-10** Web alerted on every event; the trained model was unwired ·  ✓check
+- ✅ **ML-11** Level-10 web noise was unfilterable — the noisiest false positives were the on ·  ✓check
 - ✅ **ML-2** The informative features were computed and discarded ·  ✓check — _deferred: needs a deliberate training-data decision; a rushed pass would just rebuild ML-1's leak_
 - ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0 ·  ✓check
 - ✅ **ML-4** Three custom rules, no framework mapping ·  ✓check
@@ -176,6 +177,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 |---|---|---|
 | ML-1 | ✅ Fixed | **Reported accuracy was target leakage.** The shipped model scored `rule_level`, `rule_id` and `decoder_hash` and reported 0.9996 precision — it had learned to predict Wazuh's severity from Wazuh's severity. Retrained on behavioural features only; `feature_columns` is exactly `f1–f8`, so the verdict is **structurally unscoreable** rather than merely excluded by discipline. `ml/datasets/true_labeled_dataset.csv` is retired from training with the reason recorded in `model_registry.json` under `retired_datasets`: no timestamp column, 7 distinct rule_ids, and a pure `rule_id` lookup scores **98.36%** across 1.7M rows. **The same leak was then found inside the demo generator** — every benign web row was level 3 and every attack ≥5, making `rule_level` a perfect separator there too. Fixed by adding three hard negatives that genuinely trip Wazuh 31151 (retry storm, uptime monitor, stale-URL crawler), each sharing exactly one of the scanner's signatures; best single-feature threshold fell to 0.959 against an always-benign floor of 0.847. |
 | ML-10 | ✅ Fixed | **Web alerted on every event; the trained model was unwired.** `should_alert` returned `True` for the whole web channel — the `FPR=1.000` row in `make eval` — while the classifier sat trained and unused. Web is now scored, **strictly below the Wazuh level-10 floor**: a level-10 detection alerts whatever the model thinks. That boundary is what keeps this from reopening ML-8 — vetoing a confirmed brute force and filtering a blanket alert-on-everything are different acts, and only the floor separates them. `score_web_event` **fails open to 1.0**: if scoring breaks the event alerts anyway, because a scorer that silently swallows detections is FLT-1 and SEC-1 a third time. **Verified: floor holds at 0.0 model score, sub-floor noise is filtered, a crash still alerts.** Known limit, accepted deliberately: the model does not generalise to unseen benign patterns (ML-2), so this is a noise dial, not a calibrated probability. |
+| ML-11 | ✅ Fixed | **Level-10 web noise was unfilterable — the noisiest false positives were the ones the model could not touch.** Wazuh 31151 is *"multiple 400 errors from same source ip"* at **level 10**, exactly what an uptime monitor or broken-asset retry storm trips; ML-10's floor put it out of reach. The model may now filter above the floor, bounded four ways: **confidence** (`p < 0.1`, versus the 0.5 noise dial below it), **a cap** (levels 13+ — 31115/31168/31169 — never suppressible), **channel** (web only; SSH and every other channel untouchable), and **a record** (`record_suppression` logs it and increments a `suppressed` decision metric). Safe because of an asymmetry: the model's *known* weakness is calling unseen benign traffic an attack (52 false positives held-out), which as a suppressor means it declines to suppress — the dangerous direction is what the bounds contain. **ML-8 was not "a model suppressed something"; it was that the alert vanished with no trace.** The record is the line between the two. Verified: confident-benign L10 filters, uncertain L10 alerts, L15 alerts regardless, sshd L10 alerts regardless. |
 | ML-2 | ✅ Fixed | **The informative features were computed and discarded.** `f1–f8` are now generalised from auth-specific to per-source behaviour — `f2` is failed logins on sshd and 4xx/5xx on web, `f3` is distinct usernames or distinct request paths — and reach the model through `feature_extractor`, the same code that runs in production, so a feature cannot mean one thing at fit time and another at serve time. Trained across 12 seeds with the eval seed held out. **Measured honestly, and the number does not survive scrutiny:** TPR 0.956 / FPR 0.000 on the generator, but a leave-one-out check produced **52 false positives on a held-out benign pattern against 6 for the rule it was meant to beat.** It memorised three authored shapes rather than learning benign traffic. The eval prints the caveat itself. Recorded because a flattering number nobody qualified is how ML-1 happened. |
 | ML-3 | ✅ Fixed | **Model pickled on sklearn 1.8.0, loaded on 1.9.0.** Dependency was unpinned; the SHA-256 registry check validated bytes but not runtime compatibility. Pinned to `scikit-learn==1.8.0` and installed. |
 | ML-7 | ✅ Fixed | **A model feature was randomised per process.** `decoder_hash` was built from Python's builtin `hash()`, which is seeded per interpreter. The model was trained under one seed and served under a fresh one every restart, so the feature was uncorrelated noise in production — and the same event could score differently in two processes, violating determinism outright rather than merely leaving it unmeasured. Switched to `zlib.crc32`. **Measured effect: eval TPR rose 0.000 → 0.182 from this one line**, confirming the feature was actively poisoning inference. `ml/alert_features.py:104` |

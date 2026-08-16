@@ -1294,3 +1294,84 @@ def test_ml_10_model_scores_web_but_cannot_override_the_wazuh_floor():
         f"ML-10: model score does not change the outcome below the floor "
         f"(scanner={noisy}, benign={quiet}) — the classifier is not consulted."
     )
+
+
+def test_ml_11_high_level_web_suppression_is_bounded_and_recorded():
+    """ML-11: the model may filter level-10 web noise — visibly, and never silently.
+
+    Web rules do reach the floor: 31151 is "multiple 400 errors from same source
+    ip" at level 10, which is exactly what an uptime monitor or a broken-asset
+    retry storm trips. ML-10 put that out of reach, so the noisiest false
+    positives in the product were the ones the model could not touch.
+
+    Suppression is safe here only because of an asymmetry: the model's *known*
+    weakness is calling unseen benign traffic an attack (52 false positives
+    held-out), which as a suppressor means it declines to suppress. The
+    dangerous direction — calling a real attack benign — is bounded three ways:
+
+      1. high confidence required, not the 0.5 used below the floor
+      2. capped: levels 13+ are never suppressible, whatever the score
+      3. recorded, so a suppressed detection is filtered rather than lost
+
+    ML-8 was not "the model suppressed something". It was that the alert
+    vanished with no record. Point 3 is what makes this a different act.
+    """
+    import sys
+    import unittest.mock as m
+    import warnings
+
+    warnings.filterwarnings("ignore")
+    sys.path[:0] = [str(REPO / "core"), str(REPO)]
+    import importlib
+
+    from modules import decision_policy as dp
+
+    importlib.reload(dp)
+    dp.update_whitelist([])
+    from schemas.normalized_event import NormalizedEvent
+
+    def web(level: int, rule: int = 31151) -> NormalizedEvent:
+        return NormalizedEvent(src_ip="203.0.113.50", channel="web",
+                               event_type="generic", wazuh_rule_id=rule,
+                               wazuh_rule_level=level)
+
+    assert hasattr(dp, "SUPPRESS_CONFIDENCE"), (
+        "ML-11: no explicit confidence bar for suppressing a rule that fired."
+    )
+    assert dp.SUPPRESS_CONFIDENCE <= 0.2, (
+        f"ML-11: suppressing a level-10 detection at p<{dp.SUPPRESS_CONFIDENCE} "
+        "is not a high bar. Below the floor 0.5 is a noise dial; above it, "
+        "overruling a fired rule needs real confidence."
+    )
+    assert hasattr(dp, "MAX_SUPPRESSIBLE_LEVEL"), "ML-11: no cap on what may be suppressed"
+    assert dp.MAX_SUPPRESSIBLE_LEVEL < 13, (
+        "ML-11: levels 13+ (31115, 31168, 31169) are attack-confirmed and must "
+        "never be suppressible."
+    )
+
+    # Confident-benign filters a level-10 monitoring-bot pattern...
+    with m.patch.object(dp, "score_web_event", return_value=0.01):
+        assert dp.should_alert(web(10)) is False, (
+            "ML-11: a confidently-benign level-10 web event still alerts — the "
+            "noisiest false positives remain unfilterable."
+        )
+        # ...but the cap holds regardless of score.
+        assert dp.should_alert(web(15, rule=31168)) is True, (
+            "ML-11: a level-15 detection was suppressed. Levels 13+ are capped."
+        )
+    # Merely uncertain is not enough to overrule a rule that fired.
+    with m.patch.object(dp, "score_web_event", return_value=0.35):
+        assert dp.should_alert(web(10)) is True, (
+            "ML-11: a level-10 detection was suppressed on a middling score."
+        )
+
+    # And it must leave a trace — a filtered alert, not a lost one.
+    recorded: list = []
+    with m.patch.object(dp, "score_web_event", return_value=0.01), \
+         m.patch.object(dp, "record_suppression", lambda *a, **k: recorded.append(a)):
+        dp.should_alert(web(10))
+    assert recorded, (
+        "ML-11: the suppression left no record. That is exactly ML-8 — the "
+        "alert did not vanish because a model was wrong, it vanished because "
+        "nothing wrote down that it had gone."
+    )

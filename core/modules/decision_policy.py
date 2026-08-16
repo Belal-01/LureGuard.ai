@@ -92,6 +92,39 @@ FIM_ALERT_LEVEL = 7
 # as a noise dial rather than a calibrated probability.
 WEB_SCORE_THRESHOLD = 0.5
 
+# Above the Wazuh floor the model may still filter noise — 31151 ("multiple 400
+# errors from same source ip") is level 10 and is exactly what an uptime monitor
+# or a broken-asset retry storm trips, so the noisiest false positives live
+# here. Overruling a rule that fired needs a far higher bar than the sub-floor
+# noise dial, and it is bounded three ways: confidence, a cap, and a record.
+#
+# Safe because of an asymmetry: the model's known weakness is calling unseen
+# benign traffic an attack (52 false positives held-out), which as a suppressor
+# means it declines to suppress. The dangerous direction is what these bounds
+# exist to contain.
+SUPPRESS_CONFIDENCE = 0.1
+MAX_SUPPRESSIBLE_LEVEL = 12   # 31115/31168/31169 (13, 15) are attack-confirmed
+
+
+def record_suppression(event: NormalizedEvent, score: float) -> None:
+    """Write down that a fired rule was filtered. Never let it vanish.
+
+    ML-8 was not "a model suppressed something" — it was that the alert
+    disappeared with no trace, so nobody could tell a filtered detection from
+    one that never happened. This is the line between the two.
+    """
+    logger.warning(
+        f"SUPPRESSED level-{event.wazuh_rule_level} web detection "
+        f"rule={event.wazuh_rule_id} src={event.src_ip} model_p={score:.3f} "
+        f"— filtered as benign, not lost"
+    )
+    try:
+        from api.metrics_endpoint import decisions_total
+
+        decisions_total.labels(decision="suppressed").inc()
+    except Exception:  # noqa: BLE001 - metrics must never drop the record
+        pass
+
 
 def score_web_event(event: NormalizedEvent) -> float:
     """Behavioural score for a web event, 0.0 when it cannot be computed.
@@ -127,7 +160,14 @@ def should_alert(event: NormalizedEvent, decision: str | None = None) -> bool:
         # A human decided this source is ours. That outranks every detection.
         return False
     if event.wazuh_rule_level >= WAZUH_ALERT_LEVEL:
-        # Rules detect; our scoring does not get a veto.
+        # Rules detect. Our scoring may filter *web* noise here (ML-11) but only
+        # with high confidence, never above MAX_SUPPRESSIBLE_LEVEL, and never
+        # without leaving a record. Every other channel is untouchable.
+        if event.channel == "web" and event.wazuh_rule_level <= MAX_SUPPRESSIBLE_LEVEL:
+            score = score_web_event(event)
+            if score < SUPPRESS_CONFIDENCE:
+                record_suppression(event, score)
+                return False
         return True
     if event.channel in ("syscheck", "rootcheck"):
         return event.wazuh_rule_level >= FIM_ALERT_LEVEL
