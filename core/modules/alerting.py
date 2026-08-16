@@ -3,6 +3,7 @@ Alerting — Telegram notifications via connectors/telegram.py
 """
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -38,7 +39,7 @@ async def send_alert(decision: DecisionResult, event: NormalizedEvent) -> None:
         t1=settings.thresholds.t1,
         t2=settings.thresholds.t2,
     )
-    result = telegram_notifier.send_message(message, parse_mode="HTML")
+    result = await asyncio.to_thread(telegram_notifier.send_message, message, parse_mode="HTML")
     if not result.get("sent"):
         logger.warning(f"Telegram not sent: {result.get('reason')}")
     else:
@@ -67,6 +68,6 @@ async def send_non_ssh_alert(event: NormalizedEvent) -> None:
     else:
         message = format_fim_alert(event)
 
-    result = telegram_notifier.send_message(message, parse_mode="HTML")
+    result = await asyncio.to_thread(telegram_notifier.send_message, message, parse_mode="HTML")
     if not result.get("sent"):
         logger.warning(f"Telegram not sent: {result.get('reason')}")

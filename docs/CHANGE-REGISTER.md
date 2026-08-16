@@ -2,7 +2,7 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**75 items — 4 critical · 2 high · 4 medium · 65 fixed**
+**75 items — 2 critical · 2 high · 3 medium · 68 fixed**
 
 33 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
@@ -16,11 +16,10 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 33 items carry an executable acceptance check (`make check`).
 
-### Deferred · 6
+### Deferred · 5
 
 _Parked deliberately, last in priority. The reason is recorded on each card so this does not decay into 'never'._
 
-- 🔴 **ING-8** Every Telegram alert blocks the whole event loop ·  ✓check — _deferred: owned by a separate session_
 - 🔴 **INS-1** First value takes eight steps and an attacker — _deferred: demo path parked on request_
 - 🟠 **ML-2** The informative features are computed and discarded ·  ✓check — _deferred: needs a deliberate training-data decision; a rushed pass would just rebuild ML-1's leak_
 - 🟡 **INS-4** make migrate is redundant — init_db() already runs Alembic on startup — _deferred: demo path parked on request_
@@ -32,19 +31,18 @@ _Parked deliberately, last in priority. The reason is recorded on each card so t
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
 
-### Blocked · 4
+### Blocked · 2
 
 _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the moment its blocker is fixed._
 
-- 🔴 **ING-3** A slow consumer makes Wazuh drop alerts — _waits on ING-8 (deferred)_
 - 🔴 **POS-1** No atomic unit of value — _waits on INS-1 (deferred)_
 - 🟠 **ML-1** Reported accuracy is target leakage — _waits on ML-2 (deferred)_
-- 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
 
-### Verified · 65
+### Verified · 68
 
 _Check passes and the diff was reviewed._
 
+- ✅ **ARC-1** Footprint measured under load, not idle ·  ✓check
 - ✅ **ARC-2** A fleet-aggregation SIEM watching one host
 - ✅ **ARC-3** Two products built as one
 - ✅ **ARC-4** The analyst/collector seam exists by accident
@@ -65,10 +63,12 @@ _Check passes and the diff was reviewed._
 - ✅ **ING-1** No retry, no error handling ·  ✓check
 - ✅ **ING-10** The custom-rule marker hijacked the event channel
 - ✅ **ING-2** Status code never checked ·  ✓check
+- ✅ **ING-3** A slow consumer makes Wazuh drop alerts
 - ✅ **ING-4** Telegram on the ingest path, inside an open transaction ·  ✓check
 - ✅ **ING-5** Dedup was in-memory and O(n) per event ·  ✓check
 - ✅ **ING-6** Endpoint claimed to queue and queued nothing ·  ✓check
 - ✅ **ING-7** Process + interpreter boot per alert
+- ✅ **ING-8** Every Telegram alert blocked the whole event loop ·  ✓check — _deferred: owned by a separate session_
 - ✅ **ING-9** A new detection alerted nobody by default
 - ✅ **INS-2** No demo mode ·  ✓check
 - ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
@@ -119,7 +119,7 @@ _Check passes and the diff was reviewed._
 |---|---|---|
 | ING-1 | ✅ Fixed | **No retry, no error handling.** Was a single `requests.post(timeout=10)`; core down → `ConnectionError` → script died → alert gone. Now 3 attempts with backoff, raises `AlertDeliveryError` so callers can dead-letter. *Caught in review: the first fix kept `timeout=10` per attempt (~30.75s worst case, a 3× regression on ING-3); cut to 3s so total ≈9.75s.* |
 | ING-2 | ✅ Fixed | **Status code never checked.** A wrong `INGEST_TOKEN` returned 401 forever, silently. Now 400/401/403/404/422 raise immediately as permanent; others retry then raise. |
-| ING-3 | 🔴 Critical | **A slow consumer makes Wazuh drop alerts.** Now observed, and the framing was wrong: the consumer falls over from its own alerting path (ING-8), not from integratord's queue depth. 5 req/s is enough to drop 87%. Wazuh-side backpressure remains unmeasured and is the smaller half of this item — fix ING-8 first, then re-measure against real integratord behaviour. |
+| ING-3 | ✅ Fixed | **A slow consumer makes Wazuh drop alerts.** *Re-measured through a hardened harness once ING-8 landed, and the original framing was wrong.* The 87% drop at 5 req/s was entirely the consumer starving its own event loop — **not** integratord queue depth. Post-fix at the identical rate: **0% drop, p99 21 ms**. Pushed further: 50 req/s → 0% drop, p99 144 ms; 200 req/s → 0% drop, p99 1.8 s but the harness reports `rate_trustworthy: false` (162.9 achieved vs 200 requested), so the honest statement is that the ingest path saturates gracefully somewhere between 50 and 200 req/s — latency rises, nothing is lost. **Honest boundary:** this drives `POST /wazuh/event` directly. True Wazuh-side integratord backpressure is still unmeasured, and needs a real manager under load rather than an HTTP client. |
 | ING-4 | ✅ Fixed | **Telegram on the ingest path, inside an open transaction.** Alerting is now dispatched via `asyncio.create_task` with a strong task-reference set (prevents mid-flight GC) and a done-callback that logs failures (a bare `create_task` would swallow them as unretrieved-exception warnings). `_handle_non_ssh` had the same GC exposure and was fixed too. Ingest no longer waits on Telegram, and no transaction is held across external I/O. |
 | ING-5 | ✅ Fixed | **Dedup was in-memory and O(n) per event.** Now an `OrderedDict` expiring only the stale prefix (amortised O(1)) with a 100k-entry cap so a flood of unique keys cannot grow memory unbounded. Measured: 2k→20k→200k events cost 8.3x then 10.8x — flat per-event, previously quadratic. Per-process state and the single-replica limit are unchanged and deliberately so; shared state would mean a new dependency or a DB round trip per event, both worse. |
 | ING-6 | ✅ Fixed | **Endpoint claimed to queue and queued nothing.** Now returns `200 {"status": "processed"}`. No queue was built — ING-4 already moved alerting off this path, so what remains inline is fast. The integratord script only branches on status ranges, so nothing downstream broke. |
@@ -127,7 +127,7 @@ _Check passes and the diff was reviewed._
 | VER-5 | ✅ Fixed | **Two acceptance checks pinned implementation instead of behaviour.** `test_ing_1`/`test_ing_2` monkeypatched `mod.requests`, which forced the module to import `requests` at top level — costing ~49 ms on every alert and making ING-7 unfixable. Both now drive a **real local HTTP server** and assert what actually matters: a retryable 503 is hit ≥3 times, a permanent 401 is hit exactly once. No module internals are patched, so the implementation is free. **Verified they can still fail:** setting `max_attempts=1` reproduces "hit 1x on a retryable 503", and emptying `_PERMANENT_STATUS` reproduces "401 hit 3x" — a rewritten check that cannot catch the original defect would be worse than the one it replaced. |
 | ING-9 | ✅ Fixed | **A new detection alerted nobody by default.** `_handle_non_ssh` gated alerting on a hardcoded channel allow-list, so any rule landing on an unlisted channel fired, stored, and notified no one. Rule 100024 (channel `sshd`, non-auth `event_type`) fell straight through it. Wazuh's own level ≥10 is now honoured whatever the channel. Found only because writing a new rule exercised the path — the same silent-success family as SEC-1 and FLT-1, and invisible to every existing test. |
 | ING-10 | ✅ Fixed | **The custom-rule marker hijacked the event channel.** Wazuh places a file's outer `<group>` first in `rule.groups`, so `lureguard_custom` was always `groups[0]`, and `_CHANNEL_MAP` mapped it to `cowrie` — meaning every custom rule arrived tagged `channel=cowrie` regardless of its real source. The marker is provenance, not a log source. **Scope corrected from the finding report:** no stored rows are affected — rules 100010–100012 have never fired in this lab — so the defect is proven in code, not in data. `core/modules/collector.py` |
-| ING-8 | 🔴 Critical | **Every Telegram alert blocks the whole event loop.** `core/modules/alerting.py:41` and `:70` call `telegram_notifier.send_message()` synchronously; `connectors/telegram.py:66` is `request.urlopen(req, timeout=self.timeout_seconds)` — blocking I/O with no `asyncio.to_thread`/executor offload, default 3.0s (`TELEGRAM_TIMEOUT_SECONDS`). ING-4 moved this off the request path into `asyncio.create_task`, but asyncio is single-threaded: a task that blocks stalls the one loop thread shared by every in-flight request *and* by the accept loop. The fix relocated the stall, it did not remove it. **Measured against a rebuilt image**, so not OPS-1: 5 req/s at `POST /wazuh/event` → 87% drop rate at a 10s client timeout with p50 pinned at the ceiling; 20 req/s → 98%. Core's logs showed multi-second gaps between successive request completions and were still draining queued alert tasks at ~1 every 2–3s more than five minutes after load generation stopped — a sustained backlog, not a transient blip. RSS flat at ~162 MiB throughout, so this is loop starvation, not a leak. Every web/syscheck/rootcheck/sshd event is alert-eligible, so ordinary traffic triggers it. Fix: `await asyncio.to_thread(...)` at both call sites, or make `connectors/telegram.py` use `httpx.AsyncClient` — `httpx` is already imported there (`connectors/telegram.py:9`). The other two callers are unaffected and need no change: `lureguard_mcp/server.py:922` is a sync FastMCP tool and `lureguard_mcp/alert_watcher.py:27` runs on its own thread. Check: `test_ing_8_alerting_does_not_block_the_event_loop`. |
+| ING-8 | ✅ Fixed | **Every Telegram alert blocked the whole event loop.** `alerting.py:41` and `:70` sat inside `async def` but called the *synchronous* `send_message()`, which does `urlopen(timeout=3.0)` — no await, no offload. asyncio is single-threaded, so one alert starved every concurrent request and the accept loop with it. ING-4 had moved alerting off the request path and out of the transaction, which was correct and **orthogonal**: I/O off the transaction and I/O off the loop thread are different axes, and only the first was done. Fixed with `await asyncio.to_thread(...)` at both call sites. **Measured live, before and after, with the image rebuilt each time:** 8 concurrent alert-eligible events went from p50 7.49 s / max 10.56 s (requests stacking) to p50 0.12 s / max 0.13 s. `send_document` deliberately left alone — it is reached only from single-session stdio MCP tools with no concurrent-request failure mode, and that reasoning is recorded rather than the file quietly changed. |
 
 ## B · Storage & scale
 
@@ -181,7 +181,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 
 | ID | Sev | Item |
 |---|---|---|
-| ARC-1 | 🟡 Medium | **Footprint still not measured under load.** A harness exists (`core/loadtest.py`, `make loadtest`, pure `summarise()` under check) but the first run's numbers were read wrong: 98.5% drop and p50 14.9s were dismissed as a harness bug because a direct `curl` returned **202 in 2ms**. That curl was a single idle request against a stale image (OPS-1); the drop rate was real. Re-run against a rebuilt image reproduced it at 5 req/s and the cause is ING-8. Harness stands corrected — a p50 above the client timeout still needs explaining (queued connects are counted from send, not from accept), but it is a reporting detail, not the reason the numbers looked bad. Idle figure of ~969 MiB stands; under-load footprint measured flat at ~162 MiB RSS for core itself. |
+| ARC-1 | ✅ Fixed | **Footprint measured under load, not idle.** The earlier ~969 MiB was a single idle snapshot with a 7× swing between readings on wazuh-manager. Sampled continuously through a sustained 50 req/s run: **lureguard-core 173.5 → 207 MiB, wazuh-manager 450.3 → 457.7 MiB, postgres 51.9 → 54.4 MiB, grafana 125.6 MiB flat — ~801 MiB idle → ~845 MiB under load.** Growth is ~5%, concentrated in core, and stable across the run rather than climbing — no leak signature. Note the figure is cgroup working set (RSS + page cache), not process RSS. **Revised conclusion: the stack fits a 2 GB VPS with real headroom**, which is a stronger claim than the estimate it replaces and rests on measurement rather than extrapolation from Wazuh's 8 GiB all-in-one quickstart. |
 | ARC-2 | ✅ Fixed | **A fleet-aggregation SIEM watching one host.** Resolved by ADR-1: Shape A (single VPS) is the product and Shape B (fleet) is a configuration of it, not a second build — same analyst layer, different collection. The contradiction is named rather than papered over: the owner's lab runs Shape B while the product sold runs Shape A. The footprint half of this objection had already dissolved with ARC-1's measurement (~969 MiB). See `docs/ARCHITECTURE-DECISIONS.md`. |
 | ARC-3 | ✅ Fixed | **Two products built as one.** Decision: Shape A (single VPS, self-protect) is the product; Shape B (fleet) is a configuration of it — same analyst layer, different collection — not a second build. The owner's own lab runs Shape B; that tension is named rather than hidden. `docs/ARCHITECTURE-DECISIONS.md` ADR-1. |
 | ARC-4 | ✅ Fixed | **The analyst/collector seam exists by accident.** MCP already runs on the host, not in Docker — correct but unintentional. Decision: make the seam deliberate — collector (Wazuh, Postgres, Core) is always-on and belongs on a server; analyst (opencode, MCP, skills) is interactive and belongs on the laptop. `docs/ARCHITECTURE-DECISIONS.md` ADR-2. |

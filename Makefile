@@ -78,19 +78,18 @@ eval: ensure-venv
 	PYTHONHASHSEED=0 PYTHONPATH=core:. $(PYTHON) -m evaluate
 
 # ARC-1/ING-3: drive POST /wazuh/event at RATE req/s for DURATION seconds and
-# report latency percentiles + drop rate (core/loadtest.py). Samples container
-# memory before/mid/after so footprint-under-load has more than an idle
-# snapshot behind it. Override: make loadtest RATE=50 DURATION=60
+# report latency percentiles, an outcome breakdown (ok/timeout/connection_error/
+# http_error), and achieved-vs-requested rate (core/loadtest.py). Discards a
+# short warm-up, then samples MEM_CONTAINER's memory continuously through the
+# run (not point-in-time snapshots) so footprint-under-load is more than an
+# idle guess. Override: make loadtest RATE=50 DURATION=60
 RATE ?= 20
 DURATION ?= 30
 URL ?= http://localhost:8080/wazuh/event
+MEM_CONTAINER ?= wazuh-manager
 loadtest: ensure-venv
 	@set -a; [ -f .env ] && . ./.env; set +a; \
-	echo "== memory before =="; docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' 2>/dev/null || true; \
-	( sleep $$(( $(DURATION) / 2 )); echo "== memory mid-run =="; docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' 2>/dev/null || true ) & \
-	PYTHONPATH=core:. $(PYTHON) -m loadtest --rate $(RATE) --duration $(DURATION) --url $(URL); \
-	wait; \
-	echo "== memory after =="; docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}' 2>/dev/null || true
+	PYTHONPATH=core:. $(PYTHON) -m loadtest --rate $(RATE) --duration $(DURATION) --url $(URL) --mem-container $(MEM_CONTAINER)
 
 fetch-dataset: venv
 	$(PYTHON) -c "from ml.dataset_loaders import ensure_true_labeled_dataset; ensure_true_labeled_dataset()"
