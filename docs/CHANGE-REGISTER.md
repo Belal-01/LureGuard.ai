@@ -2,7 +2,7 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**73 items — 4 critical · 4 high · 6 medium · 59 fixed**
+**75 items — 4 critical · 3 high · 6 medium · 62 fixed**
 
 31 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
@@ -27,11 +27,10 @@ _Parked deliberately, last in priority. The reason is recorded on each card so t
 - 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
 
-### Ready · 4
+### Ready · 3
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
-- 🟠 **ML-5** Attack surface is SSH-shaped end to end
 - 🟠 **SEC-4** No credential model for remote Postgres
 - 🟡 **SKL-3** Invocation is a prompt convention, not a product surface
 - 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job ·  ✓check
@@ -45,7 +44,7 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 - 🟠 **ML-1** Reported accuracy is target leakage — _waits on ML-2 (deferred)_
 - 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
 
-### Verified · 59
+### Verified · 62
 
 _Check passes and the diff was reviewed._
 
@@ -67,15 +66,18 @@ _Check passes and the diff was reviewed._
 - ✅ **GFA-8** Competing with Kibana Discover instead of delegating to it
 - ✅ **GFA-9** Five stat panels hardcoded their own time window and ignored the dashboard tim
 - ✅ **ING-1** No retry, no error handling ·  ✓check
+- ✅ **ING-10** The custom-rule marker hijacked the event channel
 - ✅ **ING-2** Status code never checked ·  ✓check
 - ✅ **ING-4** Telegram on the ingest path, inside an open transaction ·  ✓check
 - ✅ **ING-5** Dedup was in-memory and O(n) per event ·  ✓check
 - ✅ **ING-6** Endpoint claimed to queue and queued nothing ·  ✓check
 - ✅ **ING-7** Process + interpreter boot per alert
+- ✅ **ING-9** A new detection alerted nobody by default
 - ✅ **INS-2** No demo mode ·  ✓check
 - ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
 - ✅ **ML-3** Model pickled on sklearn 1.8.0, loaded on 1.9.0 ·  ✓check
 - ✅ **ML-4** Three custom rules, no framework mapping ·  ✓check
+- ✅ **ML-5** Attack surface was SSH-shaped end to end
 - ✅ **ML-6** Windows/AD unsupported and premature
 - ✅ **ML-7** A model feature was randomised per process ·  ✓check
 - ✅ **OPS-1** The running container does not contain the repo's code ·  ✓check
@@ -123,6 +125,8 @@ _Check passes and the diff was reviewed._
 | ING-6 | ✅ Fixed | **Endpoint claimed to queue and queued nothing.** Now returns `200 {"status": "processed"}`. No queue was built — ING-4 already moved alerting off this path, so what remains inline is fast. The integratord script only branches on status ranges, so nothing downstream broke. |
 | ING-7 | ✅ Fixed | **Process + interpreter boot per alert.** integratord fork/execs this file once per event, so every top-level import is paid per alert. Measured in the manager's own bundled interpreter (`/var/ossec/framework/python/bin/python3`), not the host: `import requests` **55 ms** vs `urllib` **13 ms**, with `-X importtime` attributing almost all of it to `urllib3` and its transitive ssl/email/charset imports. Switched to stdlib `urllib.request`, which also drops a dependency from the manager container. **Same path, same interpreter, 30 iterations each: 49.7 ms → 23.6 ms, a 52% reduction.** The retry budget is unchanged (~9.75 s worst case) — `urllib` raises on 4xx/5xx rather than returning them, so the permanent-vs-retryable split moved into an `HTTPError` handler. |
 | VER-5 | ✅ Fixed | **Two acceptance checks pinned implementation instead of behaviour.** `test_ing_1`/`test_ing_2` monkeypatched `mod.requests`, which forced the module to import `requests` at top level — costing ~49 ms on every alert and making ING-7 unfixable. Both now drive a **real local HTTP server** and assert what actually matters: a retryable 503 is hit ≥3 times, a permanent 401 is hit exactly once. No module internals are patched, so the implementation is free. **Verified they can still fail:** setting `max_attempts=1` reproduces "hit 1x on a retryable 503", and emptying `_PERMANENT_STATUS` reproduces "401 hit 3x" — a rewritten check that cannot catch the original defect would be worse than the one it replaced. |
+| ING-9 | ✅ Fixed | **A new detection alerted nobody by default.** `_handle_non_ssh` gated alerting on a hardcoded channel allow-list, so any rule landing on an unlisted channel fired, stored, and notified no one. Rule 100024 (channel `sshd`, non-auth `event_type`) fell straight through it. Wazuh's own level ≥10 is now honoured whatever the channel. Found only because writing a new rule exercised the path — the same silent-success family as SEC-1 and FLT-1, and invisible to every existing test. |
+| ING-10 | ✅ Fixed | **The custom-rule marker hijacked the event channel.** Wazuh places a file's outer `<group>` first in `rule.groups`, so `lureguard_custom` was always `groups[0]`, and `_CHANNEL_MAP` mapped it to `cowrie` — meaning every custom rule arrived tagged `channel=cowrie` regardless of its real source. The marker is provenance, not a log source. **Scope corrected from the finding report:** no stored rows are affected — rules 100010–100012 have never fired in this lab — so the defect is proven in code, not in data. `core/modules/collector.py` |
 | ING-8 | 🔴 Critical | **Every Telegram alert blocks the whole event loop.** `core/modules/alerting.py:41` and `:70` call `telegram_notifier.send_message()` synchronously; `connectors/telegram.py:66` is `request.urlopen(req, timeout=self.timeout_seconds)` — blocking I/O with no `asyncio.to_thread`/executor offload, default 3.0s (`TELEGRAM_TIMEOUT_SECONDS`). ING-4 moved this off the request path into `asyncio.create_task`, but asyncio is single-threaded: a task that blocks stalls the one loop thread shared by every in-flight request *and* by the accept loop. The fix relocated the stall, it did not remove it. **Measured against a rebuilt image**, so not OPS-1: 5 req/s at `POST /wazuh/event` → 87% drop rate at a 10s client timeout with p50 pinned at the ceiling; 20 req/s → 98%. Core's logs showed multi-second gaps between successive request completions and were still draining queued alert tasks at ~1 every 2–3s more than five minutes after load generation stopped — a sustained backlog, not a transient blip. RSS flat at ~162 MiB throughout, so this is loop starvation, not a leak. Every web/syscheck/rootcheck/sshd event is alert-eligible, so ordinary traffic triggers it. Fix: `await asyncio.to_thread(...)` at both call sites, or make `connectors/telegram.py` use `httpx.AsyncClient` — `httpx` is already imported there (`connectors/telegram.py:9`). The other two callers are unaffected and need no change: `lureguard_mcp/server.py:922` is a sync FastMCP tool and `lureguard_mcp/alert_watcher.py:27` runs on its own thread. Check: `test_ing_8_alerting_does_not_block_the_event_loop`. |
 
 ## B · Storage & scale
@@ -170,7 +174,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | ML-3 | ✅ Fixed | **Model pickled on sklearn 1.8.0, loaded on 1.9.0.** Dependency was unpinned; the SHA-256 registry check validated bytes but not runtime compatibility. Pinned to `scikit-learn==1.8.0` and installed. |
 | ML-7 | ✅ Fixed | **A model feature was randomised per process.** `decoder_hash` was built from Python's builtin `hash()`, which is seeded per interpreter. The model was trained under one seed and served under a fresh one every restart, so the feature was uncorrelated noise in production — and the same event could score differently in two processes, violating determinism outright rather than merely leaving it unmeasured. Switched to `zlib.crc32`. **Measured effect: eval TPR rose 0.000 → 0.182 from this one line**, confirming the feature was actively poisoning inference. `ml/alert_features.py:104` |
 | ML-4 | ✅ Fixed | **Three custom rules, no framework mapping.** `core/attack_map.json` now maps **218 rules** to ATT&CK — 212 read from the running manager's own `<mitre>` blocks, 6 hand-assigned for `local_rules.xml` which carries none. Provenance is recorded per rule because vendor metadata and a guess carry different confidence. Scope is deliberate: only rules whose groups intersect `_FORWARD_GROUPS`, since a rule outside those never reaches this product and mapping it would overstate coverage. **226 in-scope rules carry no ATT&CK metadata at all** — that is the honest coverage gap, and it is recorded in the file. Tactics: initial-access 98, credential-access 66, impact 25, lateral-movement 17, then a long tail; collection, exfiltration and reconnaissance are nearly dark. Regenerate with `python3 scripts/build_attack_map.py`. Unblocks GFA-7. |
-| ML-5 | 🟠 High | **Attack surface is SSH-shaped end to end.** Features are literally `is_sshd` and `decoder_sshd`. **Now measured, not asserted:** GFA-7's coverage query shows 8 of 42 mapped techniques observed and 8 of 13 tactics completely dark, concentrated in everything post-compromise. Severity raised from Medium — this is no longer a design observation, it is a quantified detection gap. |
+| ML-5 | ✅ Fixed | **Attack surface was SSH-shaped end to end.** Eight rules added (100020–100032) covering the *reachable* dark tactics: authorized_keys, cron, systemd and sudoers changes via syscheck; sudo shell escape via auth.log; discovery, payload download and history tampering via cowrie. **Each verified firing against the running manager before being mapped or seeded** — FIM rules injected into analysisd's syscheck queue with a `/etc/hosts` control that correctly fired none. Coverage **8/42 techniques → 21/49; dark tactics 8 → 2**. The two remaining are honestly unreachable and recorded as such: collection needs file-access telemetry not collected here, and resource-development is adversary-infrastructure activity not observable from a victim host at all. `_FORWARD_GROUPS` deliberately left alone — base rules 5401–5404 sit in group `syslog,sudo` and fire on every legitimate `sudo apt`, so widening it would trade ML-5 for ING-3. |
 | ML-6 | ✅ Fixed | **Windows/AD unsupported and premature.** Scope documented in `docs/SCOPE.md` — Windows onboarding path is SSH + `apt` (separate from PowerShell/WinRM), AD detection is a separate discipline, and coverage is narrow even on Linux. Decision: Linux only until one platform passes senior review. |
 
 ## E · Architecture & deployment
