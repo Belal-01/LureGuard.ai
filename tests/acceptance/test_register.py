@@ -994,27 +994,113 @@ def test_ops_1_doctor_detects_stale_container_code():
     )
 
 
-def test_sto_8_retention_creates_partitions_safely():
-    """STO-8: DEFAULT sets in concrete — verified live, Postgres refuses to
-    create a dated partition overlapping rows already stranded in it."""
+def test_sto_8_stranded_default_rows_can_be_migrated():
+    """STO-8: DEFAULT sets in concrete, and the earlier check missed it.
+
+    The previous version asserted `ensure_future_partitions` existed and that
+    the module mentioned "default". Both were true while the actual defect stood
+    — verified live: rows remain in `events_default`, and
+    `CREATE TABLE events_2026_06 PARTITION OF events` still fails with
+    "updated partition constraint for default partition would be violated by
+    some row". A check that passes while its defect is reproducible is the thing
+    this whole register exists to eliminate.
+
+    The property that matters: there is a way to reclaim rows stranded in
+    DEFAULT into dated partitions, so retention can eventually drop them. Rows
+    that can never leave DEFAULT can never be dropped, which is STO-1 reopened
+    by the back door.
+    """
     import sys
 
     sys.path[:0] = [str(REPO / "core"), str(REPO)]
     import retention
 
     fn = next((getattr(retention, n, None) for n in
-               ("ensure_future_partitions", "ensure_partitions",
-                "create_upcoming_partitions") if getattr(retention, n, None)), None)
+               ("backfill_default_rows", "migrate_default_partition",
+                "reclaim_default_rows") if getattr(retention, n, None)), None)
     assert fn is not None, (
-        "STO-8/STO-1: retention drops old partitions but nothing creates upcoming "
-        "ones. A missing partition makes INSERT fail — a silent ingest outage, "
-        "which is the failure this project exists to prevent."
+        "STO-8: nothing can reclaim rows stranded in events_default. Postgres "
+        "refuses to create any dated partition overlapping them, so those rows "
+        "are permanently undroppable — retention silently stops applying to the "
+        "oldest data in the table."
     )
-    src = __import__("inspect").getsource(retention)
-    assert "default" in src.lower(), (
-        "STO-8: partition creation must account for events_default; a naive "
-        "CREATE TABLE ... PARTITION OF fails once rows are stranded there."
+
+    months = getattr(retention, "months_spanned", None)
+    assert months is not None, (
+        "STO-8: the month range to backfill must be computable without a "
+        "database, so the selection logic is testable on its own."
     )
+    from datetime import datetime
+
+    got = months(datetime(2026, 6, 27), datetime(2026, 8, 3))
+    assert got == ["2026_06", "2026_07", "2026_08"], (
+        f"STO-8: months_spanned should cover every month touched by the stranded "
+        f"rows, got {got}"
+    )
+
+
+def test_sec_4_remote_postgres_has_a_credential_model():
+    """SEC-4: MCP hardcodes localhost:5433 with credentials in plaintext.
+
+    ADR-4 puts the collector on the target and the analyst on a laptop, so the
+    database stops being local. Today there is no TLS setting and no way to
+    supply a credential that is not a plaintext password in .env.
+    """
+    import inspect
+
+    from lureguard_mcp import config
+
+    # Scope to the Postgres URL builder specifically. An earlier version of this
+    # check grepped the whole module for "ssl" and passed on wazuh_verify_ssl —
+    # a setting for a different service entirely. A check that can be satisfied
+    # by an unrelated function is a false green.
+    src = inspect.getsource(config.database_url_sync)
+    assert "sslmode" in src, (
+        "SEC-4: database_url_sync builds a Postgres URL with no sslmode. Under "
+        "ADR-4 the analyst connects across a network, so an unencrypted link "
+        "carries every alert, hostname and finding in clear text."
+    )
+    url = config.database_url_sync()
+    assert "sslmode=" in url, (
+        f"SEC-4: the built connection string carries no sslmode: {url.split('@')[-1]}"
+    )
+
+
+def test_skl_3_every_skill_is_reachable_by_command():
+    """SKL-3: invocation was `Read skills/triage.md and ...` — a prompt
+    convention that asks the user to know where a file lives.
+
+    The property is *reachability*, not name-matching. An earlier version of
+    this check required a command whose filename matched the skill, and an
+    implementer duly created `/incident-report` alongside the existing
+    `/report`, `/investigate-host` alongside `/investigate`, and two more — four
+    redundant verbs that exist only to satisfy a check, making the command list
+    harder to scan than before. A skill reached by `/report` does not need a
+    second command named after its file.
+    """
+    skills = {p.stem for p in (REPO / "skills").glob("*.md")
+              if p.name not in {"SKILL.md", "_shared.md", "opencode-mcp.md"}}
+    commands = {p: p.read_text(encoding="utf-8")
+                for p in (REPO / ".opencode" / "command").glob("*.md")}
+    assert commands, "SKL-3: no slash commands at all"
+
+    unreachable = sorted(
+        sk for sk in skills
+        if not any(f"skills/{sk}.md" in body for body in commands.values())
+    )
+    assert not unreachable, (
+        f"SKL-3: {len(unreachable)} skills cannot be reached by any slash command, "
+        f"so the only way in is to name a file path: {unreachable}"
+    )
+
+    # And the inverse: a command routing to a skill that no longer exists is a
+    # dead verb the user will type once and never again.
+    dead = sorted(
+        p.name for p, body in commands.items()
+        for ref in re.findall(r"skills/([a-z_-]+)\.md", body)
+        if not (REPO / "skills" / f"{ref}.md").exists()
+    )
+    assert not dead, f"SKL-3: commands route to skills that do not exist: {dead}"
 
 
 def test_gfa_7_coverage_dashboard_shows_blind_spots():

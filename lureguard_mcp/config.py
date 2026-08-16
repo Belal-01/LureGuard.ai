@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 REPORTS_DIR = REPO_ROOT / "reports"
@@ -32,14 +35,78 @@ def _read_secret(name: str) -> str:
     return ""
 
 
+def _pgpass_covers(host: str, port: str, dbname: str = "lureguard", user: str = "lureguard") -> bool:
+    """True if ~/.pgpass or $PGPASSFILE has an entry for this connection.
+
+    libpq reads this file itself once a DSN carries no password — we only need
+    to detect it so we know to omit the password and log the mechanism (SEC-4).
+    """
+    path = Path(os.getenv("PGPASSFILE", "").strip() or (Path.home() / ".pgpass"))
+    if not path.exists():
+        return False
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            fields = line.split(":")
+            if len(fields) == 5 and all(
+                f in ("*", v) for f, v in zip(fields[:4], (host, port, dbname, user))
+            ):
+                return True
+    except OSError:
+        pass
+    return False
+
+
 def database_url_sync() -> str:
-    """psycopg2 DSN (sync) for host-side MCP."""
+    """psycopg2 DSN (sync) for host-side MCP.
+
+    SEC-4: under ADR-4 this connection crosses a network (collector on the
+    VPS, analyst on a laptop), so it needs both encryption in transit and a
+    credential that isn't a plaintext password sitting in .env.
+
+    sslmode default: "disable" only when talking to localhost/127.0.0.1 (no
+    network hop, matches today's behaviour and the local dev Postgres which
+    has no TLS configured) — "require" for any other host, so a remote
+    connection is encrypted by default instead of silently staying plaintext
+    until someone remembers to opt in. "require" stops passive sniffing but
+    not an active MITM (it doesn't authenticate the server); set
+    POSTGRES_SSLMODE=verify-full with POSTGRES_SSLROOTCERT once a CA is
+    available for that guarantee.
+
+    Credential precedence, most to least preferred, logged either way:
+    1. ~/.pgpass or $PGPASSFILE (native libpq mechanism — no secret handled here)
+    2. secrets/db_password.txt (existing file-based secret)
+    3. POSTGRES_PASSWORD env var (plaintext .env fallback — kept for compat)
+    4. hardcoded "lureguard" dev default
+    """
     if url := os.getenv("DATABASE_URL", "").strip():
         return url.replace("postgresql+asyncpg://", "postgresql://")
-    pw = _read_secret("db_password.txt") or os.getenv("POSTGRES_PASSWORD", "lureguard")
+
     host = os.getenv("POSTGRES_HOST", "localhost")
     port = os.getenv("POSTGRES_PORT", "5433")
-    return f"postgresql://lureguard:{pw}@{host}:{port}/lureguard"
+
+    sslmode = os.getenv("POSTGRES_SSLMODE", "").strip()
+    if not sslmode:
+        sslmode = "disable" if host in ("localhost", "127.0.0.1") else "require"
+    sslrootcert = os.getenv("POSTGRES_SSLROOTCERT", "").strip()
+
+    if _pgpass_covers(host, port):
+        pw, mechanism = None, "~/.pgpass or PGPASSFILE"
+    elif file_secret := _read_secret("db_password.txt"):
+        pw, mechanism = file_secret, "secrets/db_password.txt"
+    elif env_pw := os.getenv("POSTGRES_PASSWORD", "").strip():
+        pw, mechanism = env_pw, "POSTGRES_PASSWORD env var (plaintext .env fallback)"
+    else:
+        pw, mechanism = "lureguard", "hardcoded dev default"
+    logger.info("database_url_sync: credential source = %s", mechanism)
+
+    auth = f"lureguard:{pw}@" if pw is not None else "lureguard@"
+    url = f"postgresql://{auth}{host}:{port}/lureguard?sslmode={sslmode}"
+    if sslrootcert:
+        url += f"&sslrootcert={sslrootcert}"
+    return url
 
 
 def wazuh_api_url() -> str:

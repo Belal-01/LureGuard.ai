@@ -127,7 +127,7 @@ Headless:
 opencode run "Read skills/triage.md — triage last hour"
 ```
 
-Slash commands: `/triage`, `/investigate`, `/onboard`, `/posture`, `/report`, `/update`
+Slash commands: `/triage`, `/auto-triage`, `/investigate`, `/investigate-web`, `/ioc-sweep`, `/onboard`, `/posture`, `/refresh-posture`, `/report`, `/daily-summary`, `/update`
 
 ---
 

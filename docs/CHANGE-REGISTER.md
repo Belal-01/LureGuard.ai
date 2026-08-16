@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**75 items — 4 critical · 3 high · 6 medium · 62 fixed**
+**75 items — 4 critical · 2 high · 4 medium · 65 fixed**
 
-31 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+33 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,7 +14,7 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 31 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 33 items carry an executable acceptance check (`make check`).
 
 ### Deferred · 6
 
@@ -27,13 +27,10 @@ _Parked deliberately, last in priority. The reason is recorded on each card so t
 - 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
 
-### Ready · 3
+### Ready · 0
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
-- 🟠 **SEC-4** No credential model for remote Postgres
-- 🟡 **SKL-3** Invocation is a prompt convention, not a product surface
-- 🟡 **STO-8** The DEFAULT partition sets in concrete — blocks the retention job ·  ✓check
 
 ### Blocked · 4
 
@@ -44,7 +41,7 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 - 🟠 **ML-1** Reported accuracy is target leakage — _waits on ML-2 (deferred)_
 - 🟡 **ARC-1** Footprint still not measured under load ·  ✓check — _waits on ING-8 (deferred)_
 
-### Verified · 62
+### Verified · 65
 
 _Check passes and the diff was reviewed._
 
@@ -95,9 +92,11 @@ _Check passes and the diff was reviewed._
 - ✅ **SEC-1** Containment reported success while doing nothing
 - ✅ **SEC-2** Unnecessary NET_ADMIN
 - ✅ **SEC-3** Plaintext SSH password for fleet access ·  ✓check
+- ✅ **SEC-4** No credential model for remote Postgres ·  ✓check
 - ✅ **SEC-5** Naive laptop-hosted manager would create a DMZ→home pivot
 - ✅ **SKL-1** Skills had no contract and no test ·  ✓check
 - ✅ **SKL-2** Agent instructions lived in four places ·  ✓check
+- ✅ **SKL-3** Invocation was a prompt convention, not a product surface ·  ✓check
 - ✅ **STO-1** No retention anywhere ·  ✓check
 - ✅ **STO-2** No time partitioning ·  ✓check
 - ✅ **STO-3** The SIEM's storage is duplicated for no gain
@@ -105,6 +104,7 @@ _Check passes and the diff was reviewed._
 - ✅ **STO-5** Two composite B-trees maintained per insert
 - ✅ **STO-6** Log text stored uncompressed
 - ✅ **STO-7** Datastore decision
+- ✅ **STO-8** The DEFAULT partition set in concrete, and the first check missed it ·  ✓check
 - ✅ **VER-1** Every quality axis unmeasured ·  ✓check
 - ✅ **VER-2** Tests encoded the defect as the requirement
 - ✅ **VER-3** No seeded dataset
@@ -141,7 +141,7 @@ _Check passes and the diff was reviewed._
 | STO-4 | ✅ Fixed | **Random UUIDv4 PK on the highest-insert table.** Replaced with UUIDv7 (`core/db/ids.py`) — 48-bit ms timestamp in the high bits, plus a 12-bit intra-millisecond counter so a burst still sorts strictly. Applied to all 12 tables, not just `events`: they all take inserts and all paid the same random-page cost. **No migration needed** — the default was Python-side, not a server default. Verified over 10k ids for ordering and uniqueness, with a uuid4 control asserting the test can actually fail. |
 | STO-5 | ✅ Fixed | **Two composite B-trees maintained per insert.** *Closed verified-no-change, with evidence.* The BRIN index on `ts` landed with the partition migration; the open question was whether the composite B-trees still earn their write cost. `pg_stat_user_indexes` on the live database says yes: `src_ip_ts` has **967 scans** — the most-used secondary index on the table — and `agent_id_ts` 118, both driven by real repo query paths in `lureguard_mcp/repos/events.py`. Dropping either would have broken an active path to save a write cost the data does not support. Also learned: the Grafana panels wrap the IP filter as `host(src_ip) = …`, a functional expression the plain B-tree cannot serve — so the dashboards do *not* exercise that index; the application layer does. |
 | STO-6 | ✅ Fixed | **Log text stored uncompressed.** *Closed verified-no-change.* All three candidate columns are structurally bounded far below the ~2 KB TOAST threshold — measured on live data, `raw_ref` averages 51 B (hard-capped at 500), `wazuh_rule_description` 32 B, `syscheck_path` 19 B. Postgres only attempts compression once a value crosses the TOAST threshold, so `lz4`/`STORAGE EXTENDED` would be a literal no-op here. Compressing nothing is the correct action. |
-| STO-8 | 🟡 Medium | **The DEFAULT partition sets in concrete — blocks the retention job.** Verified on the live database: 132 historical rows landed in `events_default`, and Postgres then refuses any overlapping dated partition — `ERROR: updated partition constraint for default partition "events_default" would be violated by some row`. The retention job cannot simply `CREATE TABLE events_2026_06 PARTITION OF events`; it must `DETACH` the default, create the dated partition, move matching rows across, and re-attach. Alternatively back-fill dated partitions for the existing range so DEFAULT stays empty and serves only as the missing-partition safety net it was intended to be. **Found by running the migration, not by the acceptance check** — model introspection cannot see this. |
+| STO-8 | ✅ Fixed | **The DEFAULT partition set in concrete, and the first check missed it.** 132 rows sat in `events_default` that no dated partition could ever cover, so retention — which drops *dated* partitions — could never touch the oldest data: STO-1 silently reopened. `reclaim_default_rows()` now performs detach → create → move → reattach **in a single transaction**, wired into the daily `run_retention()` tick as a self-healing net rather than a one-off script. Because Postgres holds DDL locks until COMMIT, a concurrent INSERT never sees `events` without a DEFAULT — it blocks sub-second — and any failure rolls back with DEFAULT reattached automatically. **Verified live:** 640 rows before and after, `events_default` 132 → 0, rows redistributed into `events_2026_06`/`_07`, and the `CREATE TABLE ... PARTITION OF events` that previously errored now succeeds. *Register note: the earlier check for this item passed while the defect was reproducible, because it asserted a function existed instead of that the property held.* |
 | STO-7 | ✅ Fixed | **Datastore decision.** OpenSearch would fix retention, compression, partitioning and search — and **none of ING-1…7**, which are upstream pipeline defects. Two arguments make all-OpenSearch disqualifying: it's JVM-based (2–4 GB heap, which is why Wazuh's quickstart says 8 GiB), and it has no joins and no ACID — killing GFA-5 and the audit trail that is the differentiator. Decision: keep events in Postgres, partitioned by month, retention by `DROP PARTITION`, raw payload stays in Wazuh via `raw_ref`. No OpenSearch. `docs/ARCHITECTURE-DECISIONS.md` ADR-8. |
 
 ## C · Fault tolerance
@@ -200,7 +200,7 @@ None of this is covered by the test suite. Tests verify code; architecture is ve
 | SEC-1 | ✅ Fixed | **Containment reported success while doing nothing.** DNAT rules were installed inside a bridged container's namespace, where attacker traffic never transits. iptables returned 0, a gauge incremented, it logged `✅ DNAT`, and Telegram told the user the attacker had been redirected. Enforcement deleted; the decision band is retained as a recommendation. |
 | SEC-2 | ✅ Fixed | **Unnecessary `NET_ADMIN`.** Dropped from compose once no iptables path remained in core. |
 | SEC-3 | ✅ Fixed | **Plaintext SSH password for fleet access.** `ONBOARD_SSH_KEY` added and preferred; the password remains an explicit fallback, and which method was used is logged rather than falling back silently. A misconfigured key path now refuses rather than quietly reverting to the password. **Found while fixing, and worse than the original item:** the code used `sshpass -p <password>`, putting the credential in the process argv where any local user could read it from `ps`. Switched to `sshpass -e`, which passes it through the environment. |
-| SEC-4 | 🟠 High | **No credential model for remote Postgres.** MCP assumes `localhost:5433`; splitting analyst from collector needs auth, TLS and secret distribution that don't exist. |
+| SEC-4 | ✅ Fixed | **No credential model for remote Postgres.** `database_url_sync` built a DSN with a plaintext password and no TLS at all — fine while everything was local, but ADR-4 puts the analyst on a laptop and the collector on a VPS, so the link now carries every alert, hostname and verdict in clear text. `sslmode` is now **host-conditional**: `disable` for localhost (the containerised Postgres genuinely has TLS off — verified, `require` fails against it), `require` for any other host, with `verify-full` + `POSTGRES_SSLROOTCERT` available once a CA exists. `~/.pgpass`/`PGPASSFILE` supported so the password need not be in `.env`, falling back through `secrets/` then env — and **logging which mechanism was used**, since a silent downgrade to the weaker option is the pattern this register keeps finding. `core/db/session.py` deliberately left alone: container-to-container over the compose bridge is a different threat model, and that reasoning is recorded rather than the file quietly changed. |
 | SEC-5 | ✅ Fixed | **Naive laptop-hosted manager would create a DMZ→home pivot.** Analysis and risks documented in `docs/SECURITY-NOTES.md`; if attempted anyway, requires overlay network with ACLs, never router port-forwarding. |
 
 ## G · Grafana & analyst UX
@@ -273,7 +273,7 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 |---|---|---|
 | SKL-1 | ✅ Fixed | **Skills had no contract and no test.** All 11 now carry YAML frontmatter declaring `requires_tools`, and a check verifies every declared tool actually exists in `lureguard_mcp/server.py` — a skill naming a tool the server does not expose fails at runtime, silently, the first time an agent follows it. Generation bug caught by the check itself: unquoted descriptions containing a colon produced invalid YAML, so the frontmatter is now quoted and `yaml.safe_load`-validated at write time rather than at agent runtime. |
 | SKL-2 | ✅ Fixed | **Agent instructions lived in four places.** They had already diverged: `.agents/` was missing the system-update routing row, so an agent reading that copy did not know `check_system_update`/`apply_system_update` existed. `skills/SKILL.md` is now canonical and the `.claude/` and `.agents/` paths are symlinks to it. |
-| SKL-3 | 🟡 Medium | Invocation is a prompt convention, not a product surface. |
+| SKL-3 | ✅ Fixed | **Invocation was a prompt convention, not a product surface.** Every skill is now reachable by a slash command — 11 commands, one per verb a user would actually type. **The check had to be fixed first, and the failure is instructive:** it originally demanded a command whose *filename matched the skill*, so the implementer created `/incident-report` beside the existing `/report`, `/investigate-host` beside `/investigate`, and two more — four redundant verbs whose only purpose was turning the check green, leaving a 15-item command list harder to scan than the 11 it replaced. It reported doing this openly, having identified them as duplicates. The check now tests *reachability* (some command routes to the skill) plus the inverse (no command points at a skill that does not exist), and both failure modes were verified reproducible. |
 
 ## L · Product & positioning
 
