@@ -1476,3 +1476,58 @@ def test_arc_8_feature_window_is_bounded_under_flood():
         f"throughput collapses under load: {slow:,.0f} ev/s at 2 req/s vs "
         f"{fast:,.0f} ev/s at 120 req/s — per-event cost still scales with the window"
     )
+
+
+def test_ins_5_installer_gates_on_prerequisites_and_generates_secrets():
+    """INS-5: install.sh must refuse to proceed when a prerequisite is missing.
+
+    The point of this installer is that it is the gate — it replaces `make
+    doctor` as the thing standing between a user and a half-configured stack.
+    A gate that reports a problem and continues anyway is not a gate, so the
+    property asserted here is the exit status, not the wording.
+
+    Also asserts the installer generates its own secrets. `.env.example` ships
+    GRAFANA_ADMIN_PASSWORD=admin and a fixed INGEST_TOKEN; anyone following the
+    README by hand gets a security product with a published admin password.
+    """
+    import os
+    import shutil
+    import subprocess
+    import tempfile
+
+    script = REPO / "install.sh"
+    assert script.exists(), "INS-5: no install.sh"
+    assert os.access(script, os.X_OK), "INS-5: install.sh is not executable"
+
+    syntax = subprocess.run(["bash", "-n", str(script)], capture_output=True, text=True)
+    assert syntax.returncode == 0, f"INS-5: install.sh does not parse: {syntax.stderr}"
+
+    # A PATH with no docker in it. The installer must fail, not carry on and
+    # leave the user with a broken stack and a green log.
+    with tempfile.TemporaryDirectory() as empty:
+        for tool in ("git", "curl", "uname", "awk", "sed", "grep", "df", "sysctl", "tr", "head"):
+            real = shutil.which(tool)
+            if real:
+                os.symlink(real, os.path.join(empty, tool))
+        proc = subprocess.run(
+            [shutil.which("bash") or "/bin/bash", str(script), "--dry-run", "-y",
+             "--dir", os.path.join(empty, "x")],
+            capture_output=True, text=True, timeout=120,
+            env={**os.environ, "PATH": empty, "TERM": "dumb"},
+        )
+    assert proc.returncode != 0, (
+        "INS-5: install.sh exited 0 with docker absent from PATH. It must stop, "
+        f"not continue. stdout tail:\n{proc.stdout[-500:]}"
+    )
+    assert "docker" in (proc.stdout + proc.stderr).lower(), (
+        "INS-5: failed without naming the missing prerequisite — the user needs "
+        "to know what to install."
+    )
+
+    body = script.read_text(encoding="utf-8")
+    assert "gen_secret" in body and "GRAFANA_ADMIN_PASSWORD=${GRAFANA_PW}" in body, (
+        "INS-5: installer does not generate a Grafana password. .env.example "
+        "ships `GRAFANA_ADMIN_PASSWORD=admin`, so a hand-followed README yields "
+        "a security tool with a known admin credential."
+    )
+    assert "chmod 600 .env" in body, "INS-5: generated .env is not mode 0600"

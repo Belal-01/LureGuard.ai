@@ -2,9 +2,9 @@
 
 Every known defect, gap and decision, with evidence. This file is the source of truth for project state; it replaced `PRODUCT-STATUS.md`, which was self-scored and misleading.
 
-**82 items — 2 critical · 0 high · 3 medium · 77 fixed**
+**83 items — 2 critical · 1 high · 2 medium · 78 fixed**
 
-40 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
+41 items have executable acceptance checks in `tests/acceptance/test_register.py`. Run them with `make check`. They are *expected to fail* until the item is fixed — a failure there is an open register item, not broken code.
 
 **Rule for anyone working an item:** the check defines done. Do not modify a check to make it pass. A check the implementer can edit proves nothing — that is how `test_process_event_redirect_calls_dnat` came to assert that fake DNAT enforcement was correct.
 
@@ -14,21 +14,21 @@ Every known defect, gap and decision, with evidence. This file is the source of 
 
 ## Board
 
-Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 40 items carry an executable acceptance check (`make check`).
+Generated from the item tables by `scripts/regen_board.py` — it cannot drift from them. 41 items carry an executable acceptance check (`make check`).
 
-### Deferred · 4
+### Deferred · 3
 
 _Parked deliberately, last in priority. The reason is recorded on each card so this does not decay into 'never'._
 
 - 🔴 **INS-1** First value takes eight steps and an attacker — _deferred: demo path parked on request_
 - 🟡 **INS-4** make migrate is redundant — init_db() already runs Alembic on startup — _deferred: demo path parked on request_
-- 🟡 **INS-5** Installer neither interactive nor self-healing — _deferred: demo path parked on request_
 - 🟡 **INS-6** Doctor gates all 13 checks regardless of intent; demo mode needs ~3 — _deferred: demo path parked on request_
 
-### Ready · 0
+### Ready · 1
 
 _Scoped and unblocked. Each needs an acceptance check written before it is safe to delegate._
 
+- 🟠 **INS-7** .env.example ships working default credentials
 
 ### Blocked · 1
 
@@ -36,7 +36,7 @@ _Waiting on another item. Blockers resolve by ID, so a card leaves this lane the
 
 - 🔴 **POS-1** No atomic unit of value — _waits on INS-1 (deferred)_
 
-### Verified · 77
+### Verified · 78
 
 _Check passes and the diff was reviewed._
 
@@ -72,6 +72,7 @@ _Check passes and the diff was reviewed._
 - ✅ **ING-9** A new detection alerted nobody by default
 - ✅ **INS-2** No demo mode ·  ✓check
 - ✅ **INS-3** Honeypots shipped in the default stack ·  ✓check
+- ✅ **INS-5** install.sh — one command, and it is the gate ·  ✓check
 - ✅ **ML-1** Reported accuracy was target leakage ·  ✓check
 - ✅ **ML-10** Web alerted on every event; the trained model was unwired ·  ✓check
 - ✅ **ML-11** Bounded web-noise suppression, withdrawn when the model it depended on was rep ·  ✓check
@@ -273,13 +274,14 @@ Measured against the Kubernetes and Wazuh dashboards used as references:
 
 | ID | Sev | Item |
 |---|---|---|
-| INS-1 | 🔴 Critical | **First value takes eight steps and an attacker.** clone → env → containers → `make venv` → `make migrate` → 13 doctor checks → opencode → LLM credentials → *wait to be attacked*. The last gate isn't under the user's control. |
+| INS-1 | 🔴 Critical | **First value takes eight steps and an attacker.** clone → env → containers → `make venv` → `make migrate` → 13 doctor checks → opencode → LLM credentials → *wait to be attacked*. The last gate isn't under the user's control. **INS-5's `install.sh` is the intended fix** — one command, secrets generated, demo data seeded so nothing waits on an attacker — but it has only been exercised through `--dry-run` and its preflight gate. The clone → `compose up` → seed path has never run on a clean host, so this stays open. Closing it needs one real install on a fresh Linux VM, timed, with the eight steps counted again. |
 | INS-2 | ✅ Fixed | **No demo mode.** `core/demo_seed.py` + `make demo` — 500 deterministic events (seeded RNG, `uuid5` ids, fixed time anchor) across 4 channels: an SSH brute-force burst escalating to a level-10 alert and a root success, web scanner noise, FIM and rootcheck findings, and a benign majority so triage must discriminate rather than count. Idempotent via `ON CONFLICT (id, ts) DO NOTHING`. Public-looking IPs use documentation ranges only. |
 | INS-3 | ✅ Fixed | **Honeypots shipped in the default stack.** Both Cowrie services moved behind a `honeypots` profile; default stack is now four services. |
 | OPS-4 | ✅ Fixed | **WeasyPrint logged three CSS-parsing lines into the middle of `make doctor` output**, so a completely passing run looked like something had gone wrong. Third-party loggers are now quietened before health-check imports run. Cosmetic, but doctor is the product's trust surface — noise there teaches people to skim it. |
 | INS-4 | 🟡 Medium | `make migrate` is redundant — `init_db()` already runs Alembic on startup. |
-| INS-5 | 🟡 Medium | **Installer neither interactive nor self-healing.** Target the openclaw pattern: TTY detection with a non-interactive override, styled prompts degrading to plain markers, stage counters, and a remediation path on every failure. `make doctor`'s renderer is already right — reuse it. |
+| INS-5 | ✅ Fixed | **`install.sh` — one command, and it is the gate.** 392 lines of bash served from the repo (`curl -fsSLO .../install.sh`, documented download-then-read rather than pipe-to-shell, hermes-agent's pattern). Six stages with a counter, ANSI colour degrading cleanly to plain markers under `NO_COLOR`/`TERM=dumb`, an ASCII wordmark, and prompts read from `/dev/tty` so they still work under `curl | sh`. Asks what it actually needs: install dir, dashboard port, demo data, Telegram (bot token + chat id), Cowrie honeypots (off by default, with the exposure warned). **Replaces `make doctor` as the gate** — preflight hard-fails with the exact remediation command and `exit 1`; it deliberately installs nothing on the host, unlike openclaw and hermes-agent which both `sudo`-install system packages. Checks OS, Docker *daemon reachable* (not just the binary), Compose v2, git, curl, RAM against ARC-1's measured ~845 MiB, disk, and port conflicts — correctly distinguishing a port held by our own stack (an upgrade) from a genuine conflict, which the first run of the preflight got wrong. **Generates every secret** (`openssl rand`, `.env` at 0600); `.env.example` still ships `GRAFANA_ADMIN_PASSWORD=admin` and a fixed `INGEST_TOKEN`, so anyone hand-following the README gets a published admin credential — the installer is now the only safe path, and that hazard is INS-7. Check asserts the *property*: with docker absent from `PATH` the script must exit non-zero and name what is missing; verified to fail when the exit gate is removed. |
 | INS-6 | 🟡 Medium | Doctor gates all 13 checks regardless of intent; demo mode needs ~3. |
+| INS-7 | 🟠 High | **`.env.example` ships working default credentials.** `GRAFANA_ADMIN_PASSWORD=admin`, `INGEST_TOKEN=lureguard-dev-ingest-token`, `ADMIN_TOKEN=lureguard-dev-admin-token`, `WAZUH_API_PASSWORD=LureGuard-Wazuh-Dev-2026!`. `install.sh` generates real secrets and never copies this file, but the README still tells a reader to `cp .env.example .env`, which yields a security product with a published admin password and a known ingest token. Found while writing INS-5. Fix is to strip the values, leave the keys empty, and fail closed on startup when they are unset rather than falling back to a default. |
 
 ## K · Skills & agent layer
 
