@@ -79,6 +79,7 @@ async def insert_event(db: AsyncSession, event: NormalizedEvent) -> None:
         geo_city=geo_city,
     ))
     await ensure_ip_geolocation(db, str(event.src_ip) if event.src_ip else None)
+    await db.flush()
 
 
 async def insert_decision(db: AsyncSession, dec: DecisionResult) -> None:
@@ -96,6 +97,7 @@ async def insert_decision(db: AsyncSession, dec: DecisionResult) -> None:
         profile_id=dec.profile_id,
         reason=dec.reason,
     ))
+    await db.flush()
 
 
 async def get_whitelist(db: AsyncSession) -> list[str]:
