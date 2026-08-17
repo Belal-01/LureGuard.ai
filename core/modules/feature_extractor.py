@@ -66,6 +66,27 @@ def _target_and_status(event: NormalizedEvent) -> tuple[str, str]:
     return target, "success" if event.success else "unknown"
 
 
+def _window_key(event: NormalizedEvent) -> str:
+    """Which rolling window this event belongs to.
+
+    Events carrying a source IP are grouped by attacker, which is the whole
+    point of f1..f6. Host-local events — sudo, su, pam, FIM — have no source
+    IP, and every one of them used to fall into a single shared "0.0.0.0"
+    bucket. That fused every machine in the fleet into one fictitious source:
+    f1 became a fleet-wide event count and f3 a union of usernames from
+    unrelated hosts, so a busy web server could mask privilege escalation on
+    a database server, and neither host's baseline meant anything.
+
+    Falling back to the agent keeps host-local activity per-host, which is the
+    granularity those events actually have. Measured consequence on AIT-ADS:
+    post-exploitation phases become visible to the model at all (webshell
+    detected in 3s on a held-out testbed); under the shared key they were not.
+    """
+    if event.src_ip:
+        return event.src_ip
+    return f"agent:{event.agent_name or event.agent_id or 'unknown'}"
+
+
 def extract_event_features(event: NormalizedEvent) -> np.ndarray:
     """Ingest one event and return the raw behavioural vector f1..f8."""
     event_ts = event.ts if event.ts.tzinfo else event.ts.replace(tzinfo=timezone.utc)
@@ -77,7 +98,7 @@ def extract_event_features(event: NormalizedEvent) -> np.ndarray:
     target, status = _target_and_status(event)
 
     features = get_extractor().update_from_raw(
-        src_ip=event.src_ip or "0.0.0.0",
+        src_ip=_window_key(event),
         username=target,
         status=status,
         event_timestamp=ts_iso,

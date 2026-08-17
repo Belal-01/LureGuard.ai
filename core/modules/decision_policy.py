@@ -102,8 +102,15 @@ WEB_SCORE_THRESHOLD = 0.5
 # benign traffic an attack (52 false positives held-out), which as a suppressor
 # means it declines to suppress. The dangerous direction is what these bounds
 # exist to contain.
+# Retired, kept as named constants because the ML-11 register entry and its
+# check still refer to them. Nothing reads them in the live path any more: see
+# the floor branch in should_alert() for why bounded suppression was withdrawn
+# when the model was retargeted from web noise to post-exploitation.
 SUPPRESS_CONFIDENCE = 0.1
 MAX_SUPPRESSIBLE_LEVEL = 12   # 31115/31168/31169 (13, 15) are attack-confirmed
+
+# Score at or above which the model raises an alert the rules did not.
+MODEL_THRESHOLD = 0.5
 
 
 def record_suppression(event: NormalizedEvent, score: float) -> None:
@@ -160,20 +167,34 @@ def should_alert(event: NormalizedEvent, decision: str | None = None) -> bool:
         # A human decided this source is ours. That outranks every detection.
         return False
     if event.wazuh_rule_level >= WAZUH_ALERT_LEVEL:
-        # Rules detect. Our scoring may filter *web* noise here (ML-11) but only
-        # with high confidence, never above MAX_SUPPRESSIBLE_LEVEL, and never
-        # without leaving a record. Every other channel is untouchable.
-        if event.channel == "web" and event.wazuh_rule_level <= MAX_SUPPRESSIBLE_LEVEL:
-            score = score_web_event(event)
-            if score < SUPPRESS_CONFIDENCE:
-                record_suppression(event, score)
-                return False
+        # Rules detect, and nothing we compute may overrule them. ML-11 used to
+        # let a high-confidence model score suppress level-10 web noise here.
+        # That branch is gone: the model it depended on was a web-noise
+        # estimator, and the shipped model (2026-08-17) is a post-exploitation
+        # detector trained with scan/flood phases excluded. It scores ordinary
+        # web traffic near zero by construction — p=0.005 on a routine event —
+        # so the old "score below 0.1 means benign" test now reads *every* web
+        # detection as suppressible and silently drops it. Same failure as ML-8,
+        # reached by a different road: a model answering a question nobody
+        # checked it was still being asked.
+        return True
+    # The model adds detections the rules missed, on every channel rather than
+    # only web. The shipped model detects post-exploitation, and privilege
+    # escalation and reverse shells arrive on sshd and syslog — scoring web
+    # alone would consult it exactly where it has nothing to say. Measured on
+    # two held-out testbeds it finds one attack (wheeler/webshell, in 3s) that
+    # neither the Wazuh floor nor the evidence rule finds.
+    #
+    # It can only ever return True here. The floor above already returned for
+    # every rule-confirmed detection, so no score reachable from this line can
+    # take an alert away — that property is what ML-8 and ML-11 cost us.
+    if score_web_event(event) >= MODEL_THRESHOLD:
         return True
     if event.channel in ("syscheck", "rootcheck"):
         return event.wazuh_rule_level >= FIM_ALERT_LEVEL
     if event.channel == "web":
-        # Scored, not blanket-alerted (ML-10). The level-10 floor above already
-        # returned True, so the model only ever sees sub-floor traffic.
+        # Scored, not blanket-alerted (ML-10) — the same score, read at the
+        # web-specific threshold the ML-10 contract pins.
         return score_web_event(event) >= WEB_SCORE_THRESHOLD
     if event.channel in ("cowrie", "cowrie_session", "windows"):
         return True

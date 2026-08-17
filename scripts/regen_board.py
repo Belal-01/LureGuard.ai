@@ -9,7 +9,12 @@ s = P.read_text()
 rows = re.findall(r'^\| ([A-Z]{2,4}-\d+) \| ([^|]+?) \| (.+?) \|\s*$', s, re.M)
 sev, title = {}, {}
 for rid, sv, body in rows:
-    sev[rid] = ('fixed' if 'Fixed' in sv else 'crit' if 'Critical' in sv
+    # "Reversed" is a closed state, not outstanding work: the item was resolved
+    # by withdrawing an earlier fix whose premise no longer held, the reasoning
+    # is on the card, and an acceptance check defends the replacement. Without
+    # this it would sit in Ready forever, reading as something nobody started.
+    sev[rid] = ('fixed' if ('Fixed' in sv or 'Reversed' in sv)
+                else 'crit' if 'Critical' in sv
                 else 'high' if 'High' in sv else 'med')
     m = re.match(r'\*\*(.+?)\*\*', body)
     t = (m.group(1) if m else body).rstrip('. ')
@@ -83,12 +88,12 @@ out = ["## Board\n",
 for lane, ids in lanes.items():
     out += [f"### {lane} · {len(ids)}\n", f"_{NOTE[lane]}_\n"]
     for r in ids:
-        if r in DEFERRED:
+        if r in DEFERRED and sev[r] != 'fixed':
             w = f" — _deferred: {DEFERRED[r]}_"
         elif r in BLOCKED:
             b = BLOCKED[r]
             tag = f"{b} (deferred)" if b in DEFERRED else b
-            w = f" — _waits on {tag}_"
+            w = f" — _waits on {tag}_"  
         else:
             w = ""
         chk = " ·  ✓check" if r in checks else ""

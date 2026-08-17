@@ -91,14 +91,19 @@ loadtest: ensure-venv
 	@set -a; [ -f .env ] && . ./.env; set +a; \
 	PYTHONPATH=core:. $(PYTHON) -m loadtest --rate $(RATE) --duration $(DURATION) --url $(URL) --mem-container $(MEM_CONTAINER)
 
+# ML-12: AIT-ADS (Zenodo 8263181, CC-BY-4.0) — ~96 MB zipped, ~2.8 GB unzipped
+# into ml/datasets/ait-ads/ (gitignored). `make train` fetches it if missing.
 fetch-dataset: venv
-	$(PYTHON) -c "from ml.dataset_loaders import ensure_true_labeled_dataset; ensure_true_labeled_dataset()"
+	$(PYTHON) -c "from ml.dataset_loaders import ensure_ait_ads; ensure_ait_ads()"
 
 train: venv
-	$(PYTHON) -m ml.train --output-dir ml/models
+	$(PYTHON) -u -m ml.train --output-dir ml/models
 
+# Smaller run for iterating: keep fewer rows per testbed. Every alert still
+# feeds the rolling window, so the features of a kept row are unchanged — only
+# how many rows reach the fit differs.
 train-quick: venv
-	$(PYTHON) -m ml.train --sample-cap 100000 --output-dir ml/models
+	$(PYTHON) -m ml.train --train-stride 40 --eval-stride 20 --output-dir ml/models
 
 lint: venv
 	@if [ -x $(VENV)/bin/ruff ]; then $(VENV)/bin/ruff check core/ ml/ tests/ lureguard_mcp/; else echo "ruff not installed (optional)"; fi

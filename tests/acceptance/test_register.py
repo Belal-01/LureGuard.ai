@@ -1296,82 +1296,183 @@ def test_ml_10_model_scores_web_but_cannot_override_the_wazuh_floor():
     )
 
 
-def test_ml_11_high_level_web_suppression_is_bounded_and_recorded():
-    """ML-11: the model may filter level-10 web noise — visibly, and never silently.
+def test_ml_11_nothing_can_suppress_a_rule_confirmed_detection():
+    """ML-11 (reversed): no score may take away an alert a rule raised.
 
-    Web rules do reach the floor: 31151 is "multiple 400 errors from same source
-    ip" at level 10, which is exactly what an uptime monitor or a broken-asset
-    retry storm trips. ML-10 put that out of reach, so the noisiest false
-    positives in the product were the ones the model could not touch.
+    This check previously asserted the opposite — that the model *could*
+    suppress level-10 web noise, bounded by confidence, a level cap, and a
+    written record. That was a defensible feature for the model it was built
+    around: a web-noise estimator whose low scores meant "this web traffic
+    looks benign".
 
-    Suppression is safe here only because of an asymmetry: the model's *known*
-    weakness is calling unseen benign traffic an attack (52 false positives
-    held-out), which as a suppressor means it declines to suppress. The
-    dangerous direction — calling a real attack benign — is bounded three ways:
+    The shipped model (2026-08-17) is not that model. It detects
+    post-exploitation and is trained with scan and flood phases excluded, so it
+    scores ordinary web traffic near zero *by construction* — p=0.005 on a
+    routine event. Under the old branch that reads as maximum confidence to
+    suppress, and every level-10 web detection was silently dropped. ML-10's
+    check caught it.
 
-      1. high confidence required, not the 0.5 used below the floor
-      2. capped: levels 13+ are never suppressible, whatever the score
-      3. recorded, so a suppressed detection is filtered rather than lost
+    The lesson is not "suppression was tuned wrong". It is that suppression
+    coupled the alerting path to what a particular model meant by a low score,
+    and nothing re-checked that meaning when the model was replaced. The
+    replacement invariant has no such coupling: whatever the model is, whatever
+    it scores, a rule-confirmed detection reaches the operator.
 
-    ML-8 was not "the model suppressed something". It was that the alert
-    vanished with no record. Point 3 is what makes this a different act.
+    Asserted as a property over the whole score range, not as the absence of a
+    branch — a future suppressor reintroduced anywhere below the floor fails
+    here without needing this test to know where it was written.
     """
     import sys
     import unittest.mock as m
-    import warnings
 
-    warnings.filterwarnings("ignore")
     sys.path[:0] = [str(REPO / "core"), str(REPO)]
-    import importlib
-
     from modules import decision_policy as dp
-
-    importlib.reload(dp)
-    dp.update_whitelist([])
     from schemas.normalized_event import NormalizedEvent
 
-    def web(level: int, rule: int = 31151) -> NormalizedEvent:
-        return NormalizedEvent(src_ip="203.0.113.50", channel="web",
-                               event_type="generic", wazuh_rule_id=rule,
-                               wazuh_rule_level=level)
+    dp.update_whitelist([])
 
-    assert hasattr(dp, "SUPPRESS_CONFIDENCE"), (
-        "ML-11: no explicit confidence bar for suppressing a rule that fired."
-    )
-    assert dp.SUPPRESS_CONFIDENCE <= 0.2, (
-        f"ML-11: suppressing a level-10 detection at p<{dp.SUPPRESS_CONFIDENCE} "
-        "is not a high bar. Below the floor 0.5 is a noise dial; above it, "
-        "overruling a fired rule needs real confidence."
-    )
-    assert hasattr(dp, "MAX_SUPPRESSIBLE_LEVEL"), "ML-11: no cap on what may be suppressed"
-    assert dp.MAX_SUPPRESSIBLE_LEVEL < 13, (
-        "ML-11: levels 13+ (31115, 31168, 31169) are attack-confirmed and must "
-        "never be suppressible."
-    )
-
-    # Confident-benign filters a level-10 monitoring-bot pattern...
-    with m.patch.object(dp, "score_web_event", return_value=0.01):
-        assert dp.should_alert(web(10)) is False, (
-            "ML-11: a confidently-benign level-10 web event still alerts — the "
-            "noisiest false positives remain unfilterable."
-        )
-        # ...but the cap holds regardless of score.
-        assert dp.should_alert(web(15, rule=31168)) is True, (
-            "ML-11: a level-15 detection was suppressed. Levels 13+ are capped."
-        )
-    # Merely uncertain is not enough to overrule a rule that fired.
-    with m.patch.object(dp, "score_web_event", return_value=0.35):
-        assert dp.should_alert(web(10)) is True, (
-            "ML-11: a level-10 detection was suppressed on a middling score."
+    def web(level: int) -> NormalizedEvent:
+        return NormalizedEvent(
+            src_ip="203.0.113.50", channel="web", event_type="generic",
+            wazuh_rule_id=31151, wazuh_rule_level=level,
         )
 
-    # And it must leave a trace — a filtered alert, not a lost one.
-    recorded: list = []
-    with m.patch.object(dp, "score_web_event", return_value=0.01), \
-         m.patch.object(dp, "record_suppression", lambda *a, **k: recorded.append(a)):
-        dp.should_alert(web(10))
-    assert recorded, (
-        "ML-11: the suppression left no record. That is exactly ML-8 — the "
-        "alert did not vanish because a model was wrong, it vanished because "
-        "nothing wrote down that it had gone."
+    event = web(10)
+
+    for score in (0.0, 0.001, 0.01, 0.05, 0.099, 0.1, 0.5, 0.99, 1.0):
+        with m.patch.object(dp, "score_web_event", return_value=score):
+            assert dp.should_alert(event) is True, (
+                f"ML-11: a level-10 detection was suppressed at model score {score}. "
+                "No score may remove an alert a rule raised — that is ML-8."
+            )
+
+    # And the same must hold above the old cap, where it always did.
+    for level in (10, 11, 12, 13, 15):
+        ev = web(level)
+        with m.patch.object(dp, "score_web_event", return_value=0.0):
+            assert dp.should_alert(ev) is True, (
+                f"ML-11: level-{level} detection suppressed at score 0.0"
+            )
+
+
+def test_ml_12_trained_on_a_published_dataset_with_window_labels():
+    """ML-12: replace self-generated training data with AIT-ADS.
+
+    The model was trained on scenarios we wrote ourselves — 45 web attack rows
+    from 2 distinct source IPs per seed. It could only recognise attacks
+    someone had already thought of, and "benign" meant the four patterns we
+    invented; held out, it produced 52 false positives against 6 for the rule.
+
+    AIT-ADS (Zenodo 8263181, CC-BY-4.0) is 2.29M real Wazuh alerts across 8
+    independent testbeds, with ground truth given as attack-phase start/end
+    times in labels.csv.
+
+    Two properties matter, and both are asserted here:
+
+    1. **Labels come from time windows, not severity.** An alert is an attack
+       if its timestamp falls inside a labelled phase — independent of
+       rule_level, rule_id and decoder. That makes ML-1's leak impossible by
+       construction rather than avoided by discipline. The old loader fell back
+       to `rule_level >= 10 -> attack`, which is the leak restated as a label.
+
+    2. **Evaluation is cross-testbed.** Training and evaluating on the same
+       environment measures memorisation. Holding out whole scenarios is the
+       only honest generalisation number this project can produce.
+    """
+    import json as _json
+
+    reg = REPO / "ml" / "models" / "model_registry.json"
+    if not reg.exists():
+        pytest.skip("no model registry")
+    r = _json.loads(reg.read_text(encoding="utf-8"))
+
+    ds = _json.dumps(r.get("datasets", {})).lower()
+    assert "ait" in ds, (
+        f"ML-12: the model is not trained on AIT-ADS. datasets={r.get('datasets')}. "
+        "Self-generated scenarios only contain attacks their author thought of."
+    )
+
+    held = r.get("held_out_scenarios") or r.get("eval_scenarios")
+    trained = r.get("train_scenarios")
+    assert held and trained, (
+        "ML-12: registry must record which testbeds were trained on and which "
+        "were held out — a generalisation claim is unreadable without it."
+    )
+    assert not (set(held) & set(trained)), (
+        f"ML-12: scenarios appear in both train and eval: {set(held) & set(trained)}"
+    )
+    assert len(held) >= 2, f"ML-12: only {len(held)} held-out testbed(s); need >= 2"
+
+    # The label source must be the published ground truth, never severity.
+    src = (REPO / "ml" / "dataset_loaders.py").read_text(encoding="utf-8")
+    ait = src[src.index("_ait_alert_label"):] if "_ait_alert_label" in src else src
+    ait = ait[:ait.index("\ndef ", 10)] if "\ndef " in ait[10:] else ait
+    assert "rule" not in ait or "level" not in ait, (
+        "ML-12: AIT labelling still consults the Wazuh rule level. Ground truth "
+        "is labels.csv attack windows; deriving the label from severity is the "
+        "leak wearing a different hat."
+    )
+
+    # Features stay behavioural.
+    banned = [c for c in r.get("feature_columns", [])
+              if any(k in c.lower() for k in ("rule_level", "rule_id", "decoder", "wazuh"))]
+    assert not banned, f"ML-12: Wazuh verdict fields back in the feature set: {banned}"
+
+
+def test_arc_8_feature_window_is_bounded_under_flood():
+    """ARC-8: one loud source must not be able to slow the sensor down.
+
+    f1..f6 are computed by scanning the per-IP window, so before the cap the
+    per-event cost grew with the window and the window grew with the
+    attacker's rate: 8,745 ev/s at 2 req/s but 505 ev/s at 60 req/s. That
+    curve means ~175 req/s from a single source saturates a core — the
+    detector degrades fastest exactly when it is being attacked.
+
+    Asserts the property, not the symbol: feed the same extractor at a slow
+    and a fast rate and require the fast one to stay within a small factor of
+    the slow one. A future refactor that reintroduces an unbounded scan fails
+    here even if MAX_WINDOW_EVENTS is still spelled somewhere in the file.
+    """
+    import time
+    from datetime import datetime, timezone
+
+    from ml.extractor import LureGuardExtractor
+
+    def throughput(rate: int, n: int = 6000) -> float:
+        ex = LureGuardExtractor(window_seconds=300)
+        base = 1_700_000_000.0
+        stamps = [
+            datetime.fromtimestamp(base + i / rate, timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
+            for i in range(n)
+        ]
+        start = time.perf_counter()
+        for s in stamps:
+            ex.update_from_raw("203.0.113.9", "u", "failed", s)
+        return n / (time.perf_counter() - start)
+
+    slow, fast = throughput(2), throughput(120)
+
+    # Bound the *window*, using a small explicit cap so this check stays fast
+    # whatever the shipped default is. Driving `MAX_WINDOW_EVENTS + 500` events
+    # instead would make the check itself hang when the cap is removed, which
+    # is a hang, not a failure — a check has to fail cleanly to be worth having.
+    ex = LureGuardExtractor(window_seconds=300, max_window_events=500)
+    base = 1_700_000_000.0
+    for i in range(2000):
+        ex.update_from_raw(
+            "203.0.113.9", "u", "failed",
+            datetime.fromtimestamp(base + i / 120, timezone.utc)
+            .isoformat().replace("+00:00", "Z"),
+        )
+    held = len(ex.ip_history["203.0.113.9"])
+    assert held <= 500, (
+        f"window held {held:,} events with a 500 cap — unbounded scan is back"
+    )
+    # Generous factor: this asserts "bounded", not a latency budget, so it does
+    # not turn into a flaky benchmark on a loaded CI box.
+    assert fast >= slow / 6, (
+        f"throughput collapses under load: {slow:,.0f} ev/s at 2 req/s vs "
+        f"{fast:,.0f} ev/s at 120 req/s — per-event cost still scales with the window"
     )

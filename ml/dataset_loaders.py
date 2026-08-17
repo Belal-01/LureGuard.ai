@@ -1,19 +1,24 @@
 """
-Load and merge Wazuh alert datasets for offline alert-triage training.
+Load Wazuh alert datasets for offline training.
 
-Primary source: Kaggle `minahilsiddiq/wazuh-labeled-alert-features` (auto via kagglehub).
-Production artifacts: `ml/models/model.joblib` + `scaler.joblib` (shipped in Git).
+ML-12 — the source that actually trains the shipped model is **AIT-ADS**
+(Zenodo 8263181, CC-BY-4.0): 2.6M real Wazuh alerts from 8 independent
+testbeds, with ground truth published as attack-phase start/end times. Its
+loaders here are deliberately thin — windows, a containment test, and a raw
+alert iterator — because the featurisation belongs to the *production* code
+path (`modules.collector` -> `modules.feature_extractor`), and `ml/train.py`
+drives that.
 
-Sources (under ml/datasets/):
-  - true_labeled_dataset.csv  (Kaggle — downloaded by code if missing)
-  - hf-wazuh-alerts.json      (optional Hugging Face cache)
-  - optional extra *.csv under ml/datasets/extra/
+Everything else in this module is the retired ALERT_FEATURE_COLUMNS world (the
+24 Wazuh-metadata columns), kept for the tests that document why it was
+retired. Nothing trains on it.
 """
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -40,7 +45,15 @@ HF_FIRST_ROWS_URL = (
 )
 HF_DATASET_ID = "kholil-lil/wazuh-alerts"
 AIT_ADS_DIR = DATASETS_DIR / "ait-ads"
-# Zenodo: https://zenodo.org/record/8263181 — unzip under ml/datasets/ait-ads/
+AIT_LABELS_CSV = AIT_ADS_DIR / "labels.csv"
+# AIT Alert Data Set — Landauer, Skopik & Wurzenberger, Zenodo record 8263181,
+# CC-BY-4.0. 2.6M Wazuh alerts from 8 independent testbeds, ground truth given
+# as attack-phase [start, end] UNIX epochs in labels.csv.
+AIT_ADS_ZENODO = "https://zenodo.org/records/8263181/files"
+AIT_SCENARIOS = (
+    "fox", "harrison", "russellmitchell", "santos",
+    "shaw", "wardbeck", "wheeler", "wilson",
+)
 
 
 def download_true_labeled_dataset(
@@ -267,16 +280,84 @@ def load_hf_wazuh_alerts(
     return rows_to_frame(rows, labels, sources)
 
 
-def _load_ait_alert_file(path: Path) -> list[tuple[dict[str, float], int]]:
-    text = path.read_text(encoding="utf-8", errors="replace").strip()
-    if not text:
-        return []
-    parsed: object
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError:
-        rows: list[tuple[dict[str, float], int]] = []
-        for line in text.splitlines():
+def _ait_alert_label(event_epoch: float, windows: Sequence[tuple[float, float]]) -> int:
+    """Ground truth for one AIT-ADS alert: 1 inside a published attack phase.
+
+    The *only* input is when the alert happened. `labels.csv` publishes each
+    testbed's attack phases as [start, end] UNIX epochs in UTC, and every AIT
+    alert carries `@timestamp` as UTC ISO-8601 ("…Z"), so the join is a plain
+    numeric containment test with no offset to get wrong. Verified against the
+    data: all 7 664 russellmitchell web-access alerts land inside the
+    service_scans→webshell phases and none outside them.
+
+    Nothing about the alert's own severity, signature id or decoder is
+    consulted. That is the point of ML-12: the label is not merely *chosen* not
+    to depend on Wazuh's verdict, it is unable to — the verdict is not
+    reachable from this function's arguments. ML-1's leak cannot come back by
+    someone editing a heuristic in a hurry.
+
+    The published windows are per-testbed, not per-host, so a benign mail login
+    that happens during an attack phase is labelled attack. That is the ground
+    truth as the authors released it; it adds label noise and it is the
+    dataset's own definition, not ours.
+    """
+    return int(any(start <= event_epoch <= end for start, end in windows))
+
+
+def ensure_ait_ads(*, directory: Path | None = None) -> Path:
+    """Download + unzip AIT-ADS into ml/datasets/ait-ads/ (gitignored, ~2.8 GB)."""
+    import urllib.request
+    import zipfile
+
+    root = directory or AIT_ADS_DIR
+    root.mkdir(parents=True, exist_ok=True)
+    labels = root / "labels.csv"
+    if not labels.is_file():
+        urllib.request.urlretrieve(f"{AIT_ADS_ZENODO}/labels.csv?download=1", labels)
+
+    if not any(root.glob("*_wazuh.json")):
+        archive = root / "ait_ads.zip"
+        if not archive.is_file():
+            print(f"Downloading AIT-ADS (~96 MB zipped) to {root} …")
+            urllib.request.urlretrieve(f"{AIT_ADS_ZENODO}/ait_ads.zip?download=1", archive)
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(root)
+    return root
+
+
+def load_ait_attack_windows(
+    labels_csv: Path | None = None,
+) -> dict[str, list[tuple[float, float]]]:
+    """Parse labels.csv -> {scenario: [(start_epoch, end_epoch), …]}."""
+    import csv
+
+    path = labels_csv or AIT_LABELS_CSV
+    windows: dict[str, list[tuple[float, float]]] = {}
+    with path.open(encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            windows.setdefault(row["scenario"], []).append(
+                (float(row["start"]), float(row["end"]))
+            )
+    return windows
+
+
+def iter_ait_alerts(
+    scenario: str,
+    *,
+    directory: Path | None = None,
+    windows: dict[str, list[tuple[float, float]]] | None = None,
+) -> Iterable[tuple[dict, float, int]]:
+    """Yield (alert, event_epoch, label) for one testbed, in log order.
+
+    The files are JSON-lines and already sorted by `@timestamp` (checked), which
+    matters: the rolling window is fed in arrival order exactly as production
+    feeds it, so replaying a file is replaying the testbed.
+    """
+    root = directory or AIT_ADS_DIR
+    phases = (windows or load_ait_attack_windows()).get(scenario, [])
+    path = root / f"{scenario}_wazuh.json"
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
             line = line.strip()
             if not line:
                 continue
@@ -284,64 +365,11 @@ def _load_ait_alert_file(path: Path) -> list[tuple[dict[str, float], int]]:
                 alert = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if isinstance(alert, dict):
-                label = _ait_alert_label(alert)
-                if label is not None:
-                    rows.append((featurize_wazuh_alert(alert), label))
-        return rows
-
-    alerts = parsed if isinstance(parsed, list) else [parsed]
-    out: list[tuple[dict[str, float], int]] = []
-    if isinstance(alerts, list):
-        for alert in alerts:
-            if isinstance(alert, dict):
-                label = _ait_alert_label(alert)
-                if label is not None:
-                    out.append((featurize_wazuh_alert(alert), label))
-    return out
-
-
-def _ait_alert_label(alert: dict) -> int | None:
-    """AIT-ADS: use attack_labels / ground truth when present, else Wazuh level heuristic."""
-    for key in ("attack", "is_attack", "malicious", "label"):
-        if key in alert:
-            return normalize_label(alert[key])
-    labels = alert.get("attack_labels") or alert.get("labels")
-    if isinstance(labels, list) and labels:
-        return 1
-    level = (alert.get("rule") or {}).get("level") if isinstance(alert.get("rule"), dict) else None
-    try:
-        if level is not None and int(level) >= 10:
-            return 1
-    except (TypeError, ValueError):
-        pass
-    return 0
-
-
-def load_ait_ads_alerts(
-    directory: Path | None = None,
-    *,
-    max_files: int | None = 500,
-) -> pd.DataFrame:
-    """Load Wazuh JSON alerts from AIT-ADS (after unzip to ml/datasets/ait-ads/)."""
-    root = directory or AIT_ADS_DIR
-    if not root.is_dir():
-        return pd.DataFrame(columns=[*ALERT_FEATURE_COLUMNS, "target", "source"])
-
-    files = sorted(root.rglob("*.json"))
-    if max_files is not None:
-        files = files[:max_files]
-
-    rows: list[dict[str, float]] = []
-    labels: list[int] = []
-    for path in files:
-        for feats, label in _load_ait_alert_file(path):
-            rows.append(feats)
-            labels.append(label)
-
-    if not rows:
-        return pd.DataFrame(columns=[*ALERT_FEATURE_COLUMNS, "target", "source"])
-    return rows_to_frame(rows, labels, ["ait_ads"] * len(rows))
+            stamp = alert.get("@timestamp") or alert.get("timestamp")
+            if not isinstance(alert, dict) or not stamp:
+                continue
+            epoch = datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).timestamp()
+            yield alert, epoch, _ait_alert_label(epoch, phases)
 
 
 def combine_datasets(
@@ -365,13 +393,12 @@ def load_all_training_sources(
     include_true_labeled: bool = True,
     include_hf: bool = False,
     include_extra_csv: bool = True,
-    include_ait: bool = True,
     true_labeled_max_rows: int | None = 200_000,
     hf_max_rows: int | None = None,
-    ait_max_files: int | None = 500,
     seed: int = 42,
 ) -> tuple[pd.DataFrame, dict[str, int]]:
-    """Merge real public datasets for offline training (never customer/demo traffic)."""
+    """Merge the retired ALERT_FEATURE_COLUMNS sources. AIT-ADS is not one of them:
+    it feeds the behavioural f1..f8 contract via `ml.train.build_ait_dataset`."""
     frames: list[pd.DataFrame] = []
     counts: dict[str, int] = {}
 
@@ -388,12 +415,6 @@ def load_all_training_sources(
         except Exception as exc:
             counts["hf_wazuh_alerts"] = 0
             counts["hf_error"] = str(exc)[:200]
-
-    if include_ait:
-        ait_df = load_ait_ads_alerts(max_files=ait_max_files)
-        counts["ait_ads"] = len(ait_df)
-        if len(ait_df) > 0:
-            frames.append(ait_df)
 
     if include_extra_csv:
         extra_df = load_labeled_csv_dir(DATASETS_DIR / "extra", source_name="extra_csv")

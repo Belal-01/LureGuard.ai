@@ -1,32 +1,7 @@
 {
-  "version": "2026.08.16",
-  "algorithm": "RandomForestClassifier",
-  "model_type": "behavioural_rolling_window",
-  "sha256": "a039097cb6121e2757e7793a559443bb8443d480d92025add03f34f83c708598",
-  "f1_test": 0.963855421686747,
-  "recall_test": 0.9552238805970149,
-  "roc_auc_test": 0.9897559047937502,
-  "training_samples": 3571,
-  "trained_at": "2026-08-16T16:01:07.200125+00:00",
   "active": true,
-  "datasets": {
-    "demo_seed_scenarios": 5580,
-    "train_seeds": [
-      11,
-      23,
-      47,
-      59,
-      71,
-      83,
-      97,
-      109,
-      127,
-      139,
-      151,
-      163
-    ],
-    "eval_seed_excluded": 1337
-  },
+  "version": "2026-08-17",
+  "sha256": "74f8492176a3a6591c3eda908913d530fd987484ecbcdce3d9bb1e6f0a63fe1d",
   "feature_columns": [
     "f1",
     "f2",
@@ -37,9 +12,60 @@
     "f7",
     "f8"
   ],
-  "training_policy": "offline_generated_scenarios_no_customer_retrain",
-  "retired_datasets": {
-    "ml/datasets/true_labeled_dataset.csv": "No timestamp column, 7 distinct rule_ids, and a pure rule_id lookup scores 98.36%. Behavioural features are not computable from it and any model fitted on it re-learns Wazuh's verdict."
+  "training_samples": 583093,
+  "positive_samples": 256,
+  "algorithm": "RandomForestClassifier(n_estimators=200, max_depth=8, class_weight=balanced)",
+  "task": "post-exploitation phase detection (privilege_escalation, service_stop, webshell, reverse_shell)",
+  "datasets": {
+    "ait_ads": {
+      "source": "AIT Alert Data Set, Zenodo record 8263181, CC-BY-4.0",
+      "citation": "Landauer, Skopik & Wurzenberger \u2014 AIT Alert Data Set",
+      "train_scenarios": [
+        "fox",
+        "harrison",
+        "russellmitchell",
+        "shaw",
+        "wardbeck",
+        "wilson"
+      ],
+      "held_out_scenarios": [
+        "santos",
+        "wheeler"
+      ],
+      "excluded_phases": [
+        "cracking",
+        "dirb",
+        "dnsteal",
+        "network_scans",
+        "service_scans",
+        "wpscan"
+      ],
+      "label_source": "labels.csv attack-phase [start,end] epochs; never the Wazuh verdict"
+    }
   },
-  "honest_caveat": "Trained and evaluated on the same generator. Held-out seeds vary source IPs and benign noise but not attack timing. These numbers are a pipeline sanity check, not evidence of field performance."
+  "held_out_results": {
+    "post_exploit_runs": 8,
+    "caught_wazuh_floor_only": 2,
+    "caught_model": 3,
+    "caught_decoder_rule": 4,
+    "caught_union": 6,
+    "benign_events": 299902,
+    "false_alerts": {
+      "wazuh level>=10 (today)": 3984,
+      "model p>=0.5": 249,
+      "rule: decoder in sudo/su/pam": 150
+    }
+  },
+  "train_scenarios": [
+    "fox",
+    "harrison",
+    "russellmitchell",
+    "shaw",
+    "wardbeck",
+    "wilson"
+  ],
+  "held_out_scenarios": [
+    "santos",
+    "wheeler"
+  ]
 }
