@@ -23,9 +23,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 
-CANONICAL_REPO = "https://github.com/Belal-01/LureGuard.ai.git"
-RAW_VERSION_URL = "https://raw.githubusercontent.com/Belal-01/LureGuard.ai/main/VERSION"
-RELEASES_API = "https://api.github.com/repos/Belal-01/LureGuard.ai/releases/latest"
+CANONICAL_REPO = "https://github.com/MajdKhalaf12/LureGuard.ai.git"
+RAW_VERSION_URL = "https://raw.githubusercontent.com/MajdKhalaf12/LureGuard.ai/main/VERSION"
+RELEASES_API = "https://api.github.com/repos/MajdKhalaf12/LureGuard.ai/releases/latest"
 
 SYSTEM_PATHS = [
     "AGENTS.md",

@@ -61,7 +61,7 @@ python update-system.py dismiss      # suppress prompt until re-check
 **Apply flow:**
 
 1. Create git branch `backup-pre-update-{VERSION}`
-2. `git fetch` canonical repo (`Belal-01/LureGuard.ai`)
+2. `git fetch` canonical repo (`MajdKhalaf12/LureGuard.ai`)
 3. Checkout only paths listed in `DATA_CONTRACT.md` / `update-system.py` `SYSTEM_PATHS`
 4. Abort if any user-layer file changed
 5. Run `make venv`

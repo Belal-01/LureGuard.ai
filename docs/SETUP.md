@@ -24,7 +24,7 @@ WeasyPrint (PDF reports) may need OS libraries (Pango/Cairo) on some machines; `
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/Belal-01/LureGuard.ai.git
+git clone https://github.com/MajdKhalaf12/LureGuard.ai.git
 cd LureGuard.ai
 
 cp .env.example .env

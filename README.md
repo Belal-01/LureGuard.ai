@@ -65,7 +65,7 @@ Optional: Telegram bot, VT/AbuseIPDB keys, SSH password for onboarding (`ONBOARD
 ### Install
 
 ```bash
-git clone https://github.com/Belal-01/LureGuard.ai.git
+git clone https://github.com/MajdKhalaf12/LureGuard.ai.git
 cd LureGuard.ai
 cp .env.example .env
 docker compose up -d
