@@ -2,7 +2,7 @@
 #
 # LureGuard.ai installer
 #
-#   curl -fsSLO https://raw.githubusercontent.com/Belal-01/LureGuard.ai/main/install.sh
+#   curl -fsSLO https://raw.githubusercontent.com/MajdKhalaf12/LureGuard.ai/main/install.sh
 #   less install.sh          # you are installing a security tool. read it.
 #   sh install.sh
 #
@@ -18,7 +18,7 @@
 #
 set -euo pipefail
 
-REPO_URL="https://github.com/Belal-01/LureGuard.ai.git"
+REPO_URL="https://github.com/MajdKhalaf12/LureGuard.ai.git"
 REPO_REF="${LUREGUARD_REF:-main}"
 INSTALL_DIR="${LUREGUARD_DIR:-$HOME/lureguard}"
 MIN_RAM_MB=2048
@@ -38,10 +38,10 @@ if [ -t 1 ] && [ -z "${NO_COLOR:-}" ] && [ "${TERM:-dumb}" != "dumb" ]; then
   C_CYAN=$'\033[38;5;51m'; C_CYAN_D=$'\033[38;5;38m'
   C_BROWN=$'\033[38;5;130m'; C_BROWN_D=$'\033[38;5;94m'
   C_GREEN=$'\033[38;5;42m'; C_RED=$'\033[38;5;203m'
-  C_AMBER=$'\033[38;5;214m'; C_GREY=$'\033[38;5;245m'
+  C_AMBER=$'\033[38;5;214m'; C_GREY=$'\033[38;5;245m'; C_FACE=$'\033[38;5;252m'
 else
   C_RESET=''; C_BOLD=''; C_DIM=''; C_CYAN=''; C_CYAN_D=''
-  C_BROWN=''; C_BROWN_D=''; C_GREEN=''; C_RED=''; C_AMBER=''; C_GREY=''
+  C_BROWN=''; C_BROWN_D=''; C_GREEN=''; C_RED=''; C_AMBER=''; C_GREY=''; C_FACE=''
 fi
 
 STAGE=0
@@ -61,23 +61,44 @@ stage() {
 }
 
 banner() {
-  printf '\n'
-  printf '%s      ╲╲╲╲╲╲╲╲%s            %s▄▄▄▄▄%s            %s╱╱╱╱╱╱╱╱%s\n' \
-    "$C_CYAN" "$C_RESET" "$C_BROWN" "$C_RESET" "$C_CYAN" "$C_RESET"
-  printf '%s    ╲╲╲╲╲╲╲╲╲╲╲╲%s     %s▄▄███████████▄▄%s     %s╱╱╱╱╱╱╱╱╱╱╱╱%s\n' \
-    "$C_CYAN" "$C_RESET" "$C_BROWN" "$C_RESET" "$C_CYAN" "$C_RESET"
-  printf '%s  ╲╲╲╲╲╲╲╲╲╲╲╲╲╲%s  %s▄███████████████████▄%s  %s╱╱╱╱╱╱╱╱╱╱╱╱╱╱%s\n' \
-    "$C_CYAN_D" "$C_RESET" "$C_BROWN_D" "$C_RESET" "$C_CYAN_D" "$C_RESET"
-  printf '%s    ╲╲╲╲╲╲╲╲╲╲%s   %s▀▀▀▀▀▀▀▀%s%s███████%s%s▀▀▀▀▀▀▀▀%s   %s╱╱╱╱╱╱╱╱╱╱%s\n' \
-    "$C_CYAN" "$C_RESET" "$C_BROWN_D" "$C_RESET" "$C_CYAN" "$C_RESET" \
-    "$C_BROWN_D" "$C_RESET" "$C_CYAN" "$C_RESET"
-  printf '%s       ╲╲╲╲╲%s          %s▟█▛ ▘   ▝ ▜█▙%s          %s╱╱╱╱╱%s\n' \
-    "$C_CYAN_D" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_CYAN_D" "$C_RESET"
-  printf '                       %s▜█▙▄ ═══ ▄▟█▛%s\n' "$C_CYAN" "$C_RESET"
-  printf '                         %s▀▀█████▀▀%s\n\n' "$C_CYAN_D" "$C_RESET"
-  printf '   %s%sLureGuard.ai%s  %san AI security analyst for one server%s\n' \
-    "$C_BOLD" "$C_CYAN" "$C_RESET" "$C_GREY" "$C_RESET"
-  printf '   %sWazuh detects · the analyst explains · you decide%s\n\n' "$C_GREY" "$C_RESET"
+  # Rasterised from logo.png, not hand-drawn: per cell, alpha coverage picks the
+  # block glyph and the cell's mean colour picks the palette entry. Coverage
+  # rather than brightness because the logo is art on transparency whose wings
+  # and hat sit at nearly the same brightness — a brightness ramp renders one
+  # flat blob with no skull and no wings.
+  #
+  # Colour is quantised to the ${C_*} variables above instead of being written
+  # as 24-bit escapes, and that is what keeps the NO_COLOR / TERM=dumb path
+  # working: those variables expand to '' and the art prints plain. Raw escapes
+  # would need sed to strip them, and banner() runs before preflight has
+  # established that any external binary is on PATH.
+  #
+  # Regions come from saturation, not hue. The skull is desaturated blue-grey
+  # (112,133,144), so it is blue-dominant exactly like the cyan wings and no hue
+  # test separates the two. Measured saturation splits them with wide margin —
+  # wings 0.76-0.94, hat 0.60-0.66, skull 0.22-0.25 — so the cut sits at 0.45.
+  #
+  # printf is a builtin; `cat` would make the banner need an external binary on
+  # PATH before preflight has checked anything.
+  local art="
+                       ${C_CYAN}▒░                       ${C_BROWN_D}▒█             ${C_CYAN}▒▒${C_RESET}
+             ${C_CYAN}░░▒▒▓▓▓█████▓            ${C_BROWN_D}▓█▓▒   ${C_BROWN}░▓███▓           ${C_CYAN}▓███████▓▓▒▒▒░░${C_RESET}
+      ${C_CYAN}▒▓████████████${C_CYAN_D}████${C_CYAN}██▒          ${C_BROWN}▒███${C_BROWN_D}███${C_BROWN}████${C_BROWN_D}███░         ${C_CYAN}▒██${C_CYAN_D}███${C_CYAN}█████████████▓▒░${C_RESET}
+ ${C_CYAN}░▒████████████████████████░        ${C_BROWN}░██████████${C_BROWN_D}█████        ${C_CYAN}░████████████████████████▓░${C_RESET}
+     ${C_CYAN}░▒██████████${C_CYAN_D}█████${C_CYAN}██████░       ${C_BROWN}███████████${C_BROWN_D}█████▒      ${C_CYAN}░██████${C_CYAN_D}█████${C_CYAN}█████████▓░${C_RESET}
+        ${C_CYAN}░█████████████████████▒░   ${C_BROWN}███████████${C_BROWN_D}███████░  ${C_CYAN}░▓█████████████████████${C_RESET}
+          ${C_CYAN}███████████████████████████${C_BROWN}████████${C_BROWN_D}█████████${C_FACE}███${C_CYAN_D}███${C_CYAN}██████████████████${C_RESET}
+          ${C_CYAN}░▒▒▒▒▒▒▓███████${C_FACE}███${C_BROWN_D}███████████████████████████████${C_FACE}████${C_CYAN}███████▓▒▒░░▒▒${C_RESET}
+                    ${C_CYAN}▒███████████${C_FACE}████${C_BROWN_D}███████████████${C_FACE}█████${C_CYAN}███████████░${C_RESET}
+                      ${C_CYAN}▒███▓▒░  ${C_FACE}▒███████████████████${C_CYAN_D}█████   ${C_CYAN}░▒▓███░${C_RESET}
+                       ${C_CYAN}░▓       ${C_FACE}███████████▒▓█████${C_CYAN_D}█████▒       ${C_CYAN}▒░${C_RESET}
+                                 ${C_FACE}▓████████████████████░${C_RESET}
+                                       ${C_FACE}██░▒██ ▓██${C_RESET}
+
+     ${C_BOLD}${C_CYAN}LureGuard.ai${C_RESET}   ${C_GREY}an AI security analyst for one server${C_RESET}
+     ${C_GREY}Wazuh detects · the analyst explains · you decide${C_RESET}
+"
+  printf '%s\n' "$art"
 }
 
 die() {
