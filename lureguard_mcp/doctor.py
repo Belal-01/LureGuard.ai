@@ -134,7 +134,10 @@ def check_core_health() -> Check:
 def check_wazuh_api() -> Check:
     try:
         import httpx
+    except (ImportError, ModuleNotFoundError):
+        return Check("Wazuh API :55000", False, "httpx not installed — run: make venv")
 
+    try:
         base = os.getenv("WAZUH_API_URL", "https://localhost:55000").rstrip("/")
         r = httpx.get(f"{base}/", verify=False, timeout=5)
         if r.status_code >= 500:
