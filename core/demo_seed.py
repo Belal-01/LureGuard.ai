@@ -41,7 +41,8 @@ import uuid
 from datetime import datetime, timedelta
 
 SEED = 1337
-ANCHOR = datetime(2026, 8, 14, 9, 0, 0)  # fixed instant, not datetime.now() — see module docstring
+# pyrefly: ignore [deprecated]
+ANCHOR = datetime.utcnow().replace(microsecond=0)
 _NAMESPACE = uuid.UUID("f3b1c1d0-0000-4000-8000-000000000002")  # fixed namespace for deterministic ids
 
 _USERNAMES = [
@@ -442,15 +443,50 @@ async def load_demo() -> int:
     under two minutes.
     """
     from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy import select, update
 
-    from db.models import Event
+    from db.models import Event, Investigation
     from db.session import AsyncSessionLocal
 
     rows = generate_events(500)
+    
+    # Seed deterministic investigations if none exist
+    demo_inv_defs = [
+        ("aabc4cd8-4f04-4b30-8287-9ae402516ddd", "closed", "false_positive", "high"),
+        ("d61e0be0-0977-4a9f-981d-efd6eb663c77", "closed", "undetermined", "low"),
+        ("4daff02c-34f8-4594-b72c-83fc7fc16af5", "closed", "true_positive", "high"),
+        ("2d17fd2b-0098-46d9-ac49-cc86690d22f2", "closed", "true_positive", "high"),
+    ]
+    
     # is_attack_scenario is eval-harness ground truth (VER-1), not an events
     # column — strip it before the insert.
     db_rows = [{k: v for k, v in r.items() if k != "is_attack_scenario"} for r in rows]
     async with AsyncSessionLocal() as session:
+        # Seed investigations if needed
+        inv_ids = []
+        for inv_str_id, status, verdict, confidence in demo_inv_defs:
+            inv_uuid = uuid.UUID(inv_str_id)
+            inv_ids.append(inv_uuid)
+            existing = await session.get(Investigation, inv_uuid)
+            if not existing:
+                session.add(Investigation(
+                    id=inv_uuid,
+                    trigger="human",
+                    subject="Demo Investigation Batch",
+                    status=status,
+                    verdict=verdict,
+                    confidence=confidence,
+                    started_at=ANCHOR - timedelta(hours=24),
+                    closed_at=ANCHOR - timedelta(hours=23),
+                    summary="Demo investigation for evaluation and Grafana dashboard visualization.",
+                    detection_source="wazuh",
+                    asset_criticality="medium"
+                ))
+
+        # Assign deterministic investigation_ids to db_rows
+        for idx, row in enumerate(db_rows):
+            row["investigation_id"] = inv_ids[idx % len(inv_ids)]
+
         # One multi-row VALUES statement (not executemany) so RETURNING
         # reports exactly which rows were newly inserted vs skipped.
         stmt = (
@@ -461,6 +497,13 @@ async def load_demo() -> int:
         )
         result = await session.execute(stmt)
         inserted = len(result.fetchall())
+
+        # Ensure existing events without investigation_id are linked
+        unlinked = (await session.execute(select(Event.id).where(Event.investigation_id.is_(None)))).scalars().all()
+        for idx, event_id in enumerate(unlinked):
+            inv_id = inv_ids[idx % len(inv_ids)]
+            await session.execute(update(Event).where(Event.id == event_id).values(investigation_id=inv_id))
+
         await session.commit()
     return inserted
 

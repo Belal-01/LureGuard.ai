@@ -30,10 +30,11 @@
         "label": "Tactic",
         "type": "query",
         "datasource": {
-          "type": "grafana-postgresql-datasource",
-          "uid": "lureguard-postgres"
+          "type": "postgres",
+          "uid": "lureguard-pg"
         },
         "query": "SELECT DISTINCT tactic FROM attack_rule_map ORDER BY 1",
+        "allValue": "$__all",
         "includeAll": true,
         "multi": false,
         "refresh": 1,
@@ -57,8 +58,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "options": {
         "graphMode": "none",
@@ -98,7 +99,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(DISTINCT m.technique) AS techniques_seen\nFROM events e\nJOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\nWHERE $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  AND ('${tactic}' = '$__all' OR m.tactic = '${tactic}')"
+          "rawSql": "SELECT count(DISTINCT m.technique) AS techniques_seen\nFROM events e\nJOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\nWHERE $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  AND ('${tactic}' = '$__all' OR '${tactic}' = 'All' OR '${tactic}' LIKE '{%}' OR m.tactic = '${tactic}')"
         }
       ]
     },
@@ -114,8 +115,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "options": {
         "graphMode": "none",
@@ -155,7 +156,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT count(*) AS techniques_dark FROM (\n  SELECT m.technique\n  FROM attack_rule_map m\n  WHERE ('${tactic}' = '$__all' OR m.tactic = '${tactic}')\n  GROUP BY m.technique\n  HAVING NOT EXISTS (\n    SELECT 1 FROM events e\n    WHERE e.wazuh_rule_id = ANY (\n      SELECT wazuh_rule_id FROM attack_rule_map x WHERE x.technique = m.technique\n    )\n    AND $__timeFilter(e.ts)\n    AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  )\n) d"
+          "rawSql": "SELECT count(*) AS techniques_dark FROM (\n  SELECT m.technique\n  FROM attack_rule_map m\n  WHERE ('${tactic}' = '$__all' OR '${tactic}' = 'All' OR '${tactic}' LIKE '{%}' OR m.tactic = '${tactic}')\n  GROUP BY m.technique\n  HAVING NOT EXISTS (\n    SELECT 1 FROM events e\n    WHERE e.wazuh_rule_id = ANY (\n      SELECT wazuh_rule_id FROM attack_rule_map x WHERE x.technique = m.technique\n    )\n    AND $__timeFilter(e.ts)\n    AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  )\n) d"
         }
       ]
     },
@@ -171,8 +172,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "options": {
         "graphMode": "none",
@@ -228,8 +229,8 @@
         "h": 4
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "options": {
         "graphMode": "none",
@@ -285,8 +286,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "fieldConfig": {
         "defaults": {
@@ -317,7 +318,7 @@
           "refId": "A",
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT $__timeGroup(e.ts, '$__interval') AS time,\n       count(DISTINCT m.technique) AS techniques\nFROM events e\nJOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\nWHERE $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  AND ('${tactic}' = '$__all' OR m.tactic = '${tactic}')\nGROUP BY 1 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroup(e.ts, '$__interval') AS time,\n       count(DISTINCT m.technique) AS techniques\nFROM events e\nJOIN attack_rule_map m ON m.wazuh_rule_id = e.wazuh_rule_id\nWHERE $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n  AND ('${tactic}' = '$__all' OR '${tactic}' = 'All' OR '${tactic}' LIKE '{%}' OR m.tactic = '${tactic}')\nGROUP BY 1 ORDER BY 1"
         }
       ]
     },
@@ -333,8 +334,8 @@
         "h": 10
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "fieldConfig": {
         "defaults": {
@@ -349,7 +350,7 @@
           "refId": "A",
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT m.technique AS \"Technique\",\n       m.tactic AS \"Tactic\",\n       count(DISTINCT m.wazuh_rule_id) AS \"Rules covering it\",\n       min(m.description) AS \"Example rule\"\nFROM attack_rule_map m\nWHERE ('${tactic}' = '$__all' OR m.tactic = '${tactic}')\nGROUP BY m.technique, m.tactic\nHAVING NOT EXISTS (\n  SELECT 1 FROM events e\n  WHERE e.wazuh_rule_id = ANY (\n    SELECT wazuh_rule_id FROM attack_rule_map x WHERE x.technique = m.technique\n  )\n  AND $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n)\nORDER BY 2, 1"
+          "rawSql": "SELECT m.technique AS \"Technique\",\n       m.tactic AS \"Tactic\",\n       count(DISTINCT m.wazuh_rule_id) AS \"Rules covering it\",\n       min(m.description) AS \"Example rule\"\nFROM attack_rule_map m\nWHERE ('${tactic}' = '$__all' OR '${tactic}' = 'All' OR '${tactic}' LIKE '{%}' OR m.tactic = '${tactic}')\nGROUP BY m.technique, m.tactic\nHAVING NOT EXISTS (\n  SELECT 1 FROM events e\n  WHERE e.wazuh_rule_id = ANY (\n    SELECT wazuh_rule_id FROM attack_rule_map x WHERE x.technique = m.technique\n  )\n  AND $__timeFilter(e.ts)\n  AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', ''))\n)\nORDER BY 2, 1"
         }
       ]
     },
@@ -365,8 +366,8 @@
         "h": 10
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "fieldConfig": {
         "defaults": {
@@ -397,8 +398,8 @@
         "h": 7
       },
       "datasource": {
-        "type": "grafana-postgresql-datasource",
-        "uid": "lureguard-postgres"
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
       "fieldConfig": {
         "defaults": {

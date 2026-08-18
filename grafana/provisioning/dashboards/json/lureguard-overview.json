@@ -108,7 +108,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS events FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS events FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -169,7 +169,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, coalesce(max(wazuh_rule_level), 0) AS peak_level FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, coalesce(max(wazuh_rule_level), 0) AS peak_level FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -228,7 +228,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), channel AS metric, count(*) AS value FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1, channel ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), channel AS metric, count(*) AS value FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1, channel ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -292,7 +292,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), max(wazuh_rule_level) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), max(wazuh_rule_level) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -368,7 +368,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT host(src_ip) AS src_ip, count(*) AS events, max(wazuh_rule_level) AS max_level FROM events WHERE $__timeFilter(ts) AND src_ip IS NOT NULL AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY src_ip ORDER BY events DESC LIMIT 15",
+          "rawSql": "SELECT host(src_ip) AS src_ip, count(*) AS events, max(wazuh_rule_level) AS max_level FROM events WHERE $__timeFilter(ts) AND src_ip IS NOT NULL AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY src_ip ORDER BY events DESC LIMIT 15",
           "refId": "A"
         }
       ],
@@ -403,7 +403,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT CASE WHEN wazuh_rule_level >= 12 THEN '12+ critical' WHEN wazuh_rule_level >= 10 THEN '10-11 high' WHEN wazuh_rule_level >= 7 THEN '7-9 medium' WHEN wazuh_rule_level >= 3 THEN '3-6 low' ELSE '0-2 info' END AS level_band, count(*) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT CASE WHEN wazuh_rule_level >= 12 THEN '12+ critical' WHEN wazuh_rule_level >= 10 THEN '10-11 high' WHEN wazuh_rule_level >= 7 THEN '7-9 medium' WHEN wazuh_rule_level >= 3 THEN '3-6 low' ELSE '0-2 info' END AS level_band, count(*) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -556,7 +556,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT host(e.src_ip) AS src_ip, max(g.country_code) AS country_code, max(g.country_name) AS country_name, max(g.lat) AS latitude, max(g.lon) AS longitude, max(COALESCE((SELECT d.decision FROM sessions s JOIN decisions d ON d.session_id = s.id WHERE s.src_ip = e.src_ip ORDER BY abs(extract(epoch FROM (d.ts - e.ts))) LIMIT 1), CASE WHEN e.event_type IN ('auth_failed', 'cowrie_session', 'rootkit_detected', 'fim_change') THEN 'alert' WHEN e.event_type = 'auth_success' THEN 'allow' ELSE 'unclassified' END)) AS decision, count(*) AS events FROM events e INNER JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.lat IS NOT NULL AND g.lon IS NOT NULL AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY e.src_ip ORDER BY events DESC LIMIT 50",
+          "rawSql": "SELECT host(e.src_ip) AS src_ip, max(g.country_code) AS country_code, max(g.country_name) AS country_name, max(g.lat) AS latitude, max(g.lon) AS longitude, max(COALESCE((SELECT d.decision FROM decisions d WHERE d.event_id = e.id LIMIT 1), CASE WHEN e.event_type IN ('auth_failed', 'cowrie_session', 'rootkit_detected', 'fim_change') THEN 'alert' WHEN e.event_type = 'auth_success' THEN 'allow' ELSE 'unclassified' END)) AS decision, count(*) AS events FROM events e INNER JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.lat IS NOT NULL AND g.lon IS NOT NULL AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR e.agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY e.src_ip ORDER BY events DESC LIMIT 50",
           "refId": "A"
         }
       ],
@@ -634,7 +634,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT host(e.src_ip) AS src_ip, count(*) AS events, max(e.wazuh_rule_level) AS max_level FROM events e LEFT JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.ip IS NULL AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY e.src_ip ORDER BY events DESC LIMIT 15",
+          "rawSql": "SELECT host(e.src_ip) AS src_ip, count(*) AS events, max(e.wazuh_rule_level) AS max_level FROM events e LEFT JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.ip IS NULL AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR e.agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY e.src_ip ORDER BY events DESC LIMIT 15",
           "refId": "A"
         }
       ],
@@ -735,7 +735,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT channel, event_type, count(*) AS cnt FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY channel, event_type ORDER BY cnt DESC LIMIT 15",
+          "rawSql": "SELECT channel, event_type, count(*) AS cnt FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY channel, event_type ORDER BY cnt DESC LIMIT 15",
           "refId": "A"
         }
       ],
@@ -918,7 +918,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT extract(epoch FROM (now() - max(ts))) AS seconds_since_last_event FROM events WHERE (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}')",
+          "rawSql": "SELECT extract(epoch FROM (now() - max(ts))) AS seconds_since_last_event FROM events WHERE (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}')",
           "refId": "A"
         }
       ],
@@ -988,7 +988,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS critical_cves FROM cve_findings WHERE severity = 'critical' AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT count(*) AS critical_cves FROM cve_findings WHERE severity = 'critical' AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1044,7 +1044,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS fleet_sca_pct FROM sca_findings s WHERE s.check_id != 'none' AND (NULLIF('${agent_id}', '') IS NULL OR s.agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS fleet_sca_pct FROM sca_findings s WHERE s.check_id != 'none' AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR s.agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1099,7 +1099,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS failed_checks FROM sca_findings WHERE result IN ('failed', 'fail') AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT count(*) AS failed_checks FROM sca_findings WHERE result IN ('failed', 'fail') AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1155,7 +1155,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS high_epss FROM cve_findings WHERE epss_score > 0.5 AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT count(*) AS high_epss FROM cve_findings WHERE epss_score > 0.5 AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1211,7 +1211,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS risky_users FROM user_findings WHERE risk_level IN ('critical', 'high', 'medium') AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT count(*) AS risky_users FROM user_findings WHERE risk_level IN ('critical', 'high', 'medium') AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1267,7 +1267,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS eol_hosts FROM hosts WHERE eol_os = true AND agent_id != '000' AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT count(*) AS eol_hosts FROM hosts WHERE eol_os = true AND agent_id != '000' AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1323,7 +1323,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*)::int AS image_cves FROM container_cve_findings WHERE (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "rawSql": "SELECT count(*)::int AS image_cves FROM container_cve_findings WHERE (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR agent_id = '${agent_id}')",
           "refId": "A"
         }
       ],
@@ -1359,7 +1359,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.criticality, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, coalesce((SELECT jsonb_array_length(cr.containers) FROM container_runtime cr WHERE cr.agent_id = h.agent_id), 0) AS containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS image_cves, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM container_cve_findings cc2 WHERE cc2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' AND (NULLIF('${agent_id}', '') IS NULL OR h.agent_id = NULLIF('${agent_id}', '')) GROUP BY h.name, h.agent_id, h.ip, h.criticality, h.eol_os ORDER BY CASE h.criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, h.name",
+          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.criticality, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, coalesce((SELECT jsonb_array_length(cr.containers) FROM container_runtime cr WHERE cr.agent_id = h.agent_id), 0) AS containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS image_cves, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM container_cve_findings cc2 WHERE cc2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR h.agent_id = '${agent_id}') GROUP BY h.name, h.agent_id, h.ip, h.criticality, h.eol_os ORDER BY CASE h.criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, h.name",
           "refId": "A"
         }
       ],
@@ -1734,19 +1734,20 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
+          "selected": true,
+          "text": "All",
+          "value": "All"
         },
         "datasource": {
           "type": "postgres",
           "uid": "lureguard-pg"
         },
-        "definition": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "definition": "SELECT 'All' AS agent_id UNION SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
         "hide": 0,
+        "includeAll": false,
         "label": "Agent ID",
         "name": "agent_id",
-        "query": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "query": "SELECT 'All' AS agent_id UNION SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
         "refresh": 2,
         "type": "query"
       },

@@ -46,7 +46,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS cnt FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS cnt FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR e.agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -179,7 +179,7 @@
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(e.ts, $__interval), count(*) AS events FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(e.ts, $__interval), count(*) AS events FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR e.agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -215,7 +215,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT e.ts, host(e.src_ip) AS src_ip, e.channel, e.wazuh_rule_level, e.wazuh_rule_description, e.agent_name, left(e.raw_ref, 200) AS raw_ref_preview FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) ORDER BY e.ts DESC LIMIT 200",
+          "rawSql": "SELECT e.ts, host(e.src_ip) AS src_ip, e.channel, e.wazuh_rule_level, e.wazuh_rule_description, e.agent_name, left(e.raw_ref, 200) AS raw_ref_preview FROM events e WHERE $__timeFilter(e.ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(e.src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR '${agent_id}' = 'All' OR e.agent_id = '${agent_id}') AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) ORDER BY e.ts DESC LIMIT 200",
           "refId": "A"
         }
       ],
@@ -424,19 +424,20 @@
       },
       {
         "current": {
-          "selected": false,
-          "text": "",
-          "value": ""
+          "selected": true,
+          "text": "All",
+          "value": "All"
         },
         "datasource": {
           "type": "postgres",
           "uid": "lureguard-pg"
         },
-        "definition": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "definition": "SELECT 'All' AS agent_id UNION SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
         "hide": 0,
+        "includeAll": false,
         "label": "Agent ID",
         "name": "agent_id",
-        "query": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "query": "SELECT 'All' AS agent_id UNION SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
         "refresh": 2,
         "type": "query"
       },
