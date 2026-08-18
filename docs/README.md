@@ -6,6 +6,7 @@ Everything here matches what's actually in the repo. If something isn't implemen
 |-----|-----------------|
 | [SETUP.md](SETUP.md) | You're installing for the first time |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | You want the data flow and design decisions |
+| [ARCHITECTURE-DECISIONS.md](ARCHITECTURE-DECISIONS.md) | You want the *why* behind a decision — ADR-style, context + decision + accepted downside |
 | [SCRIPTS.md](SCRIPTS.md) | You need `make` targets, doctor, or the updater |
 | [MCP-TOOLS.md](MCP-TOOLS.md) | You want the full MCP tool reference |
 | [SKILLS-AND-MODES.md](SKILLS-AND-MODES.md) | You're writing prompts or slash commands |
@@ -13,4 +14,4 @@ Everything here matches what's actually in the repo. If something isn't implemen
 | [DATA_CONTRACT.md](../DATA_CONTRACT.md) | You care what the updater touches |
 | [screenshots/](screenshots/) | README images and sample report PDF |
 
-Verification status (what's proven vs code-only): [`PRODUCT-STATUS.md`](../PRODUCT-STATUS.md)
+Engineering register — every known defect, gap and decision with evidence and severity: [`CHANGE-REGISTER.md`](CHANGE-REGISTER.md)

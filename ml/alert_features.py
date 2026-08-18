@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import math
+import zlib
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -101,8 +102,13 @@ def _norm_key(name: str) -> str:
 
 
 def decoder_hash_value(decoder_name: str) -> float:
+    # ML-7: builtin hash() is randomized per process (PYTHONHASHSEED), so this
+    # feature took a different value on every restart — the model was trained
+    # under one seed and served under another, making it uncorrelated noise in
+    # production, and the same event could score differently in two processes.
+    # crc32 is stable across processes and machines.
     text = (decoder_name or "unknown").strip().lower()
-    return float(abs(hash(text)) % 10000) / 10000.0
+    return float(zlib.crc32(text.encode("utf-8")) % 10000) / 10000.0
 
 
 def _parse_timestamp(timestamp: str) -> datetime | None:

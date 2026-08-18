@@ -10,13 +10,19 @@ from ml.extractor import parse_event_datetime
 from schemas.wazuh_alert import WazuhAlert
 from schemas.normalized_event import NormalizedEvent
 
+# Wazuh puts the file's outer <group name="..."> first in rule.groups, so for
+# every rule in wazuh/local_rules.xml "lureguard_custom" is groups[0]. Mapping
+# it to a channel therefore overrode the rule's real one: a syscheck or web
+# alert from our own ruleset arrived tagged channel="cowrie". It is a marker of
+# provenance ("this is our rule"), not a log source — the source is the group
+# that follows it.
 _CHANNEL_MAP = {
     "sshd": "sshd",
+    "sudo": "sshd",  # sudo lines come from /var/log/auth.log, same source as sshd
     "authentication_failed": "sshd",
     "authentication_success": "sshd",
     "syscheck": "syscheck",
     "rootcheck": "rootcheck",
-    "lureguard_custom": "cowrie",
     "cowrie": "cowrie",
     "web": "web",
     "apache": "web",
@@ -54,7 +60,7 @@ def normalize_event(alert: WazuhAlert) -> NormalizedEvent:
         event_type = "fim_change"
     elif "rootcheck" in groups:
         event_type = "rootkit_detected"
-    elif "lureguard_custom" in groups:
+    elif "cowrie" in groups:
         event_type = "cowrie_session"
     elif any(g in groups for g in ("web-attack", "sql_injection", "xss", "attack")):
         event_type = "web_attack"
@@ -83,7 +89,7 @@ def normalize_event(alert: WazuhAlert) -> NormalizedEvent:
             break
 
     data = alert.data
-    is_cowrie = "lureguard_custom" in groups or channel == "cowrie"
+    is_cowrie = "cowrie" in groups or channel == "cowrie"
     
     src_ip = data.get("src_ip") if is_cowrie else data.get("srcip")
     if not src_ip:

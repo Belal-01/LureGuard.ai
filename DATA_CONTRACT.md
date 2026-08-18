@@ -25,7 +25,7 @@ Defines which files **auto-update** from upstream and which are **never touched*
 | `docker-compose.yml`, `Makefile`, `pyproject.toml` | Stack and tooling |
 | `config/core.yaml`, `.env.example` | Default config templates |
 | `tests/`, `ml/` | Tests and shipped classifier models |
-| `README.md`, `PRODUCT-STATUS.md`, `VERSION` | Docs and version pin |
+| `README.md`, `VERSION` | Docs and version pin |
 | `docs/` | Setup, architecture, MCP reference |
 | `update-system.py`, `DATA_CONTRACT.md` | Updater itself |
 

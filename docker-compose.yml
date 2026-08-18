@@ -25,17 +25,11 @@ services:
       dockerfile: core/Dockerfile
     container_name: lureguard-core
     restart: unless-stopped
-    cap_add:
-      - NET_ADMIN
     networks:
       - lureguard-net
     depends_on:
       postgres:
         condition: service_healthy
-      cowrie-dev:
-        condition: service_started
-      cowrie-db:
-        condition: service_started
     ports:
       - "8080:8080"
     env_file:
@@ -62,8 +56,6 @@ services:
       - lureguard-net
     depends_on:
       - lureguard-core
-      - cowrie-dev
-      - cowrie-db
     ports:
       - "1514:1514/tcp"
       - "1515:1515/tcp"
@@ -91,6 +83,8 @@ services:
     image: cowrie/cowrie:latest
     container_name: cowrie-dev
     restart: unless-stopped
+    profiles:
+      - honeypots
     networks:
       - lureguard-net
     hostname: dev-machine
@@ -104,6 +98,8 @@ services:
     image: cowrie/cowrie:latest
     container_name: cowrie-db
     restart: unless-stopped
+    profiles:
+      - honeypots
     networks:
       - lureguard-net
     hostname: db-prod-01

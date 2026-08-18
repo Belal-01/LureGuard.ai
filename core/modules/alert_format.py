@@ -25,7 +25,7 @@ def _risk_bar(p: float, width: int = 10) -> str:
 def _risk_label(p: float, t1: float, t2: float, decision: str) -> tuple[str, str]:
     pct = p * 100
     if decision == "redirect":
-        return "🔴 CRITICAL", f"Attack confidence {pct:.0f}% — redirecting to honeypot"
+        return "🔴 CRITICAL", f"Attack confidence {pct:.0f}% — containment recommended"
     if p > t2:
         return "🔴 CRITICAL", f"Attack confidence {pct:.0f}%"
     if p > t1:
@@ -61,7 +61,7 @@ def _wazuh_rule_line(event: NormalizedEvent) -> str:
 
 def _lureguard_action(decision: str, profile_id: str | None) -> str:
     if decision == "redirect":
-        text = "Redirect to honeypot"
+        text = "Recommended: redirect to honeypot (not applied — confirm to contain)"
         if profile_id:
             text += f" → <code>{html.escape(profile_id)}</code>"
         return text
@@ -108,6 +108,56 @@ def format_ssh_alert(
             f"<b>LureGuard</b>  {_lureguard_action(decision.decision, decision.profile_id)}",
         ]
     )
+    return "\n".join(lines)
+
+
+def _window_human(seconds: int) -> str:
+    if seconds < 90:
+        return f"{seconds}s"
+    minutes = round(seconds / 60)
+    return f"{minutes} minutes" if minutes != 1 else "1 minute"
+
+
+def _recurrence_human(days: float) -> str:
+    if days < 1:
+        return "first contact — no prior history"
+    if days < 2:
+        return "1 day ago"
+    return f"{days:.0f} days ago"
+
+
+def format_evidence_alert(
+    event: NormalizedEvent,
+    *,
+    attempts: int,
+    window_seconds: int,
+    usernames: list[str],
+    first_seen_days: float | None = None,
+) -> str:
+    """SSH brute-force alert: what happened, then the evidence, no model score.
+
+    ML-9: the classifier being retired for SSH duplicated Wazuh and hid the
+    one number (attempts) that actually let a human call false-positive. This
+    leads with the fact pattern instead — severity comes from the Wazuh rule
+    level, which is an independent signal already on the event.
+    """
+    host = html.escape(event.agent_name or "unknown host")
+    ip = html.escape(event.src_ip or "unknown")
+    level = event.wazuh_rule_level
+    emoji = "🔴" if level >= 10 else "🟠" if level >= 7 else "🟡"
+    users = ", ".join(html.escape(u) for u in usernames) if usernames else "—"
+
+    lines = [
+        f"<b>{emoji} SSH brute force</b> · {host}",
+        f"{attempts} failed logins from <code>{ip}</code> in {_window_human(window_seconds)}",
+        f"users tried: {users}",
+    ]
+    if first_seen_days is not None:
+        lines.append(f"source first seen {_recurrence_human(first_seen_days)}")
+    lines.append(
+        f"Wazuh {event.wazuh_rule_id} (level {level})"
+    )
+    lines.append(f"→ investigate <code>{ip}</code>")
     return "\n".join(lines)
 
 

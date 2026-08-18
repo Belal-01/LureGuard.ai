@@ -3,7 +3,7 @@ GET /metrics — Prometheus metrics endpoint.
 """
 from fastapi import APIRouter, Response
 from prometheus_client import (
-    Counter, Histogram, Gauge, Info,
+    Counter, Histogram, Info,
     generate_latest, CONTENT_TYPE_LATEST,
 )
 
@@ -19,9 +19,6 @@ decisions_total = Counter(
 infer_latency = Histogram(
     "lureguard_infer_latency_seconds", "ML inference latency",
     buckets=[0.001, 0.005, 0.01, 0.05, 0.1],
-)
-dnat_active = Gauge(
-    "lureguard_enforcer_rules_active", "Active DNAT rules"
 )
 model_info = Info("lureguard_model", "Active ML model metadata")
 

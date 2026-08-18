@@ -1,3 +1,20 @@
+---
+name: incident-report
+description: "Mode: incident-report — Write formal incident report"
+requires_tools:
+  - add_timeline_event
+  - close_investigation
+  - convert_report_to_pdf
+  - defang_ioc
+  - generate_report_chart
+  - get_event_timeline
+  - get_investigation_artifacts
+  - open_investigation
+  - record_finding
+  - save_report
+  - send_report_to_telegram
+produces: report
+---
 # Mode: incident-report — Write formal incident report
 
 ## Purpose

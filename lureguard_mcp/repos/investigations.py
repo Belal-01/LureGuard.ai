@@ -204,6 +204,15 @@ def add_timeline_event(
 
 
 
+#  SCH-2: investigations.verdict is free text (`FP`, `false_positive`, `False
+#  Positive` all validate today), which makes verdict aggregation (e.g.
+#  posture.py's false-positive-rate query) unreliable. Constrain new writes to
+#  the canonical set AGENTS.md and this module already document. This does not
+#  backfill existing rows — that needs its own migration and is out of scope
+#  here.
+_ALLOWED_VERDICTS = {"true_positive", "false_positive", "undetermined"}
+
+
 def close_investigation_db(
     investigation_id: str,
     *,
@@ -215,8 +224,44 @@ def close_investigation_db(
     mttd_seconds: int | None = None,
     kill_chain_summary: str | None = None,
 ) -> dict | None:
+    verdict = verdict.strip().lower().replace(" ", "_")
+    if verdict not in _ALLOWED_VERDICTS:
+        raise ValueError(
+            f"verdict must be one of {sorted(_ALLOWED_VERDICTS)}, got {verdict!r}"
+        )
     with get_conn() as conn:
         with conn.cursor() as cur:
+            # POS-2: "no conclusion without tool output" (AGENTS.md) is the
+            # product's differentiator — enforce it, don't just document it.
+            # Refuse to close without at least one finding, and refuse if any
+            # finding is missing its citation, so a verdict can never outrun
+            # the recorded evidence.
+            cur.execute(
+                "SELECT 1 FROM investigations WHERE id = %s", (investigation_id,)
+            )
+            if not cur.fetchone():
+                return None
+
+            cur.execute(
+                "SELECT evidence_id, citation FROM findings WHERE investigation_id = %s",
+                (investigation_id,),
+            )
+            findings = cur.fetchall()
+            if not findings:
+                raise ValueError(
+                    f"close_investigation refused for {investigation_id}: no findings "
+                    "recorded. Call record_finding(investigation_id, finding, citation, "
+                    "...) with the tool output that supports the verdict before closing."
+                )
+            uncited = [eid for eid, citation in findings if not citation or not citation.strip()]
+            if uncited:
+                raise ValueError(
+                    f"close_investigation refused for {investigation_id}: finding(s) "
+                    f"{sorted(uncited)} have no citation. Every finding must cite the "
+                    "tool output it came from — call record_finding again with a "
+                    "citation for each before closing."
+                )
+
             cur.execute(
                 """
                 UPDATE investigations

@@ -1,22 +1,41 @@
 """
 Decision Policy — orchestrates the full pipeline for each event.
 """
+import asyncio
 import hashlib
 import uuid
 from datetime import datetime, timezone
 
-import numpy as np
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db import crud
-from modules import feature_extractor, inference
+from modules import feature_extractor
 from modules.profile_selector import select_profile
-from modules.enforcer import apply_dnat
 from runtime import whitelist as whitelist_cache
 from schemas.normalized_event import NormalizedEvent
 from schemas.decision_result import DecisionResult
+
+
+# Alerting (Telegram) must never sit inside the ingest request or the open DB
+# transaction (ING-4) — dispatch it as a background task. Keep a strong
+# reference so asyncio can't GC the task mid-flight, and log any exception
+# that a bare create_task would otherwise swallow as an "unretrieved" warning.
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _dispatch(coro, label: str) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+
+    def _done(t: asyncio.Task) -> None:
+        _background_tasks.discard(t)
+        exc = t.exception() if not t.cancelled() else None
+        if exc is not None:
+            logger.error(f"Background alert dispatch failed ({label}): {exc!r}")
+
+    task.add_done_callback(_done)
 
 
 def _record_decision_metric(decision: str) -> None:
@@ -46,11 +65,158 @@ def _is_whitelisted(event: NormalizedEvent) -> bool:
 
 
 def _apply_min_attempts_gate(p: float, attempt_count: float, t1: float) -> float:
-    """Do not treat a handful of typos as an attack — need sustained volume."""
+    """Clamp a score when the window holds too few events to be an attack.
+
+    ML-8: no longer in the live path. It used to run between the model and the
+    operator on SSH, where it could clamp p below T1 on a Wazuh-confirmed brute
+    force (our 300s window sees only the events that reached us; Wazuh's rule
+    5712 counts 8 in 120s on the host) and silently send nothing. Kept only for
+    core/evaluate.py, which reproduces model scoring offline.
+    """
     minimum = settings.min_attempts_for_alert
     if attempt_count < minimum:
         return min(p, t1 - 1e-6)
     return p
+
+
+# Wazuh's own "this matters" line. Rule 5712 escalates here on 8 failures in
+# 120s from one source — the correlation f1/f3 were reimplementing. At or above
+# it the detection reaches the operator, whatever channel it arrived on and
+# whatever our scoring makes of it.
+WAZUH_ALERT_LEVEL = 10
+FIM_ALERT_LEVEL = 7
+
+
+# Below this the web classifier's score has to clear the bar to alert. Tuned
+# against the demo scenarios; the model's own eval is circular, so treat this
+# as a noise dial rather than a calibrated probability.
+WEB_SCORE_THRESHOLD = 0.5
+
+# Above the Wazuh floor the model may still filter noise — 31151 ("multiple 400
+# errors from same source ip") is level 10 and is exactly what an uptime monitor
+# or a broken-asset retry storm trips, so the noisiest false positives live
+# here. Overruling a rule that fired needs a far higher bar than the sub-floor
+# noise dial, and it is bounded three ways: confidence, a cap, and a record.
+#
+# Safe because of an asymmetry: the model's known weakness is calling unseen
+# benign traffic an attack (52 false positives held-out), which as a suppressor
+# means it declines to suppress. The dangerous direction is what these bounds
+# exist to contain.
+# Retired, kept as named constants because the ML-11 register entry and its
+# check still refer to them. Nothing reads them in the live path any more: see
+# the floor branch in should_alert() for why bounded suppression was withdrawn
+# when the model was retargeted from web noise to post-exploitation.
+SUPPRESS_CONFIDENCE = 0.1
+MAX_SUPPRESSIBLE_LEVEL = 12   # 31115/31168/31169 (13, 15) are attack-confirmed
+
+# Score at or above which the model raises an alert the rules did not.
+MODEL_THRESHOLD = 0.5
+
+
+def record_suppression(event: NormalizedEvent, score: float) -> None:
+    """Write down that a fired rule was filtered. Never let it vanish.
+
+    ML-8 was not "a model suppressed something" — it was that the alert
+    disappeared with no trace, so nobody could tell a filtered detection from
+    one that never happened. This is the line between the two.
+    """
+    logger.warning(
+        f"SUPPRESSED level-{event.wazuh_rule_level} web detection "
+        f"rule={event.wazuh_rule_id} src={event.src_ip} model_p={score:.3f} "
+        f"— filtered as benign, not lost"
+    )
+    try:
+        from api.metrics_endpoint import decisions_total
+
+        decisions_total.labels(decision="suppressed").inc()
+    except Exception:  # noqa: BLE001 - metrics must never drop the record
+        pass
+
+
+def score_web_event(event: NormalizedEvent) -> float:
+    """Behavioural score for a web event, 0.0 when it cannot be computed.
+
+    ML-10: web previously alerted on every event (`return True`) — the FPR=1.000
+    row in `make eval`. The classifier discriminates *below* the Wazuh level-10
+    floor only; it filters noise and never overrules a rule that fired.
+
+    Fails open to 1.0, not 0.0: if scoring breaks we alert rather than go quiet.
+    A scorer that silently swallows detections is FLT-1 and SEC-1 again.
+    """
+    try:
+        from modules import feature_extractor, inference
+
+        row = feature_extractor.extract_event_features(event)
+        return float(inference.infer_event(
+            {f"f{i}": float(v) for i, v in enumerate(row, start=1)}
+        )["p"])
+    except Exception as exc:  # noqa: BLE001 - never let scoring drop an alert
+        logger.warning(f"web scoring failed for {event.src_ip}, alerting anyway: {exc!r}")
+        return 1.0
+
+
+def should_alert(event: NormalizedEvent, decision: str | None = None) -> bool:
+    """The one place that decides whether an event reaches the operator.
+
+    Every dispatch goes through here. Alerting used to be decided in two
+    scattered branches — the SSH classifier path and a channel allow-list — so
+    a detection on an unlisted channel alerted nobody (ING-9) and a level-10
+    brute force could be vetoed by our own score (ML-8).
+    """
+    if _is_whitelisted(event):
+        # A human decided this source is ours. That outranks every detection.
+        return False
+    if event.wazuh_rule_level >= WAZUH_ALERT_LEVEL:
+        # Rules detect, and nothing we compute may overrule them. ML-11 used to
+        # let a high-confidence model score suppress level-10 web noise here.
+        # That branch is gone: the model it depended on was a web-noise
+        # estimator, and the shipped model (2026-08-17) is a post-exploitation
+        # detector trained with scan/flood phases excluded. It scores ordinary
+        # web traffic near zero by construction — p=0.005 on a routine event —
+        # so the old "score below 0.1 means benign" test now reads *every* web
+        # detection as suppressible and silently drops it. Same failure as ML-8,
+        # reached by a different road: a model answering a question nobody
+        # checked it was still being asked.
+        return True
+    # The model adds detections the rules missed, on every channel rather than
+    # only web. The shipped model detects post-exploitation, and privilege
+    # escalation and reverse shells arrive on sshd and syslog — scoring web
+    # alone would consult it exactly where it has nothing to say. Measured on
+    # two held-out testbeds it finds one attack (wheeler/webshell, in 3s) that
+    # neither the Wazuh floor nor the evidence rule finds.
+    #
+    # It can only ever return True here. The floor above already returned for
+    # every rule-confirmed detection, so no score reachable from this line can
+    # take an alert away — that property is what ML-8 and ML-11 cost us.
+    if score_web_event(event) >= MODEL_THRESHOLD:
+        return True
+    if event.channel in ("syscheck", "rootcheck"):
+        return event.wazuh_rule_level >= FIM_ALERT_LEVEL
+    if event.channel == "web":
+        # Scored, not blanket-alerted (ML-10) — the same score, read at the
+        # web-specific threshold the ML-10 contract pins.
+        return score_web_event(event) >= WEB_SCORE_THRESHOLD
+    if event.channel in ("cowrie", "cowrie_session", "windows"):
+        return True
+    if event.event_type == "cowrie_session":
+        return True
+    return decision in ("alert", "redirect")
+
+
+def _ssh_verdict(event: NormalizedEvent, attempts: int) -> float:
+    """Rule-driven SSH score — the classifier no longer sits in this path.
+
+    Wazuh rule 5712 escalates to level 10 on 8 failures in 120s from one source;
+    our own rolling window counts the same failures over `window_seconds` and is
+    what catches direct-ingest events that carry no rule level. Either is a
+    confirmed brute force, so it scores 1.0 rather than a probability: this is a
+    rule that fired, not a guess.
+    """
+    confirmed = (
+        event.wazuh_rule_level >= WAZUH_ALERT_LEVEL
+        or attempts >= settings.min_attempts_for_alert
+    )
+    return 1.0 if confirmed else 0.0
 
 
 async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
@@ -60,56 +226,34 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
         _handle_non_ssh(event)
         return
 
-    if _is_whitelisted(event):
-        x_ssh = feature_extractor.extract_ssh_features(event)
-        p = 0.0
-        decision = "allow"
-        reason = f"whitelisted IP {event.src_ip} → ALLOW"
-        result = {"model_version": inference.get_model_version()}
-        logger.info(f"[{event.src_ip}] {reason}")
-        dec = DecisionResult(
-            id=uuid.uuid4(),
-            event_id=event.id,
-            ts=datetime.utcnow(),
-            decision=decision,
-            p=p,
-            score=p,
-            t1=settings.thresholds.t1,
-            t2=settings.thresholds.t2,
-            model_version=result.get("model_version", "stub"),
-            features_hash=hashlib.md5(x_ssh.tobytes()).hexdigest(),
-            profile_id=None,
-            reason=reason,
-        )
-        await crud.insert_decision(db, dec)
-        _record_decision_metric(decision)
-        return
-
-    from ml.alert_features import featurize_normalized_event
-
     x_ssh = feature_extractor.extract_ssh_features(event)
-    feat = featurize_normalized_event(event)
-    result = inference.infer_event(feat)
-    p = result["p"]
-    p = _apply_min_attempts_gate(p, float(x_ssh[0]), settings.thresholds.t1)
-
+    attempts = int(x_ssh[0])
     t1, t2 = settings.thresholds.t1, settings.thresholds.t2
-    decision = decide(p, t1, t2)
-    if decision == "allow":
-        reason = f"p={p:.3f} ≤ T1={t1} → ALLOW (attempts={int(x_ssh[0])})"
-    elif decision == "alert":
-        reason = f"p={p:.3f} ∈ (T1={t1}, T2={t2}] → ALERT (attempts={int(x_ssh[0])})"
-    else:
-        profile_id = select_profile(event.username or "", p)
-        reason = (
-            f"p={p:.3f} > T2={t2} → REDIRECT to {profile_id} "
-            f"(attempts={int(x_ssh[0])}, user={event.username})"
-        )
 
-    profile_id = None
-    if decision == "redirect":
-        profile_id = select_profile(event.username or "", p)
-        apply_dnat(event.src_ip or "", profile_id)
+    if _is_whitelisted(event):
+        p, decision, profile_id = 0.0, "allow", None
+        reason = f"whitelisted IP {event.src_ip} → ALLOW"
+    else:
+        p = _ssh_verdict(event, attempts)
+        decision = decide(p, t1, t2)
+        profile_id = None
+        evidence = (
+            f"rule={event.wazuh_rule_id} level={event.wazuh_rule_level}, "
+            f"attempts={attempts}/{settings.window_seconds}s, user={event.username}"
+        )
+        if decision == "allow":
+            reason = f"no rule matched → ALLOW ({evidence})"
+        elif decision == "alert":
+            reason = f"rule match → ALERT ({evidence})"
+        else:
+            # Recommendation only. Containment is human-gated via the MCP
+            # recommend_block_ip -> confirm_block_ip path, which executes over SSH
+            # on the enrolled host and verifies the result. Core does not enforce.
+            profile_id = select_profile(event.username or "", p)
+            reason = (
+                f"rule match → RECOMMEND redirect to {profile_id}, not applied "
+                f"({evidence})"
+            )
 
     dec = DecisionResult(
         id=uuid.uuid4(),
@@ -120,8 +264,8 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
         score=p,
         t1=t1,
         t2=t2,
-        model_version=result.get("model_version", "stub"),
-        features_hash=hashlib.md5(str(feat).encode()).hexdigest(),
+        model_version="rules-wazuh",
+        features_hash=hashlib.md5(x_ssh.tobytes()).hexdigest(),
         profile_id=profile_id,
         reason=reason,
     )
@@ -130,20 +274,14 @@ async def process_event(event: NormalizedEvent, db: AsyncSession) -> None:
 
     logger.info(f"[{event.src_ip}] {reason}")
 
-    if decision in ("alert", "redirect"):
+    if should_alert(event, decision):
         from modules.alerting import send_alert
 
-        await send_alert(dec, event)
+        _dispatch(send_alert(dec, event), label=f"send_alert[{event.src_ip}]")
 
 
 def _handle_non_ssh(event: NormalizedEvent) -> None:
-    from modules.alerting import send_non_ssh_alert
-    import asyncio
+    if should_alert(event):
+        from modules.alerting import send_non_ssh_alert
 
-    should_alert = (
-        (event.channel in ("syscheck", "rootcheck") and event.wazuh_rule_level >= 7)
-        or event.channel in ("cowrie", "cowrie_session", "web", "windows")
-        or event.event_type == "cowrie_session"
-    )
-    if should_alert:
-        asyncio.create_task(send_non_ssh_alert(event))
+        _dispatch(send_non_ssh_alert(event), label=f"send_non_ssh_alert[{event.channel}]")

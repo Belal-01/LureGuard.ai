@@ -1,173 +1,105 @@
 {
-  "training_policy": "real_public_datasets_only",
-  "kaggle_file": "/Users/majd/hustle/LureGuard.ai/ml/datasets/true_labeled_dataset.csv",
+  "training_policy": "generated_scenarios_only",
   "datasets": {
-    "kaggle_true_labeled": 500000,
-    "ait_ads": 0,
-    "extra_csv": 0,
-    "combined_rows": 500000
+    "demo_seed_scenarios": 5580,
+    "train_seeds": [
+      11,
+      23,
+      47,
+      59,
+      71,
+      83,
+      97,
+      109,
+      127,
+      139,
+      151,
+      163
+    ],
+    "eval_seed_excluded": 1337
   },
   "feature_columns": [
-    "rule_level",
-    "rule_id",
-    "decoder_hash",
-    "firedtimes_log",
-    "has_srcip",
-    "has_srcuser",
-    "has_dstip",
-    "has_url",
-    "has_syscheck",
-    "is_sshd",
-    "is_web",
-    "is_syscheck",
-    "is_rootcheck",
-    "is_active_response",
-    "is_ossec",
-    "is_auth_failed",
-    "is_auth_success",
-    "decoder_sshd",
-    "decoder_web",
-    "decoder_syscheck",
-    "full_log_len_log",
-    "hour_sin",
-    "hour_cos",
-    "weekday"
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8"
   ],
   "training": {
     "cv_mean": {
-      "roc_auc": 0.9932107123046876,
-      "average_precision": 0.9943589694196053,
-      "f1": 0.9923096865889873,
-      "precision": 0.9996321527124186,
-      "recall": 0.9850937500000001
+      "roc_auc": 0.983948671326794,
+      "average_precision": 0.9557145995764955,
+      "f1": 0.9660666026123348,
+      "precision": 1.0,
+      "recall": 0.9348837209302326
     },
     "cv_std": {
-      "roc_auc": 0.0003017643622291969,
-      "average_precision": 0.00016409937750809977,
-      "f1": 0.00012863099006363353,
-      "precision": 4.7442734656131317e-05,
-      "recall": 0.00025078003309671047
+      "roc_auc": 0.009361391188164028,
+      "average_precision": 0.025074910942442605,
+      "f1": 0.0170560623276771,
+      "precision": 0.0,
+      "recall": 0.031716701620897327
     },
     "threshold_selection": {
-      "threshold": 0.7847848226002514,
-      "precision": 0.9997463924323502,
-      "recall": 0.985525,
-      "f_beta": 0.9883368182477169
+      "threshold": 0.9355712877226259,
+      "precision": 1.0,
+      "recall": 0.9537037037037037,
+      "f_beta": 0.9626168224297122
     },
     "test_default_threshold_0_5": {
-      "roc_auc": 0.992406835,
-      "average_precision": 0.993864998719982,
-      "precision": 0.9996951529316126,
-      "recall": 0.9838,
-      "f2": 0.9869384643165265,
+      "roc_auc": 0.9897559047937502,
+      "average_precision": 0.9725935185533292,
+      "precision": 1.0,
+      "recall": 0.9626865671641791,
+      "f2": 0.9699248120300752,
       "confusion_matrix": [
         [
-          49985,
-          15
+          982,
+          0
         ],
         [
-          810,
-          49190
+          5,
+          129
         ]
       ]
     },
     "test_tuned_threshold": {
-      "threshold": 0.7847848226002514,
-      "roc_auc": 0.992406835,
-      "average_precision": 0.993864998719982,
-      "precision": 0.9996951529316126,
-      "recall": 0.9838,
-      "f2": 0.9869384643165265,
+      "threshold": 0.9355712877226259,
+      "roc_auc": 0.9897559047937502,
+      "average_precision": 0.9725935185533292,
+      "precision": 1.0,
+      "recall": 0.9552238805970149,
+      "f2": 0.963855421686747,
       "confusion_matrix": [
         [
-          49985,
-          15
+          982,
+          0
         ],
         [
-          810,
-          49190
+          6,
+          128
         ]
       ],
-      "classification_report": "              precision    recall  f1-score   support\n\n           0     0.9841    0.9997    0.9918     50000\n           1     0.9997    0.9838    0.9917     50000\n\n    accuracy                         0.9918    100000\n   macro avg     0.9919    0.9918    0.9917    100000\nweighted avg     0.9919    0.9918    0.9917    100000\n"
+      "classification_report": "              precision    recall  f1-score   support\n\n           0     0.9939    1.0000    0.9970       982\n           1     1.0000    0.9552    0.9771       134\n\n    accuracy                         0.9946      1116\n   macro avg     0.9970    0.9776    0.9870      1116\nweighted avg     0.9947    0.9946    0.9946      1116\n"
     },
     "splits": {
-      "train": 320000,
-      "validation": 80000,
-      "test": 100000
+      "train": 3571,
+      "validation": 893,
+      "test": 1116
     }
   },
-  "learning_curve": [
-    {
-      "train_rows": 2400,
-      "fraction_of_trainval": 0.02,
-      "test_accuracy": 0.9922,
-      "test_precision": 0.9994588012447572,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9933661866666668
-    },
-    {
-      "train_rows": 6000,
-      "fraction_of_trainval": 0.05,
-      "test_accuracy": 0.9922,
-      "test_precision": 0.9994588012447572,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.993276911111111
-    },
-    {
-      "train_rows": 12000,
-      "fraction_of_trainval": 0.1,
-      "test_accuracy": 0.9922,
-      "test_precision": 0.9994588012447572,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9924012888888889
-    },
-    {
-      "train_rows": 24000,
-      "fraction_of_trainval": 0.2,
-      "test_accuracy": 0.9923,
-      "test_precision": 0.9996616821165166,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9923803555555556
-    },
-    {
-      "train_rows": 42000,
-      "fraction_of_trainval": 0.35,
-      "test_accuracy": 0.9923,
-      "test_precision": 0.9996616821165166,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9925254800000001
-    },
-    {
-      "train_rows": 60000,
-      "fraction_of_trainval": 0.5,
-      "test_accuracy": 0.9923,
-      "test_precision": 0.9996616821165166,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9925171066666668
-    },
-    {
-      "train_rows": 90000,
-      "fraction_of_trainval": 0.75,
-      "test_accuracy": 0.9923,
-      "test_precision": 0.9996616821165166,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9925275377777778
-    },
-    {
-      "train_rows": 120000,
-      "fraction_of_trainval": 1.0,
-      "test_accuracy": 0.9923666666666666,
-      "test_precision": 0.9997969817960344,
-      "test_recall": 0.9849333333333333,
-      "test_roc_auc": 0.9925713266666665
-    }
-  ],
-  "confusion_matrix_explained": {
-    "tn": 49985,
-    "fp": 15,
-    "fn": 810,
-    "tp": 49190,
-    "note": "34 in prior report was FN (missed attacks), not FP. FP=0."
+  "feature_importances": {
+    "f1": 0.1565785145570367,
+    "f2": 0.066411553719187,
+    "f3": 0.32610196729251195,
+    "f4": 0.1855564789655667,
+    "f5": 0.2372301638425306,
+    "f6": 0.0022488151406715143,
+    "f7": 0.02587250648249544,
+    "f8": 0.0
   },
-  "test_accuracy": 0.99175
+  "caveat": "Within-generator metrics. The split below is a random row split, so rows from one scenario appear in both train and test \u2014 treat these as optimistic and read `make eval` (seed 1337, never trained on) as the held-out number."
 }

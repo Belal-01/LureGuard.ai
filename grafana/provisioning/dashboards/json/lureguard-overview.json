@@ -1,5 +1,7 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -16,18 +18,6 @@
       "tooltip": "Investigations, findings, MITRE",
       "type": "link",
       "url": "/d/lureguard-agent-activity/lureguard-agent-activity"
-    },
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": false,
-      "title": "Security Posture",
-      "tooltip": "CVE, exposure, detection, SCA, users",
-      "type": "link",
-      "url": "/d/lureguard-cve-posture/lureguard-security-posture"
     },
     {
       "asDropdown": false,
@@ -52,43 +42,73 @@
       "tooltip": "Drill-down by IP, agent, investigation",
       "type": "link",
       "url": "/d/lureguard-investigation/lureguard-investigation-console"
-    },
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": false,
-      "title": "Containers & Assets",
-      "tooltip": "Docker inventory, image CVEs, host criticality",
-      "type": "link",
-      "url": "/d/lureguard-containers-assets/lureguard-containers-and-assets"
-    },
-    {
-      "asDropdown": false,
-      "icon": "external link",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": false,
-      "title": "Fleet & Hosts",
-      "tooltip": "Agent inventory",
-      "type": "link",
-      "url": "/d/lureguard-fleet-hosts/lureguard-fleet-and-hosts"
     }
   ],
   "panels": [
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 21,
+      "panels": [],
+      "title": "Is anything attacking us right now?",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "description": "Events in the selected time range",
-      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
       "id": 10,
-      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT count(*) AS events FROM events WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS events FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -96,29 +116,60 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "description": "Highest Wazuh rule level in range",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 7 },
-              { "color": "orange", "value": 10 },
-              { "color": "red", "value": 12 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 7
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 12
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
       "id": 11,
-      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT coalesce(max(wazuh_rule_level), 0) AS peak_level FROM events WHERE $__timeFilter(ts)",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, coalesce(max(wazuh_rule_level), 0) AS peak_level FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -126,115 +177,58 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Distinct agents with events in range",
-      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
-      "id": 12,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(DISTINCT agent_id) AS agents FROM events WHERE $__timeFilter(ts) AND agent_id IS NOT NULL",
-          "refId": "A"
-        }
-      ],
-      "title": "Agents reporting",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Ingest quality — events without agent_id",
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
+          "unit": "short",
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "showPoints": "never"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 100 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 0 },
-      "id": 13,
-      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS missing_agent FROM events WHERE $__timeFilter(ts) AND agent_id IS NULL",
-          "refId": "A"
-        }
-      ],
-      "title": "Missing agent_id",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Open investigations — see Agent Activity dashboard",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "orange", "value": 3 }
-            ]
-          }
-        }
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 8,
+        "y": 1
       },
-      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 0 },
-      "id": 14,
-      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS open_inv FROM investigations WHERE status = 'open'",
-          "refId": "A"
-        }
-      ],
-      "title": "Open investigations",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Fleet-wide critical CVEs (cached posture) — see Security Posture",
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "fixed", "fixedColor": "red" }
-        }
-      },
-      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 0 },
-      "id": 15,
-      "options": { "colorMode": "value", "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS critical_cves FROM cve_findings WHERE severity = 'critical'",
-          "refId": "A"
-        }
-      ],
-      "title": "Critical CVEs",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": {
-        "defaults": {
-          "color": { "mode": "palette-classic" },
-          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2, "showPoints": "never" }
-        }
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
       "id": 1,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), channel AS metric, count(*) AS value FROM events WHERE $__timeFilter(ts) GROUP BY 1, channel ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), channel AS metric, count(*) AS value FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1, channel ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -242,30 +236,63 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Peak Wazuh level per bucket — spikes visible (not diluted by low-level noise)",
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Peak Wazuh level per bucket \u2014 spikes visible (not diluted by low-level noise)",
       "fieldConfig": {
         "defaults": {
-          "color": { "mode": "thresholds" },
-          "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2, "showPoints": "auto" },
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 15,
+            "lineWidth": 2,
+            "showPoints": "auto"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 7 },
-              { "color": "orange", "value": 10 },
-              { "color": "red", "value": 12 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 7
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 12
+              }
             ]
           }
         }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
       "id": 2,
-      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
       "targets": [
         {
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), max(wazuh_rule_level) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT $__timeGroupAlias(ts, $__interval), max(wazuh_rule_level) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -273,26 +300,54 @@
       "type": "timeseries"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console (this IP)",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-src_ip=${__data.fields.src_ip}&${__url_time_range}"
+            }
+          ]
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "max_level" },
+            "matcher": {
+              "id": "byName",
+              "options": "max_level"
+            },
             "properties": [
               {
                 "id": "custom.cellOptions",
-                "value": { "type": "color-background", "mode": "gradient" }
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
               },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "yellow", "value": 7 },
-                    { "color": "orange", "value": 10 },
-                    { "color": "red", "value": 12 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 7
+                    },
+                    {
+                      "color": "orange",
+                      "value": 10
+                    },
+                    {
+                      "color": "red",
+                      "value": 12
+                    }
                   ]
                 }
               }
@@ -300,13 +355,20 @@
           }
         ]
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
       "id": 3,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT host(src_ip) AS src_ip, count(*) AS events, max(wazuh_rule_level) AS max_level FROM events WHERE $__timeFilter(ts) AND src_ip IS NOT NULL GROUP BY src_ip ORDER BY events DESC LIMIT 15",
+          "rawSql": "SELECT host(src_ip) AS src_ip, count(*) AS events, max(wazuh_rule_level) AS max_level FROM events WHERE $__timeFilter(ts) AND src_ip IS NOT NULL AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY src_ip ORDER BY events DESC LIMIT 15",
           "refId": "A"
         }
       ],
@@ -314,71 +376,34 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "max_level" },
-            "properties": [
-              {
-                "id": "custom.cellOptions",
-                "value": { "type": "color-background", "mode": "gradient" }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "yellow", "value": 7 },
-                    { "color": "orange", "value": 10 },
-                    { "color": "red", "value": 12 }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
-      "id": 16,
-      "options": { "showHeader": true },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT coalesce(agent_name, 'unknown') AS host, agent_id, count(*) AS events, max(wazuh_rule_level) AS max_level FROM events WHERE $__timeFilter(ts) AND agent_id IS NOT NULL GROUP BY agent_name, agent_id ORDER BY events DESC LIMIT 15",
-          "refId": "A"
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
         }
-      ],
-      "title": "Top affected hosts",
-      "type": "table"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
-      "id": 4,
-      "options": { "showHeader": true },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT channel, event_type, count(*) AS cnt FROM events WHERE $__timeFilter(ts) GROUP BY channel, event_type ORDER BY cnt DESC LIMIT 15",
-          "refId": "A"
-        }
-      ],
-      "title": "Event types",
-      "type": "table"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } } },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
       "id": 17,
-      "options": { "legend": { "displayMode": "list" }, "pieType": "donut" },
+      "options": {
+        "legend": {
+          "displayMode": "list"
+        },
+        "pieType": "donut"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT CASE WHEN wazuh_rule_level >= 12 THEN '12+ critical' WHEN wazuh_rule_level >= 10 THEN '10-11 high' WHEN wazuh_rule_level >= 7 THEN '7-9 medium' WHEN wazuh_rule_level >= 3 THEN '3-6 low' ELSE '0-2 info' END AS level_band, count(*) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL GROUP BY 1 ORDER BY 1",
+          "rawSql": "SELECT CASE WHEN wazuh_rule_level >= 12 THEN '12+ critical' WHEN wazuh_rule_level >= 10 THEN '10-11 high' WHEN wazuh_rule_level >= 7 THEN '7-9 medium' WHEN wazuh_rule_level >= 3 THEN '3-6 low' ELSE '0-2 info' END AS level_band, count(*) AS value FROM events WHERE $__timeFilter(ts) AND wazuh_rule_level IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -386,12 +411,22 @@
       "type": "piechart"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
-        "defaults": { "color": { "mode": "palette-classic" } },
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "decision" },
+            "matcher": {
+              "id": "byName",
+              "options": "decision"
+            },
             "properties": [
               {
                 "id": "mappings",
@@ -399,10 +434,26 @@
                   {
                     "type": "value",
                     "options": {
-                      "allow": { "color": "green", "index": 0, "text": "allow" },
-                      "alert": { "color": "red", "index": 1, "text": "alert" },
-                      "redirect": { "color": "orange", "index": 2, "text": "redirect" },
-                      "unclassified": { "color": "blue", "index": 3, "text": "unclassified" }
+                      "allow": {
+                        "color": "green",
+                        "index": 0,
+                        "text": "allow"
+                      },
+                      "alert": {
+                        "color": "red",
+                        "index": 1,
+                        "text": "alert"
+                      },
+                      "redirect": {
+                        "color": "orange",
+                        "index": 2,
+                        "text": "redirect"
+                      },
+                      "unclassified": {
+                        "color": "blue",
+                        "index": 3,
+                        "text": "unclassified"
+                      }
                     }
                   }
                 ]
@@ -411,13 +462,21 @@
           }
         ]
       },
-      "gridPos": { "h": 12, "w": 16, "x": 0, "y": 29 },
+      "gridPos": {
+        "h": 12,
+        "w": 16,
+        "x": 0,
+        "y": 25
+      },
       "id": 5,
       "options": {
         "basemap": {
           "name": "Layer 0",
           "type": "carto",
-          "config": { "theme": "dark", "showLabels": false }
+          "config": {
+            "theme": "dark",
+            "showLabels": false
+          }
         },
         "controls": {
           "mouseWheelZoom": true,
@@ -432,12 +491,33 @@
             "config": {
               "showLegend": true,
               "style": {
-                "color": { "field": "decision", "fixed": "dark-green", "mode": "field" },
+                "color": {
+                  "field": "decision",
+                  "fixed": "dark-green",
+                  "mode": "field"
+                },
                 "opacity": 0.85,
-                "rotation": { "fixed": 0, "max": 360, "min": -360, "mode": "mod" },
-                "size": { "field": "events", "fixed": 6, "max": 24, "min": 4, "mode": "field" },
-                "symbol": { "fixed": "img/icons/marker/circle.svg", "mode": "fixed" },
-                "symbolAlign": { "horizontal": "center", "vertical": "center" },
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "field": "events",
+                  "fixed": 6,
+                  "max": 24,
+                  "min": 4,
+                  "mode": "field"
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
                 "textConfig": {
                   "fontSize": 12,
                   "offsetX": 0,
@@ -447,50 +527,93 @@
                 }
               }
             },
-            "filterData": { "id": "byRefId", "options": "A" },
-            "location": { "latitude": "latitude", "longitude": "longitude", "mode": "coords" },
+            "filterData": {
+              "id": "byRefId",
+              "options": "A"
+            },
+            "location": {
+              "latitude": "latitude",
+              "longitude": "longitude",
+              "mode": "coords"
+            },
             "name": "Classified sources",
             "tooltip": true,
             "type": "markers"
           }
         ],
-        "tooltip": { "mode": "details" },
-        "view": { "allLayers": true, "id": "zero", "lat": 20, "lon": 0, "zoom": 1 }
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "zero",
+          "lat": 20,
+          "lon": 0,
+          "zoom": 1
+        }
       },
       "pluginVersion": "11.4.0",
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT host(e.src_ip) AS src_ip, max(g.country_code) AS country_code, max(g.country_name) AS country_name, max(g.lat) AS latitude, max(g.lon) AS longitude, max(COALESCE((SELECT d.decision FROM sessions s JOIN decisions d ON d.session_id = s.id WHERE s.src_ip = e.src_ip ORDER BY abs(extract(epoch FROM (d.ts - e.ts))) LIMIT 1), CASE WHEN e.event_type IN ('auth_failed', 'cowrie_session', 'rootkit_detected', 'fim_change') THEN 'alert' WHEN e.event_type = 'auth_success' THEN 'allow' ELSE 'unclassified' END)) AS decision, count(*) AS events FROM events e INNER JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.lat IS NOT NULL AND g.lon IS NOT NULL GROUP BY e.src_ip ORDER BY events DESC LIMIT 50",
+          "rawSql": "SELECT host(e.src_ip) AS src_ip, max(g.country_code) AS country_code, max(g.country_name) AS country_name, max(g.lat) AS latitude, max(g.lon) AS longitude, max(COALESCE((SELECT d.decision FROM sessions s JOIN decisions d ON d.session_id = s.id WHERE s.src_ip = e.src_ip ORDER BY abs(extract(epoch FROM (d.ts - e.ts))) LIMIT 1), CASE WHEN e.event_type IN ('auth_failed', 'cowrie_session', 'rootkit_detected', 'fim_change') THEN 'alert' WHEN e.event_type = 'auth_success' THEN 'allow' ELSE 'unclassified' END)) AS decision, count(*) AS events FROM events e INNER JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.lat IS NOT NULL AND g.lon IS NOT NULL AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY e.src_ip ORDER BY events DESC LIMIT 50",
           "refId": "A"
         }
       ],
       "title": "Geolocated attack sources (public IPs only)",
-      "description": "LAN/private IPs (127.x, 192.168.x) are listed in the panel to the right — they cannot be placed on a world map.",
+      "description": "LAN/private IPs (127.x, 192.168.x) are listed in the panel to the right \u2014 they cannot be placed on a world map.",
       "type": "geomap"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "description": "Private or unknown IPs not shown on map",
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console (this IP)",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-src_ip=${__data.fields.src_ip}&${__url_time_range}"
+            }
+          ]
+        },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "max_level" },
+            "matcher": {
+              "id": "byName",
+              "options": "max_level"
+            },
             "properties": [
               {
                 "id": "custom.cellOptions",
-                "value": { "type": "color-background", "mode": "gradient" }
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
               },
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "yellow", "value": 7 },
-                    { "color": "orange", "value": 10 },
-                    { "color": "red", "value": 12 }
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 7
+                    },
+                    {
+                      "color": "orange",
+                      "value": 10
+                    },
+                    {
+                      "color": "red",
+                      "value": 12
+                    }
                   ]
                 }
               }
@@ -498,13 +621,20 @@
           }
         ]
       },
-      "gridPos": { "h": 12, "w": 8, "x": 16, "y": 29 },
+      "gridPos": {
+        "h": 12,
+        "w": 8,
+        "x": 16,
+        "y": 25
+      },
       "id": 18,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT host(e.src_ip) AS src_ip, count(*) AS events, max(e.wazuh_rule_level) AS max_level FROM events e LEFT JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.ip IS NULL GROUP BY e.src_ip ORDER BY events DESC LIMIT 15",
+          "rawSql": "SELECT host(e.src_ip) AS src_ip, count(*) AS events, max(e.wazuh_rule_level) AS max_level FROM events e LEFT JOIN ip_geolocation g ON g.ip = e.src_ip WHERE $__timeFilter(e.ts) AND e.src_ip IS NOT NULL AND g.ip IS NULL AND (NULLIF('${agent_id}', '') IS NULL OR e.agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR e.channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR e.wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY e.src_ip ORDER BY events DESC LIMIT 15",
           "refId": "A"
         }
       ],
@@ -512,20 +642,283 @@
       "type": "table"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "description": "Ingestion heartbeat — if null, check integratord and Wazuh agents",
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
       "fieldConfig": {
         "defaults": {
-          "unit": "dateTimeAsIso"
-        }
+          "links": [
+            {
+              "title": "Open Investigation Console (this agent)",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-agent_id=${__data.fields.agent_id}&${__url_time_range}"
+            }
+          ]
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "max_level"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background",
+                  "mode": "gradient"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 7
+                    },
+                    {
+                      "color": "orange",
+                      "value": 10
+                    },
+                    {
+                      "color": "red",
+                      "value": 12
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
-      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 41 },
-      "id": 19,
-      "options": { "colorMode": "none", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      },
+      "id": 16,
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT max(ts) AS last_event_at FROM events",
+          "rawSql": "SELECT coalesce(agent_name, 'unknown') AS host, agent_id, count(*) AS events, max(wazuh_rule_level) AS max_level FROM events WHERE $__timeFilter(ts) AND agent_id IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY agent_name, agent_id ORDER BY events DESC LIMIT 15",
+          "refId": "A"
+        }
+      ],
+      "title": "Top affected hosts",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "id": 4,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT channel, event_type, count(*) AS cnt FROM events WHERE $__timeFilter(ts) AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY channel, event_type ORDER BY cnt DESC LIMIT 15",
+          "refId": "A"
+        }
+      ],
+      "title": "Event types",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "id": 34,
+      "panels": [],
+      "title": "Is ingestion healthy?",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Distinct agents with events in range \u2014 inverted: too few reporting means the fleet went quiet",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 3
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 46
+      },
+      "id": 12,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(DISTINCT agent_id) AS agents FROM events WHERE $__timeFilter(ts) AND agent_id IS NOT NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Agents reporting",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Ingest quality \u2014 events without agent_id",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 46
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT $__timeGroup(ts, '$__interval') AS time, count(*) AS missing_agent FROM events WHERE $__timeFilter(ts) AND agent_id IS NULL AND (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}') AND (NULLIF('${severity}', '') IS NULL OR wazuh_rule_level >= NULLIF('${severity}', '')::int) GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "title": "Missing agent_id",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Point-in-time: seconds since the most recent event. Freshness, not a trend.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 120
+              },
+              {
+                "color": "red",
+                "value": 600
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 46
+      },
+      "id": 19,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT extract(epoch FROM (now() - max(ts))) AS seconds_since_last_event FROM events WHERE (NULLIF('${src_ip}', '') IS NULL OR host(src_ip) = NULLIF('${src_ip}', '')) AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', '')) AND (NULLIF('${channel}', '') IS NULL OR '${channel}' = 'All' OR channel = '${channel}')",
           "refId": "A"
         }
       ],
@@ -533,10 +926,531 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 16, "x": 8, "y": 41 },
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "id": 29,
+      "panels": [],
+      "title": "What is our exposure?",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Point-in-time snapshot of the posture cache. `cve_findings` is overwritten by each scan, so no history exists to trend.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 52
+      },
+      "id": 15,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS critical_cves FROM cve_findings WHERE severity = 'critical' AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "Critical CVEs",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Point-in-time snapshot of the posture cache, replaced by each SCA scan.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "green",
+                "value": 90
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 52
+      },
+      "id": 22,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS fleet_sca_pct FROM sca_findings s WHERE s.check_id != 'none' AND (NULLIF('${agent_id}', '') IS NULL OR s.agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "Fleet SCA pass %",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 52
+      },
+      "id": 23,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS failed_checks FROM sca_findings WHERE result IN ('failed', 'fail') AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "SCA failed checks",
+      "type": "stat",
+      "description": "Point-in-time snapshot of the posture cache, replaced by each SCA scan."
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 52
+      },
+      "id": 24,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS high_epss FROM cve_findings WHERE epss_score > 0.5 AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "High EPSS CVEs",
+      "type": "stat",
+      "description": "Point-in-time snapshot of the posture cache, replaced by each CVE scan."
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 52
+      },
+      "id": 25,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS risky_users FROM user_findings WHERE risk_level IN ('critical', 'high', 'medium') AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "Risky local users",
+      "type": "stat",
+      "description": "Point-in-time snapshot of the posture cache, replaced by each user scan."
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 52
+      },
+      "id": 26,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS eol_hosts FROM hosts WHERE eol_os = true AND agent_id != '000' AND (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "EOL OS hosts",
+      "type": "stat",
+      "description": "Point-in-time snapshot of current fleet state."
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 57
+      },
+      "id": 27,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*)::int AS image_cves FROM container_cve_findings WHERE (NULLIF('${agent_id}', '') IS NULL OR agent_id = NULLIF('${agent_id}', ''))",
+          "refId": "A"
+        }
+      ],
+      "title": "Container image CVEs",
+      "type": "stat",
+      "description": "Point-in-time snapshot of the posture cache, replaced by each Trivy scan."
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "title": "Open Investigation Console (this agent)",
+              "url": "/d/lureguard-investigation/lureguard-investigation-console?var-agent_id=${__data.fields.agent_id}&${__url_time_range}"
+            }
+          ]
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 61
+      },
+      "id": 28,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.criticality, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, coalesce((SELECT jsonb_array_length(cr.containers) FROM container_runtime cr WHERE cr.agent_id = h.agent_id), 0) AS containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS image_cves, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM container_cve_findings cc2 WHERE cc2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' AND (NULLIF('${agent_id}', '') IS NULL OR h.agent_id = NULLIF('${agent_id}', '')) GROUP BY h.name, h.agent_id, h.ip, h.criticality, h.eol_os ORDER BY CASE h.criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, h.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Posture summary by host",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 69
+      },
+      "id": 35,
+      "panels": [],
+      "title": "Is the analyst keeping up?",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Point-in-time: how many investigations are open right now. Not a trend \u2014 `investigations` records state, not a per-hour history.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 3
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 70
+      },
+      "id": 14,
+      "options": {
+        "colorMode": "value",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT count(*) AS open_inv FROM investigations WHERE status = 'open'",
+          "refId": "A"
+        }
+      ],
+      "title": "Open investigations",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 16,
+        "x": 4,
+        "y": 70
+      },
       "id": 20,
-      "options": { "showHeader": true },
+      "options": {
+        "showHeader": true
+      },
       "targets": [
         {
           "format": "table",
@@ -548,136 +1462,55 @@
       "type": "table"
     },
     {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 },
-      "id": 21,
-      "panels": [],
-      "title": "Security posture (6 pillars)",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 46 },
-      "id": 22,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS fleet_sca_pct FROM sca_findings s WHERE s.check_id != 'none'",
-          "refId": "A"
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Longer time-to-detect is worse",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 300
+              },
+              {
+                "color": "red",
+                "value": 1800
+              }
+            ]
+          }
         }
-      ],
-      "title": "Fleet SCA pass %",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 46 },
-      "id": 23,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS failed_checks FROM sca_findings WHERE result IN ('failed', 'fail')",
-          "refId": "A"
-        }
-      ],
-      "title": "SCA failed checks",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 46 },
-      "id": 24,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS high_epss FROM cve_findings WHERE epss_score > 0.5",
-          "refId": "A"
-        }
-      ],
-      "title": "High EPSS CVEs",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 46 },
-      "id": 25,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS risky_users FROM user_findings WHERE risk_level IN ('critical', 'high', 'medium')",
-          "refId": "A"
-        }
-      ],
-      "title": "Risky local users",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" } } },
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 46 },
-      "id": 26,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*) AS eol_hosts FROM hosts WHERE eol_os = true AND agent_id != '000'",
-          "refId": "A"
-        }
-      ],
-      "title": "EOL OS hosts",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 46 },
-      "id": 27,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT count(*)::int AS image_cves FROM container_cve_findings",
-          "refId": "A"
-        }
-      ],
-      "title": "Container image CVEs",
-      "type": "stat"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 50 },
-      "id": 28,
-      "options": { "showHeader": true },
-      "targets": [
-        {
-          "format": "table",
-          "rawSql": "SELECT h.name, h.agent_id, host(h.ip) AS ip, h.criticality, h.eol_os, round(100.0 * sum(CASE WHEN s.result IN ('passed', 'pass') THEN 1 ELSE 0 END) / NULLIF(sum(CASE WHEN s.result IN ('passed', 'pass', 'failed', 'fail') THEN 1 ELSE 0 END), 0), 1) AS sca_pct, coalesce((SELECT jsonb_array_length(cr.containers) FROM container_runtime cr WHERE cr.agent_id = h.agent_id), 0) AS containers, (SELECT count(*) FROM container_cve_findings cc WHERE cc.agent_id = h.agent_id) AS image_cves, (SELECT count(*) FROM user_findings u WHERE u.agent_id = h.agent_id AND u.risk_level IN ('critical', 'high', 'medium') AND u.username != '_none_') AS risky_users, (SELECT count(*) FROM cve_findings c WHERE c.agent_id = h.agent_id AND c.epss_score > 0.5 AND c.actionable = true) AS high_epss_cves, greatest((SELECT max(scanned_at) FROM cve_findings c WHERE c.agent_id = h.agent_id), (SELECT max(scanned_at) FROM sca_findings s2 WHERE s2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM user_findings u2 WHERE u2.agent_id = h.agent_id), (SELECT max(scanned_at) FROM container_cve_findings cc2 WHERE cc2.agent_id = h.agent_id)) AS last_posture_scan FROM hosts h LEFT JOIN sca_findings s ON s.agent_id = h.agent_id AND s.check_id != 'none' WHERE h.agent_id != '000' GROUP BY h.name, h.agent_id, h.ip, h.criticality, h.eol_os ORDER BY CASE h.criticality WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 WHEN 'low' THEN 4 ELSE 5 END, h.name",
-          "refId": "A"
-        }
-      ],
-      "title": "Posture summary by host",
-      "type": "table"
-    },
-    {
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 58 },
-      "id": 29,
-      "panels": [],
-      "title": "SOC SLA (24h)",
-      "type": "row"
-    },
-    {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 59 },
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 75
+      },
       "id": 30,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT round(avg(EXTRACT(EPOCH FROM (i.started_at - e.ts)))) AS avg_mttd_sec FROM investigations i JOIN events e ON e.ts <= i.started_at WHERE i.started_at >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT $__timeGroup(i.started_at, '$__interval') AS time, round(avg(EXTRACT(EPOCH FROM (i.started_at - e.ts)))) AS avg_mttd_sec FROM investigations i JOIN events e ON e.ts <= i.started_at WHERE $__timeFilter(i.started_at) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -685,14 +1518,55 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 59 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Longer time-to-resolve is worse",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 3600
+              },
+              {
+                "color": "red",
+                "value": 86400
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 75
+      },
       "id": 31,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT round(avg(EXTRACT(EPOCH FROM (closed_at - started_at)))) AS avg_mttr_sec FROM investigations WHERE status = 'closed' AND closed_at >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT $__timeGroup(closed_at, '$__interval') AS time, round(avg(EXTRACT(EPOCH FROM (closed_at - started_at)))) AS avg_mttr_sec FROM investigations WHERE status = 'closed' AND $__timeFilter(closed_at) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -700,14 +1574,55 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 59 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Fraction 0-1: a higher false-positive rate is worse",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.2
+              },
+              {
+                "color": "red",
+                "value": 0.5
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 75
+      },
       "id": 32,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "area"
+      },
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT round(count(*) FILTER (WHERE verdict = 'false_positive')::numeric / NULLIF(count(*), 0), 3) AS fpr FROM investigations WHERE status = 'closed' AND closed_at >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT $__timeGroup(closed_at, '$__interval') AS time, round(count(*) FILTER (WHERE verdict = 'false_positive')::numeric / NULLIF(count(*), 0), 3) AS fpr FROM investigations WHERE status = 'closed' AND $__timeFilter(closed_at) GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
@@ -715,10 +1630,51 @@
       "type": "stat"
     },
     {
-      "datasource": { "type": "postgres", "uid": "lureguard-pg" },
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 59 },
+      "datasource": {
+        "type": "postgres",
+        "uid": "lureguard-pg"
+      },
+      "description": "Point-in-time: blocks awaiting human confirmation right now.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          }
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 75
+      },
       "id": 33,
-      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "graphMode": "none"
+      },
       "targets": [
         {
           "format": "table",
@@ -732,10 +1688,94 @@
   ],
   "refresh": "10s",
   "schemaVersion": 39,
-  "tags": ["lureguard", "siem"],
-  "templating": { "list": [] },
-  "time": { "from": "now-6h", "to": "now" },
+  "tags": [
+    "lureguard",
+    "siem"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Source IP",
+        "name": "src_ip",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "All"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "lureguard-pg"
+        },
+        "definition": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Channel",
+        "name": "channel",
+        "query": "SELECT 'All' AS channel UNION SELECT DISTINCT channel FROM events WHERE channel IS NOT NULL ORDER BY 1",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "lureguard-pg"
+        },
+        "definition": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "hide": 0,
+        "label": "Agent ID",
+        "name": "agent_id",
+        "query": "SELECT DISTINCT agent_id FROM events WHERE agent_id IS NOT NULL ORDER BY 1",
+        "refresh": 2,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Min severity",
+        "name": "severity",
+        "options": [
+          {
+            "selected": true,
+            "text": "",
+            "value": ""
+          }
+        ],
+        "query": "",
+        "type": "textbox"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "title": "LureGuard SOC Overview",
   "uid": "lureguard-soc-overview",
-  "version": 6
+  "version": 8
 }

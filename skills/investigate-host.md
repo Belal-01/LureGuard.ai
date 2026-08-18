@@ -1,3 +1,24 @@
+---
+name: investigate-host
+description: "Mode: investigate-host — Tier-2-lite investigation"
+requires_tools:
+  - add_timeline_event
+  - close_investigation
+  - get_agent_detail
+  - get_alerts_for_ip
+  - get_attack_summary
+  - get_event_timeline
+  - get_investigation_artifacts
+  - get_ip_context
+  - list_agents
+  - list_enrolled_hosts
+  - notify_telegram
+  - open_investigation
+  - recommend_block_ip
+  - record_finding
+  - search_events
+produces: investigation
+---
 # Mode: investigate-host — Tier-2-lite investigation
 
 ## Purpose

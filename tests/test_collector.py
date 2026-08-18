@@ -86,3 +86,32 @@ def test_full_log_success_detection():
         )
     )
     assert event.event_type == "auth_success"
+
+
+def test_lureguard_custom_marker_does_not_hijack_the_channel():
+    """Wazuh puts the file's outer <group name="lureguard_custom,"> first, so
+    every rule in wazuh/local_rules.xml has it as groups[0]. It marks who wrote
+    the rule, not where the log came from — treating it as a channel filed FIM
+    and web alerts under `cowrie` (ML-5)."""
+    fim = normalize_event(
+        _make_alert(["lureguard_custom", "syscheck"], rule_id=100020, full_log="")
+    )
+    assert (fim.channel, fim.event_type) == ("syscheck", "fim_change")
+
+    web = normalize_event(
+        _make_alert(["lureguard_custom", "web", "web-attack"], rule_id=100010)
+    )
+    assert (web.channel, web.event_type) == ("web", "web_attack")
+
+    sudo = normalize_event(
+        _make_alert(
+            ["lureguard_custom", "sudo"], rule_id=100024,
+            full_log="www-data : TTY=pts/1 ; USER=root ; COMMAND=/bin/bash",
+        )
+    )
+    assert sudo.channel == "sshd"  # /var/log/auth.log, same source as sshd
+
+    honeypot = normalize_event(
+        _make_alert(["lureguard_custom", "cowrie"], rule_id=100031, full_log="CMD: wget")
+    )
+    assert (honeypot.channel, honeypot.event_type) == ("cowrie", "cowrie_session")

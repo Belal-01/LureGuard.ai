@@ -19,7 +19,7 @@ dependencies = [
     "asyncpg>=0.29.0",
     "alembic>=1.13.0",
     "apscheduler>=3.10.0",
-    "scikit-learn>=1.5.0",
+    "scikit-learn==1.8.0",
     "joblib>=1.4.0",
     "numpy>=1.26.0",
     "pandas>=2.2.0",
@@ -75,4 +75,5 @@ testpaths = ["tests"]
 pythonpath = ["core", "."]
 markers = [
     "integration: requires running Core on localhost:8080",
+    "acceptance: change-register definition-of-done; expected to fail until the item is fixed",
 ]

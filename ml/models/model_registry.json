@@ -1,45 +1,71 @@
 {
-  "version": "2026.05.25",
-  "algorithm": "RandomForestClassifier",
-  "model_type": "real_wazuh_alerts",
-  "sha256": "6ca5f8c42c61b09d95563e6b8b9e68a31c1784d89066e288060ccc11e04cc283",
-  "f1_test": 0.9869384643165265,
-  "recall_test": 0.9838,
-  "roc_auc_test": 0.992406835,
-  "training_samples": 320000,
-  "trained_at": "2026-05-25T15:22:40.463621+00:00",
   "active": true,
-  "datasets": {
-    "kaggle_true_labeled": 500000,
-    "ait_ads": 0,
-    "extra_csv": 0,
-    "combined_rows": 500000
-  },
+  "version": "2026-08-17",
+  "sha256": "74f8492176a3a6591c3eda908913d530fd987484ecbcdce3d9bb1e6f0a63fe1d",
   "feature_columns": [
-    "rule_level",
-    "rule_id",
-    "decoder_hash",
-    "firedtimes_log",
-    "has_srcip",
-    "has_srcuser",
-    "has_dstip",
-    "has_url",
-    "has_syscheck",
-    "is_sshd",
-    "is_web",
-    "is_syscheck",
-    "is_rootcheck",
-    "is_active_response",
-    "is_ossec",
-    "is_auth_failed",
-    "is_auth_success",
-    "decoder_sshd",
-    "decoder_web",
-    "decoder_syscheck",
-    "full_log_len_log",
-    "hour_sin",
-    "hour_cos",
-    "weekday"
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8"
   ],
-  "training_policy": "offline_real_data_only_no_customer_retrain"
+  "training_samples": 583093,
+  "positive_samples": 256,
+  "algorithm": "RandomForestClassifier(n_estimators=200, max_depth=8, class_weight=balanced)",
+  "task": "post-exploitation phase detection (privilege_escalation, service_stop, webshell, reverse_shell)",
+  "datasets": {
+    "ait_ads": {
+      "source": "AIT Alert Data Set, Zenodo record 8263181, CC-BY-4.0",
+      "citation": "Landauer, Skopik & Wurzenberger \u2014 AIT Alert Data Set",
+      "train_scenarios": [
+        "fox",
+        "harrison",
+        "russellmitchell",
+        "shaw",
+        "wardbeck",
+        "wilson"
+      ],
+      "held_out_scenarios": [
+        "santos",
+        "wheeler"
+      ],
+      "excluded_phases": [
+        "cracking",
+        "dirb",
+        "dnsteal",
+        "network_scans",
+        "service_scans",
+        "wpscan"
+      ],
+      "label_source": "labels.csv attack-phase [start,end] epochs; never the Wazuh verdict"
+    }
+  },
+  "held_out_results": {
+    "post_exploit_runs": 8,
+    "caught_wazuh_floor_only": 2,
+    "caught_model": 3,
+    "caught_decoder_rule": 4,
+    "caught_union": 6,
+    "benign_events": 299902,
+    "false_alerts": {
+      "wazuh level>=10 (today)": 3984,
+      "model p>=0.5": 249,
+      "rule: decoder in sudo/su/pam": 150
+    }
+  },
+  "train_scenarios": [
+    "fox",
+    "harrison",
+    "russellmitchell",
+    "shaw",
+    "wardbeck",
+    "wilson"
+  ],
+  "held_out_scenarios": [
+    "santos",
+    "wheeler"
+  ]
 }

@@ -13,14 +13,13 @@ def models_path() -> Path:
     return Path(__file__).resolve().parents[1] / "ml" / "models"
 
 
-def test_infer_stub_when_no_model():
+def test_load_model_fails_closed_when_artifacts_missing(tmp_path):
+    """Missing detector must refuse to load, not silently score everything p=0.0 (allow)."""
     import modules.inference as inf
 
-    inf._model = None
-    inf._scaler = None
-    result = inf.infer(np.zeros(8, dtype=np.float32))
-    assert result["p"] == 0.0
-    assert "model_version" in result
+    with patch("modules.inference.models_dir", return_value=tmp_path):
+        with pytest.raises(RuntimeError, match="ML artifacts missing"):
+            inf.load_model()
 
 
 def test_load_model_from_repo_artifacts(models_path: Path):

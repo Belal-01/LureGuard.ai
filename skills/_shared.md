@@ -1,3 +1,56 @@
+---
+name: _shared
+description: "LureGuard — Shared analyst playbook"
+requires_tools:
+  - add_timeline_event
+  - analyze_web_attack
+  - check_domain_virustotal
+  - check_hash
+  - check_ip_reputation
+  - check_ip_virustotal
+  - check_tls
+  - check_url_urlhaus
+  - check_url_virustotal
+  - close_investigation
+  - confirm_block_ip
+  - confirm_whitelist_ip
+  - convert_report_to_pdf
+  - defang_ioc
+  - generate_report_chart
+  - generate_report_chart_preset
+  - get_agent_container_posture
+  - get_agent_detail
+  - get_agent_exposure
+  - get_agent_sca_summary
+  - get_agent_users
+  - get_alerts_for_ip
+  - get_attack_summary
+  - get_event_timeline
+  - get_fleet_sca_summary
+  - get_fleet_vulnerability_summary
+  - get_investigation_artifacts
+  - get_ip_context
+  - get_posture_snapshot
+  - get_recent_alerts
+  - get_soc_health
+  - list_agents
+  - list_blocklist
+  - list_enrolled_hosts
+  - list_whitelist
+  - notify_telegram
+  - open_investigation
+  - rag_lookup
+  - recommend_block_ip
+  - recommend_whitelist_ip
+  - record_finding
+  - remove_whitelist_ip
+  - save_report
+  - search_events
+  - send_report_to_telegram
+  - set_host_criticality
+  - trigger_posture_scan
+produces: notes
+---
 # LureGuard — Shared analyst playbook
 
 Load this file with every investigation mode.

@@ -109,15 +109,6 @@ async def delete_whitelist(
     return {"status": "removed", "ip": ip}
 
 
-# ── Panic flush ──────────────────────────────────────────
-@router.post("/panic-flush")
-def panic_flush(_=Depends(_verify_token)):
-    """Remove ALL iptables DNAT rules created by LureGuard."""
-    from modules.enforcer import flush_all_dnat
-    flush_all_dnat()
-    return {"status": "flushed"}
-
-
 @router.post("/reset-feature-window")
 def reset_feature_window(_=Depends(_verify_token)):
     """Clear in-memory SSH attempt counters (after testing / false positives)."""

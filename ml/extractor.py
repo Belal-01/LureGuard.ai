@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import statistics
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -60,16 +59,37 @@ def parse_event_datetime(raw_timestamp: str | None) -> datetime:
 
 
 class LureGuardExtractor:
+    # Hard ceiling on events held per source IP. f1..f6 are recomputed by
+    # walking the whole window, so cost per event grows with the window, and
+    # the window grows with the attacker's rate: measured 8,745 ev/s at 2 req/s
+    # but 505 ev/s at 60 req/s (18k-event window). Extrapolated, ~175 req/s
+    # from a single source saturates a core — the detector degrades fastest
+    # exactly when it is under attack, which is a denial of service against
+    # the sensor.
+    #
+    # The cap changes f1 from "events in window" to "min(events in window,
+    # MAX_WINDOW_EVENTS)". Nothing operational is lost: 2,000 requests in five
+    # minutes from one IP and 15,000 both mean flood, and every threshold in
+    # the product sits orders of magnitude below the cap. What is lost is the
+    # magnitude, which no decision reads.
+    #
+    # ponytail: bounded scan, not an incremental window. The real fix is O(1)
+    # running counters for f2/f3/f5/f6 and bucketed counts for f4; do that if
+    # per-event latency at the cap ever shows up in the ingest budget.
+    MAX_WINDOW_EVENTS = 2000
+
     def __init__(
         self,
         window_seconds: int = 300,
         burst_subwindow_seconds: int = 10,
         baseline_min_count: int = 30,
         baseline_store_path: Optional[Path] = None,
+        max_window_events: int | None = None,
     ):
         self.window_seconds = window_seconds
         self.burst_subwindow_seconds = burst_subwindow_seconds
         self.baseline_min_count = baseline_min_count
+        self.max_window_events = max_window_events or self.MAX_WINDOW_EVENTS
 
         self.ip_history: Dict[str, Deque[EventRecord]] = {}
         self.temporal_baseline: Dict[str, RunningStats] = {}
@@ -136,9 +156,19 @@ class LureGuardExtractor:
             return 0.0, 0.0
 
         diffs = [events[i].ts - events[i - 1].ts for i in range(1, len(events))]
-        mean_gap = float(statistics.fmean(diffs))
-        std_gap = float(statistics.pstdev(diffs)) if len(diffs) > 1 else 0.0
-        return mean_gap, std_gap
+        n = len(diffs)
+        mean_gap = math.fsum(diffs) / n
+        if n < 2:
+            return mean_gap, 0.0
+        # Plain float population stdev. statistics.pstdev promotes every sample
+        # to Fraction for exactness, which cost 49% of total feature-extraction
+        # time on the AIT corpus (2.1s of 4.35s per 40k events) — and this runs
+        # per event on the live ingest path, not just at fit time. Exact
+        # rational arithmetic buys nothing here: the inputs are already
+        # float64 epoch deltas and f6 is a behavioural signal, not an
+        # accounting figure. fsum keeps the summation error-compensated.
+        var = math.fsum((d - mean_gap) ** 2 for d in diffs) / n
+        return mean_gap, math.sqrt(var)
 
     def _compute_temporal_weight(self, slot_key: str, attempts_per_minute: float) -> float:
         stats = self.temporal_baseline.get(slot_key)
@@ -171,7 +201,9 @@ class LureGuardExtractor:
         event_ts = event_dt.timestamp()
 
         if src_ip not in self.ip_history:
-            self.ip_history[src_ip] = deque()
+            # maxlen makes the oldest record fall out on append, so the scan
+            # below is bounded no matter how loud the source is.
+            self.ip_history[src_ip] = deque(maxlen=self.max_window_events)
 
         self.ip_history[src_ip].append(
             EventRecord(

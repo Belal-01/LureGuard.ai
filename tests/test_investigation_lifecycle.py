@@ -86,6 +86,7 @@ def test_timeline_and_close_fields(investigation_id: str):
         add_timeline_event,
         close_investigation_db,
         get_investigation_timeline_db,
+        record_finding,
     )
 
     ts = datetime.utcnow() - timedelta(minutes=5)
@@ -99,6 +100,13 @@ def test_timeline_and_close_fields(investigation_id: str):
     timeline = get_investigation_timeline_db(investigation_id)
     assert len(timeline) >= 1
     assert timeline[0]["phase"] == "identification"
+
+    # POS-2: close_investigation_db now refuses to close without a cited finding.
+    record_finding(
+        investigation_id,
+        "Scanner probed /wp-admin, blocked by WAF",
+        "search_events: /wp-admin 403",
+    )
 
     closed = close_investigation_db(
         investigation_id,

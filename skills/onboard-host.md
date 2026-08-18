@@ -1,3 +1,15 @@
+---
+name: onboard-host
+description: "Mode: onboard-host — Protect a new Linux VM"
+requires_tools:
+  - close_investigation
+  - get_agent_detail
+  - list_agents
+  - list_enrolled_hosts
+  - open_investigation
+  - record_finding
+produces: notes
+---
 # Mode: onboard-host — Protect a new Linux VM
 
 ## Purpose

@@ -1,3 +1,20 @@
+---
+name: triage
+description: "Mode: triage — Tier-1 alert triage"
+requires_tools:
+  - add_timeline_event
+  - analyze_web_attack
+  - close_investigation
+  - get_ip_context
+  - get_recent_alerts
+  - get_soc_health
+  - list_agents
+  - list_enrolled_hosts
+  - notify_telegram
+  - open_investigation
+  - record_finding
+produces: investigation
+---
 # Mode: triage — Tier-1 alert triage
 
 ## Purpose

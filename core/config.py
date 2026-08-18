@@ -50,8 +50,8 @@ class Settings(BaseSettings):
     thresholds: ThresholdsConfig = ThresholdsConfig()
     cowrie_profiles: dict[str, CowrieProfileConfig] = {}
     window_seconds: int = 300
-    dnat_ttl_minutes: int = 60
     min_attempts_for_alert: int = 8
+    retention_days: int = 90
 
     def load_yaml(self) -> None:
         path = Path(self.config_path)
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
                 k: CowrieProfileConfig(**v)
                 for k, v in data["cowrie_profiles"].items()
             }
-        for key in ("window_seconds", "dnat_ttl_minutes", "min_attempts_for_alert"):
+        for key in ("window_seconds", "min_attempts_for_alert", "retention_days"):
             if key in data:
                 setattr(self, key, data[key])
         if "policy" in data and isinstance(data["policy"], dict):

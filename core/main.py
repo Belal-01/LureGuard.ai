@@ -45,11 +45,20 @@ async def lifespan(app: FastAPI):
         await db.commit()
         logger.info(f"✅ Whitelist loaded from DB ({n} IP(s))")
 
-    # 2. Load ML model + scaler (verifies SHA-256)
-    load_model()
-    logger.info("✅ ML model loaded")
+    # 2. Load ML model + scaler (verifies SHA-256; raises if artifacts are missing)
+    from modules.inference import get_model_version
 
-    # 3. Start APScheduler tick loop
+    load_model()
+    logger.info(f"✅ ML model loaded (version={get_model_version()})")
+
+    # 3. Project the ATT&CK map into Postgres so Grafana can join it (GFA-7).
+    #    Reloaded every boot: the JSON is the source of truth, the table a copy.
+    from attack_seed import load_attack_map
+
+    async with AsyncSessionLocal() as db:
+        await load_attack_map(db)
+
+    # 4. Start APScheduler tick loop
     start_scheduler()
     logger.info("✅ Scheduler started (tick=2s)")
 
